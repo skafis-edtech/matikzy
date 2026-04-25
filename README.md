@@ -60,6 +60,22 @@ which displays (with LaTeX fonts)
 
 ![image](./example.png)
 
+## Setup
+
+```bash
+docker compose up -d
+```
+
+Then open http://localhost:3001
+
+Edit `matikzy.js` file syntaxCheck and compile functions for additional language rules.
+
+## About
+
+Main purpose - make diagrams for math problems for vbesort.lt public use, for teachers to use and for MB Šimtukas internal usage.
+
+The idea of syntax and tikz formatting is "humanly" thought of. But the code - most of it is vibe coded... since it needs very fast delivery. Later it might be cleaned up and more humanly made.
+
 ## Syntax
 
 ### Interval

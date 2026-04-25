@@ -1,0 +1,16 @@
+{
+  "name": "matikzy-render",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.1",
+    "express-rate-limit": "^8.4.1",
+    "ioredis": "^5.4.1",
+    "node-tikzjax": "^1.0.5",
+    "rate-limit-redis": "^4.3.1"
+  }
+}

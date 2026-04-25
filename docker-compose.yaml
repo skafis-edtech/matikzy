@@ -1,0 +1,27 @@
+services:
+  tikz-server:
+    build: .
+    container_name: tikz-server
+    ports:
+      - "3001:3000"
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      sh -c '
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      > /data/redis.log 2>&1
+      '
+    volumes:
+      - redis-tikz:/data
+      - ./redis.log:/data/redis.log
+
+volumes:
+  redis-tikz:
