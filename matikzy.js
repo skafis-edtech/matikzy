@@ -1,211 +1,268 @@
-export function syntaxCheck(matikzy) {
-    const errors = [];
+// ─── Command registry ─────────────────────────────────────────────────────────
 
-    if (matikzy.startsWith("interval: ")) {
-        const content = matikzy.slice("interval: ".length).trim();
+const COMMANDS = {};
 
-        if (!/>(\S+)$/.test(content)) {
-            errors.push("Must end with >...");
-        }
+function register(prefix, syntaxCheck, compile) {
+  COMMANDS[prefix] = { syntaxCheck, compile };
+}
 
-        const tokenRegex = /=([^=]*)=|\[([^\]]+)\]|\(([^)]+)\)|_([^_]*)_|>(\S+)/g;
-        let tokens = [];
-        let match;
-        let lastIndex = 0;
-        while ((match = tokenRegex.exec(content)) !== null) {
-            if (match.index > lastIndex) {
-                const gap = content.slice(lastIndex, match.index).trim();
-                if (gap) errors.push(`Unrecognized syntax: "${gap}"`);
-            }
-            lastIndex = match.index + match[0].length;
+// ─── interval: ────────────────────────────────────────────────────────────────
 
-            if (match[1] !== undefined)
-                tokens.push({ type: "hatch", label: match[1] });
-            else if (match[5] !== undefined)
-                tokens.push({ type: "arrow", label: match[5] });
-            else if (match[2] !== undefined)
-                tokens.push({ type: "point", dot: "solid", label: match[2] });
-            else if (match[3] !== undefined)
-                tokens.push({ type: "point", dot: "hollow", label: match[3] });
-            else if (match[4] !== undefined)
-                tokens.push({ type: "sign", label: match[4] });
-        }
+function parseIntervalTokens(content) {
+  const tokenRegex = /=([^=]*)=|\[([^\]]+)\]|\(([^)]+)\)|_([^_]*)_|>(\S+)/g;
+  const tokens = [];
+  const parseErrors = [];
+  let match;
+  let lastIndex = 0;
 
-        const points = tokens.filter((t) => t.type === "point");
-        const signs = tokens.filter((t) => t.type === "sign");
-        const hatches = tokens.filter((t) => t.type === "hatch");
-        const arrows = tokens.filter((t) => t.type === "arrow");
+  while ((match = tokenRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      const gap = content.slice(lastIndex, match.index).trim();
+      if (gap) parseErrors.push(`Unrecognized syntax: "${gap}"`);
+    }
+    lastIndex = match.index + match[0].length;
 
-        if (points.length === 0)
-            errors.push("Must have at least one point defined with [n] or (n)");
-        if (arrows.length === 0) errors.push("Missing >x at end");
-        if (arrows.length > 1) errors.push("Only one >x allowed");
-        if (arrows.length === 1 && tokens[tokens.length - 1].type !== "arrow")
-            errors.push(">x must be the last token");
+    if (match[1] !== undefined) tokens.push({ type: "hatch", label: match[1] });
+    else if (match[5] !== undefined)
+      tokens.push({ type: "arrow", label: match[5] });
+    else if (match[2] !== undefined)
+      tokens.push({ type: "point", dot: "solid", label: match[2] });
+    else if (match[3] !== undefined)
+      tokens.push({ type: "point", dot: "hollow", label: match[3] });
+    else if (match[4] !== undefined)
+      tokens.push({ type: "sign", label: match[4] });
+  }
 
-        points.forEach((p) => {
-            if (p.label.trim() === "")
-                errors.push(`Empty point label: ${p.dot === "solid" ? "[...]" : "(...)"}`);
-        });
+  return { tokens, parseErrors };
+}
 
-        const numSegments = points.length + 1;
-        const numSignTokens = signs.length + hatches.length;
-        if (numSignTokens !== numSegments) {
-            errors.push(
-                `Expected ${numSegments} sign/hatch tokens for ${points.length} point(s), got ${numSignTokens}. ` +
-                `Each segment (including before first and after last point) needs either =-= or _+_/_-_`,
-            );
-        }
+function intervalSyntaxCheck(content) {
+  const errors = [];
 
-        let expectedType = "sign_or_hatch";
-        for (let i = 0; i < tokens.length; i++) {
-            const tok = tokens[i];
-            if (tok.type === "arrow") break;
-            if (expectedType === "sign_or_hatch") {
-                if (tok.type !== "hatch" && tok.type !== "sign")
-                    errors.push(`Expected =-= or _+_/_-_ before point "${tok.label ?? ""}"`);
-                expectedType = "point";
-            } else {
-                if (tok.type !== "point")
-                    errors.push(`Expected a point [n] or (n) after sign/hatch token`);
-                expectedType = "sign_or_hatch";
-            }
-        }
+  if (!/>(\S+)$/.test(content)) errors.push("Must end with >...");
 
-        const beforeArrow = tokens[tokens.length - 2];
-        if (beforeArrow && beforeArrow.type !== "hatch" && beforeArrow.type !== "sign")
-            errors.push("Missing sign or =-= after last point");
+  const { tokens, parseErrors } = parseIntervalTokens(content);
+  errors.push(...parseErrors);
 
-        const labels = points.map((p) => p.label);
-        const duplicates = labels.filter((l, i) => labels.indexOf(l) !== i);
-        if (duplicates.length > 0)
-            errors.push(`Duplicate point label(s): ${[...new Set(duplicates)].join(", ")}`);
+  const points = tokens.filter((t) => t.type === "point");
+  const signs = tokens.filter((t) => t.type === "sign");
+  const hatches = tokens.filter((t) => t.type === "hatch");
+  const arrows = tokens.filter((t) => t.type === "arrow");
+
+  if (points.length === 0)
+    errors.push("Must have at least one point defined with [n] or (n)");
+  if (arrows.length === 0) errors.push("Missing >x at end");
+  if (arrows.length > 1) errors.push("Only one >x allowed");
+  if (arrows.length === 1 && tokens[tokens.length - 1].type !== "arrow")
+    errors.push(">x must be the last token");
+
+  points.forEach((p) => {
+    if (p.label.trim() === "")
+      errors.push(
+        `Empty point label: ${p.dot === "solid" ? "[...]" : "(...)"}`,
+      );
+  });
+
+  const numSegments = points.length + 1;
+  const numSignTokens = signs.length + hatches.length;
+  if (numSignTokens !== numSegments) {
+    errors.push(
+      `Expected ${numSegments} sign/hatch tokens for ${points.length} point(s), got ${numSignTokens}. ` +
+        `Each segment (including before first and after last point) needs either =-= or _+_/_-_`,
+    );
+  }
+
+  let expectedType = "sign_or_hatch";
+  for (const tok of tokens) {
+    if (tok.type === "arrow") break;
+    if (expectedType === "sign_or_hatch") {
+      if (tok.type !== "hatch" && tok.type !== "sign")
+        errors.push(
+          `Expected =-= or _+_/_-_ before point "${tok.label ?? ""}"`,
+        );
+      expectedType = "point";
     } else {
-        errors.push(`Unknown command. Did you mean to start with "interval: "?`);
+      if (tok.type !== "point")
+        errors.push(`Expected a point [n] or (n) after sign/hatch token`);
+      expectedType = "sign_or_hatch";
+    }
+  }
+
+  const beforeArrow = tokens[tokens.length - 2];
+  if (
+    beforeArrow &&
+    beforeArrow.type !== "hatch" &&
+    beforeArrow.type !== "sign"
+  )
+    errors.push("Missing sign or =-= after last point");
+
+  const labels = points.map((p) => p.label);
+  const duplicates = labels.filter((l, i) => labels.indexOf(l) !== i);
+  if (duplicates.length > 0)
+    errors.push(
+      `Duplicate point label(s): ${[...new Set(duplicates)].join(", ")}`,
+    );
+
+  return { valid: errors.length === 0, errors };
+}
+
+function intervalCompile(content) {
+  const { tokens } = parseIntervalTokens(content);
+
+  const SPACING = 2;
+  const START_X = -3;
+  const xRadius = SPACING / 2;
+  const points = tokens.filter((t) => t.type === "point");
+  points.forEach((p, i) => {
+    p.x = START_X + i * SPACING;
+  });
+
+  const arrowLabel = tokens.find((t) => t.type === "arrow")?.label ?? "x";
+  const lastPointX = points[points.length - 1].x;
+  const axisStart = points[0].x - 1.0;
+  const axisEnd = lastPointX + 1.0;
+
+  const hatchSegments = [];
+  let inHatch = false;
+  let prevX = axisStart;
+  for (const tok of tokens) {
+    if (tok.type === "hatch") {
+      inHatch = true;
+    } else if (tok.type === "point") {
+      if (inHatch) {
+        hatchSegments.push({ from: prevX, to: tok.x });
+        inHatch = false;
+      }
+      prevX = tok.x;
+    }
+  }
+  if (inHatch) hatchSegments.push({ from: prevX, to: axisEnd });
+
+  const orderedSigns = tokens
+    .filter((t) => t.type === "hatch" || t.type === "sign")
+    .map((t) => t.label);
+
+  const lines = [];
+  const arcH = 0.7;
+
+  lines.push(`% Axis`);
+  lines.push(`\\draw[line width=1pt] (${axisStart},0) -- (${axisEnd},0);`);
+  lines.push(
+    `\\fill (${axisEnd},0) -- (${axisEnd - 0.2},0.1) -- (${axisEnd - 0.2},-0.1) -- cycle;`,
+  );
+  lines.push(
+    `\\node[below, scale=1.5] at (${axisEnd - 0.1},0) {$${arrowLabel}$};`,
+  );
+
+  lines.push(`% Points`);
+  points.forEach((p) => {
+    lines.push(
+      p.dot === "solid"
+        ? `\\fill (${p.x},0) circle (3pt);`
+        : `\\draw[line width=1.5pt, fill=white] (${p.x},0) circle (3.5pt);`,
+    );
+    lines.push(`\\node[below, scale=1.5] at (${p.x},0) {$${p.label}$};`);
+  });
+
+  lines.push(`% Arcs and signs`);
+  const numSegments = points.length + 1;
+  for (let i = 0; i < numSegments; i++) {
+    const sign = orderedSigns[i] ?? "";
+    const isFirst = i === 0;
+    const isLast = i === numSegments - 1;
+
+    let fromX, toX;
+    if (isFirst) {
+      fromX = axisStart;
+      toX = points[0].x;
+    } else if (isLast) {
+      fromX = lastPointX;
+      toX = axisEnd;
+    } else {
+      fromX = points[i - 1].x;
+      toX = points[i].x;
     }
 
-    return { valid: errors.length === 0, errors };
+    const signX = isFirst
+      ? axisStart + 0.3
+      : isLast
+        ? axisEnd - 0.3
+        : (fromX + toX) / 2;
+    if (sign)
+      lines.push(`\\node[above, scale=1.5] at (${signX},0) {$${sign}$};`);
+
+    if (!isFirst && !isLast)
+      lines.push(
+        `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
+      );
+    else if (isFirst)
+      lines.push(
+        `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+      );
+    else
+      lines.push(
+        `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+      );
+  }
+
+  lines.push(`% Hatching`);
+  const step = 0.15;
+  hatchSegments.forEach((seg) => {
+    lines.push(
+      `\\foreach \\x in {${seg.from},${(seg.from + step).toFixed(2)},...,${seg.to}} {`,
+    );
+    lines.push(
+      `    \\draw[line width=1pt] (\\x,0) -- (\\x+${(step + 0.05).toFixed(2)},${(step + 0.05).toFixed(2)});`,
+    );
+    lines.push(`}`);
+  });
+
+  return lines.join("\n");
+}
+
+register("interval-arcs: ", intervalSyntaxCheck, intervalCompile);
+
+// ─── function: ────────────────────────────────────────────────────────────────
+
+function functionGraphSyntaxCheck(content) {}
+
+function functionGraphCompile(content) {}
+
+register("function: ", functionGraphSyntaxCheck, functionGraphCompile);
+
+// ─── Add new commands here ────────────────────────────────────────────────────
+// Example:
+//   function functionGraphSyntaxCheck(content) { ... }
+//   function functionGraphCompile(content) { ... }
+//   register("function-graph: ", functionGraphSyntaxCheck, functionGraphCompile);
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export function syntaxCheck(matikzy) {
+  const entry = Object.entries(COMMANDS).find(([prefix]) =>
+    matikzy.startsWith(prefix),
+  );
+  if (!entry) {
+    const known = Object.keys(COMMANDS).join(", ");
+    return {
+      valid: false,
+      errors: [`Unknown command. Known commands: ${known}`],
+    };
+  }
+  const [prefix, handler] = entry;
+  return handler.syntaxCheck(matikzy.slice(prefix.length).trim());
 }
 
 export function compile(matikzy) {
-    const check = syntaxCheck(matikzy);
-    if (!check.valid) throw new Error("Syntax errors:\n" + check.errors.join("\n"));
-
-    let tikzContent = "";
-
-    if (matikzy.startsWith("interval: ")) {
-        const intervalContent = matikzy.slice("interval: ".length).trim();
-
-        const tokenRegex = /=([^=]*)=|\[([^\]]+)\]|\(([^)]+)\)|_([^_]*)_|>(\S+)/g;
-        let tokens = [];
-        let match;
-        while ((match = tokenRegex.exec(intervalContent)) !== null) {
-            if (match[1] !== undefined)
-                tokens.push({ type: "hatch", label: match[1] });
-            else if (match[5] !== undefined)
-                tokens.push({ type: "arrow", label: match[5] });
-            else if (match[2] !== undefined)
-                tokens.push({ type: "point", dot: "solid", label: match[2] });
-            else if (match[3] !== undefined)
-                tokens.push({ type: "point", dot: "hollow", label: match[3] });
-            else if (match[4] !== undefined)
-                tokens.push({ type: "sign", label: match[4] });
-        }
-
-        const SPACING = 2;
-        const START_X = -3;
-        const xRadius = SPACING / 2;
-        let points = tokens.filter((t) => t.type === "point");
-        points.forEach((p, i) => { p.x = START_X + i * SPACING; });
-
-        const arrowLabel = tokens.find((t) => t.type === "arrow")?.label ?? "x";
-        const lastPointX = points[points.length - 1].x;
-        const axisStart = points[0].x - 1.0;
-        const axisEnd = lastPointX + 1.0;
-
-        let hatchSegments = [];
-        let inHatch = false;
-        let prevX = axisStart;
-        for (let i = 0; i < tokens.length; i++) {
-            const tok = tokens[i];
-            if (tok.type === "hatch") {
-                inHatch = true;
-            } else if (tok.type === "point") {
-                if (inHatch) {
-                    hatchSegments.push({ from: prevX, to: tok.x });
-                    inHatch = false;
-                }
-                prevX = tok.x;
-            }
-        }
-        if (inHatch) hatchSegments.push({ from: prevX, to: axisEnd });
-
-        let orderedSigns = [];
-        for (let i = 0; i < tokens.length; i++) {
-            const tok = tokens[i];
-            if (tok.type === "hatch" || tok.type === "sign") orderedSigns.push(tok.label);
-        }
-
-        const lines = [];
-        const arcH = 0.7;
-
-        lines.push(`% Axis`);
-        lines.push(`\\draw[line width=1pt] (${axisStart},0) -- (${axisEnd},0);`);
-        lines.push(`\\fill (${axisEnd},0) -- (${axisEnd - 0.2},0.1) -- (${axisEnd - 0.2},-0.1) -- cycle;`);
-        lines.push(`\\node[below, scale=1.5] at (${axisEnd - 0.1},0) {$${arrowLabel}$};`);
-
-        lines.push(`% Points`);
-        points.forEach((p) => {
-            if (p.dot === "solid") {
-                lines.push(`\\fill (${p.x},0) circle (3pt);`);
-            } else {
-                lines.push(`\\draw[line width=1.5pt, fill=white] (${p.x},0) circle (3.5pt);`);
-            }
-            lines.push(`\\node[below, scale=1.5] at (${p.x},0) {$${p.label}$};`);
-        });
-
-        lines.push(`% Arcs and signs`);
-        const numSegments = points.length + 1;
-        for (let i = 0; i < numSegments; i++) {
-            const sign = orderedSigns[i] ?? "";
-            const isFirst = i === 0;
-            const isLast = i === numSegments - 1;
-
-            let fromX, toX;
-            if (isFirst) {
-                fromX = axisStart;
-                toX = points[0].x;
-            } else if (isLast) {
-                fromX = lastPointX;
-                toX = axisEnd;
-            } else {
-                fromX = points[i - 1].x;
-                toX = points[i].x;
-            }
-
-            const signX = isFirst ? axisStart + 0.3 : isLast ? axisEnd - 0.3 : (fromX + toX) / 2;
-
-            if (sign) lines.push(`\\node[above, scale=1.5] at (${signX},0) {$${sign}$};`);
-
-            if (!isFirst && !isLast) {
-                lines.push(`\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`);
-            } else if (isFirst) {
-                lines.push(`\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`);
-            } else if (isLast) {
-                lines.push(`\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`);
-            }
-        }
-
-        lines.push(`% Hatching`);
-        const step = 0.15;
-        hatchSegments.forEach((seg) => {
-            lines.push(`\\foreach \\x in {${seg.from},${(seg.from + step).toFixed(2)},...,${seg.to}} {`);
-            lines.push(`    \\draw[line width=1pt] (\\x,0) -- (\\x+${(step + 0.05).toFixed(2)},${(step + 0.05).toFixed(2)});`);
-            lines.push(`}`);
-        });
-
-        tikzContent = lines.join("\n");
-    }
-
-    return `\\begin{document}\n\\begin{tikzpicture}\n${tikzContent}\n\\end{tikzpicture}\n\\end{document}`;
+  const entry = Object.entries(COMMANDS).find(([prefix]) =>
+    matikzy.startsWith(prefix),
+  );
+  if (!entry) throw new Error(`Unknown command.`);
+  const [prefix, handler] = entry;
+  const content = matikzy.slice(prefix.length).trim();
+  const check = handler.syntaxCheck(content);
+  if (!check.valid)
+    throw new Error("Syntax errors:\n" + check.errors.join("\n"));
+  const tikzContent = handler.compile(content);
+  return `\\begin{document}\n\\begin{tikzpicture}\n${tikzContent}\n\\end{tikzpicture}\n\\end{document}`;
 }

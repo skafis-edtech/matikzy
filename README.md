@@ -7,7 +7,7 @@ License: [GPLv3](./LICENSE.txt) - if you modify, you have to open source it.
 ## Example
 
 ```
-interval: =-=[0]_+_[\frac12]=-=>x
+interval-arcs: =-=[0]_+_[\frac12]=-=>x
 ```
 
 becomes
@@ -47,7 +47,7 @@ becomes
 60 requests per minute per IP.
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"lang":"matikzy", "content": "interval: =-=[0]_+_[\frac12]=-=>x"}' https://tikz.simtukas.lt/render
+curl -X POST -H "Content-Type: application/json" -d '{"lang":"matikzy", "content": "interval-arcs: =-=[0]_+_[\frac12]=-=>x"}' https://tikz.simtukas.lt/render
 ```
 
 returns
@@ -78,14 +78,14 @@ The idea of syntax and tikz formatting is "humanly" thought of. But the code - m
 
 ## Syntax
 
-### Interval
+### interval-arcs
 
 BNF:
 
 ```
-<matikzy>       ::= "interval: " <interval>
+<matikzy>       ::= "interval-arcs: " <interval-arcs>
 
-<interval>      ::= <segment> <point> <segment> { <point> <segment> } <arrow>
+<interval-arcs>      ::= <segment> <point> <segment> { <point> <segment> } <arrow>
 
 <segment>       ::= <hatch> | <sign>
 
