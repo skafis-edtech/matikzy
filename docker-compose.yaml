@@ -1,5 +1,6 @@
 services:
   tikz-server:
+    image: ghcr.io/skafis-edtech/matikzy-render-i:latest
     build: .
     container_name: tikz-server
     ports:

@@ -6,9 +6,9 @@ function register(prefix, syntaxCheck, compile) {
   COMMANDS[prefix] = { syntaxCheck, compile };
 }
 
-// ─── interval: ────────────────────────────────────────────────────────────────
+// ─── interval-arcs: ────────────────────────────────────────────────────────────────
 
-function parseIntervalTokens(content) {
+function parseIntervalArcsTokens(content) {
   const tokenRegex = /=([^=]*)=|\[([^\]]+)\]|\(([^)]+)\)|_([^_]*)_|>(\S+)/g;
   const tokens = [];
   const parseErrors = [];
@@ -36,12 +36,12 @@ function parseIntervalTokens(content) {
   return { tokens, parseErrors };
 }
 
-function intervalSyntaxCheck(content) {
+function intervalArcsSyntaxCheck(content) {
   const errors = [];
 
   if (!/>(\S+)$/.test(content)) errors.push("Must end with >...");
 
-  const { tokens, parseErrors } = parseIntervalTokens(content);
+  const { tokens, parseErrors } = parseIntervalArcsTokens(content);
   errors.push(...parseErrors);
 
   const points = tokens.filter((t) => t.type === "point");
@@ -106,8 +106,8 @@ function intervalSyntaxCheck(content) {
   return { valid: errors.length === 0, errors };
 }
 
-function intervalCompile(content) {
-  const { tokens } = parseIntervalTokens(content);
+function intervalArcsCompile(content) {
+  const { tokens } = parseIntervalArcsTokens(content);
 
   const SPACING = 2;
   const START_X = -3;
@@ -220,7 +220,7 @@ function intervalCompile(content) {
   return lines.join("\n");
 }
 
-register("interval-arcs: ", intervalSyntaxCheck, intervalCompile);
+register("interval-arcs: ", intervalArcsSyntaxCheck, intervalArcsCompile);
 
 // ─── function: ────────────────────────────────────────────────────────────────
 
