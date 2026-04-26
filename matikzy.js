@@ -259,11 +259,11 @@ function intervalArcsCompile(content, closedOnly = false) {
     }
 
     if (direction === "down") {
-      lines.push(`\\draw[line width=1pt] (${fromX},-0.2) -- (${toX},-1);`);
-      lines.push(`\\fill (${toX},-1) -- (${toX},-0.8) -- (${toX - 0.2},-1) -- cycle;`);
+      lines.push(`\\draw[line width=1pt] (${fromX},-0.7) -- (${toX},-1.5);`);
+      lines.push(`\\fill (${toX},-1.5) -- (${toX},-1.3) -- (${toX - 0.2},-1.5) -- cycle;`);
     } else {
-      lines.push(`\\draw[line width=1pt] (${fromX},-1) -- (${toX},-0.2);`);
-      lines.push(`\\fill (${toX},-0.2) -- (${toX},-0.4) -- (${toX - 0.2},-0.2) -- cycle;`);
+      lines.push(`\\draw[line width=1pt] (${fromX},-1.5) -- (${toX},-0.7);`);
+      lines.push(`\\fill (${toX},-0.7) -- (${toX},-0.9) -- (${toX - 0.2},-0.7) -- cycle;`);
     }
   }
 
