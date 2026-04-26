@@ -9,7 +9,7 @@ function register(prefix, syntaxCheck, compile) {
 // ─── interval-arcs: ────────────────────────────────────────────────────────────────
 
 function parseIntervalArcsTokens(content) {
-  const tokenRegex = /=([^=]*)=|\[([^\]]+)\]|\(([^)]+)\)|\|(\S+)\||_([^_]*)_|>(\S*)/g;
+  const tokenRegex = /=([^=]*)=(down|up)?|\[([^\]]+)\]|\(([^)]+)\)|\|(\S+)\||_([^_]*)_(down|up)?|>(\S*)/g;
   const tokens = [];
   const parseErrors = [];
   let match;
@@ -22,17 +22,18 @@ function parseIntervalArcsTokens(content) {
     }
     lastIndex = match.index + match[0].length;
 
-    if (match[1] !== undefined) tokens.push({ type: "hatch", label: match[1] });
-    else if (match[6] !== undefined)
-      tokens.push({ type: "arrow", label: match[6] });
-    else if (match[2] !== undefined)
-      tokens.push({ type: "point", dot: "solid", label: match[2] });
+    if (match[1] !== undefined)
+      tokens.push({ type: "hatch", label: match[1], direction: match[2] ?? null });
+    else if (match[8] !== undefined)
+      tokens.push({ type: "arrow", label: match[8] });
     else if (match[3] !== undefined)
-      tokens.push({ type: "point", dot: "hollow", label: match[3] });
+      tokens.push({ type: "point", dot: "solid", label: match[3] });
     else if (match[4] !== undefined)
-      tokens.push({ type: "mark", label: match[4] });
+      tokens.push({ type: "point", dot: "hollow", label: match[4] });
     else if (match[5] !== undefined)
-      tokens.push({ type: "sign", label: match[5] });
+      tokens.push({ type: "mark", label: match[5] });
+    else if (match[6] !== undefined)
+      tokens.push({ type: "sign", label: match[6], direction: match[7] ?? null });
   }
 
   return { tokens, parseErrors };
@@ -106,7 +107,7 @@ function intervalArcsSyntaxCheck(content) {
   return { valid: errors.length === 0, errors };
 }
 
-function intervalArcsCompile(content) {
+function intervalArcsCompile(content, closedOnly = false) {
   const { tokens } = parseIntervalArcsTokens(content);
 
   const SPACING = 2;
@@ -138,9 +139,9 @@ function intervalArcsCompile(content) {
   }
   if (inHatch) hatchSegments.push({ from: prevX, to: axisEnd });
 
-  const orderedSigns = tokens
+  const orderedSegments = tokens
     .filter((t) => t.type === "hatch" || t.type === "sign")
-    .map((t) => t.label);
+    .map((t) => ({ label: t.label, direction: t.direction ?? null }));
 
   const lines = [];
   const arcH = 0.7;
@@ -174,7 +175,7 @@ function intervalArcsCompile(content) {
   lines.push(`% Arcs and signs`);
   const numSegments = points.length + 1;
   for (let i = 0; i < numSegments; i++) {
-    const sign = orderedSigns[i] ?? "";
+    const sign = orderedSegments[i]?.label ?? "";
     const isFirst = i === 0;
     const isLast = i === numSegments - 1;
 
@@ -202,14 +203,43 @@ function intervalArcsCompile(content) {
       lines.push(
         `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
       );
-    else if (isFirst)
+    else if (isFirst && !closedOnly)
       lines.push(
         `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
       );
-    else
+    else if (isLast && !closedOnly)
       lines.push(
         `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
       );
+  }
+
+  lines.push(`% Arrows below`);
+  for (let i = 0; i < numSegments; i++) {
+    const direction = orderedSegments[i]?.direction;
+    if (!direction) continue;
+
+    const isFirst = i === 0;
+    const isLast = i === numSegments - 1;
+
+    let fromX, toX;
+    if (isFirst) {
+      fromX = axisStart + 0.1;
+      toX = points[0].x - 0.1;
+    } else if (isLast) {
+      fromX = lastPointX + 0.1;
+      toX = axisEnd - 0.1;
+    } else {
+      fromX = points[i - 1].x + 0.6;
+      toX = points[i].x - 0.6;
+    }
+
+    if (direction === "down") {
+      lines.push(`\\draw[line width=1pt] (${fromX},-0.2) -- (${toX},-1);`);
+      lines.push(`\\fill (${toX},-1) -- (${toX},-0.8) -- (${toX - 0.2},-1) -- cycle;`);
+    } else {
+      lines.push(`\\draw[line width=1pt] (${fromX},-1) -- (${toX},-0.2);`);
+      lines.push(`\\fill (${toX},-0.2) -- (${toX},-0.4) -- (${toX - 0.2},-0.2) -- cycle;`);
+    }
   }
 
   lines.push(`% Hatching`);
@@ -228,6 +258,11 @@ function intervalArcsCompile(content) {
 }
 
 register("interval-arcs: ", intervalArcsSyntaxCheck, intervalArcsCompile);
+register(
+  "interval-arcs[closed-only]: ",
+  intervalArcsSyntaxCheck,
+  (c) => intervalArcsCompile(c, true),
+);
 
 // ─── function: ────────────────────────────────────────────────────────────────
 
