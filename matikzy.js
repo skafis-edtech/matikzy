@@ -8,6 +8,22 @@ function register(prefix, syntaxCheck, compile) {
 
 // ─── interval-arcs: ────────────────────────────────────────────────────────────────
 
+function extractLeftLabels(content) {
+  let rest = content.trimStart();
+  let topLabel = null;
+  let bottomLabel = null;
+
+  for (let i = 0; i < 2; i++) {
+    const top = rest.match(/^\^{([^}]*)}\s*/);
+    const bot = rest.match(/^_{([^}]*)}\s*/);
+    if (top && topLabel === null) { topLabel = top[1]; rest = rest.slice(top[0].length); }
+    else if (bot && bottomLabel === null) { bottomLabel = bot[1]; rest = rest.slice(bot[0].length); }
+    else break;
+  }
+
+  return { topLabel, bottomLabel, rest };
+}
+
 function parseIntervalArcsTokens(content) {
   const tokenRegex = /=([^=]*)=(down|up)?|\[([^\]]+)\]|\(([^)]+)\)|\|(\S+)\||_([^_]*)_(down|up)?|>(\S*)/g;
   const tokens = [];
@@ -42,7 +58,8 @@ function parseIntervalArcsTokens(content) {
 function intervalArcsSyntaxCheck(content) {
   const errors = [];
 
-  const { tokens, parseErrors } = parseIntervalArcsTokens(content);
+  const { rest } = extractLeftLabels(content);
+  const { tokens, parseErrors } = parseIntervalArcsTokens(rest);
   errors.push(...parseErrors);
 
   const points = tokens.filter((t) => t.type === "point" || t.type === "mark");
@@ -108,7 +125,8 @@ function intervalArcsSyntaxCheck(content) {
 }
 
 function intervalArcsCompile(content, closedOnly = false) {
-  const { tokens } = parseIntervalArcsTokens(content);
+  const { topLabel, bottomLabel, rest } = extractLeftLabels(content);
+  const { tokens } = parseIntervalArcsTokens(rest);
 
   const SPACING = 2;
   const START_X = -3;
@@ -145,6 +163,13 @@ function intervalArcsCompile(content, closedOnly = false) {
 
   const lines = [];
   const arcH = 0.7;
+
+  lines.push(`% Left labels`);
+  const labelX = axisStart - 1;
+  if (topLabel !== null)
+    lines.push(`\\node[scale=1.2] at (${labelX},0.5) {$${topLabel}$};`);
+  if (bottomLabel !== null)
+    lines.push(`\\node[scale=1.2] at (${labelX},-0.5) {$${bottomLabel}$};`);
 
   lines.push(`% Axis`);
   lines.push(`\\draw[line width=1pt] (${axisStart},0) -- (${axisEnd},0);`);
