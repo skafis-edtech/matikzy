@@ -1,117 +1,294 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Skafis Tikz</title>
-  <style>
-    body { font-family: monospace; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-    textarea { width: 100%; font-family: monospace; font-size: 14px; box-sizing: border-box; }
-    button { margin-top: 0.5rem; padding: 0.4rem 1.2rem; font-size: 14px; cursor: pointer; }
-    #output { margin-top: 1.5rem; min-height: 100px; border: 1px solid #ccc; padding: 1rem; position: relative;}
-    #error { color: red; margin-top: 0.5rem; }
-    label { font-size: 13px; color: #555; display: block; margin-top: 1rem; margin-bottom: 0.25rem; }
-    #stats { display: flex; gap: 1.5rem; font-size: 13px; color: #555; margin-bottom: 1rem; flex-wrap: wrap; }
-    #stats span { white-space: nowrap; }
-    #stats b { color: #111; }
-  </style>
-</head>
-<body>
-  <h2>Skafis Tikz</h2>
-  <div id="stats">Loading stats...</div>
-
-  <label for="matikzy">Matikzy</label>
-  <textarea id="matikzy" style="height:80px;" placeholder="interval: =-= [a] _+_ (b) =-= >x"></textarea>
-  <button id="compile-btn">Compile to TikZ</button>
-  <div id="compile-error" style="color:red;margin-top:0.25rem;"></div>
-
-  <label for="tikz">TikZ</label>
-  <textarea id="tikz" style="height:180px;">
-\begin{document}
-\begin{tikzpicture}[scale=1.5]
-
-	\coordinate (A) at (-2,-1);
-	\coordinate (B) at (-2,1);
-	\coordinate (C) at (2,1);
-	\coordinate (D) at (2,-1);
-
-	\draw (A) -- (B) -- (C) -- (D) -- (A) -- (C);
-	\draw (B) -- (D);
-
-	\node[left, scale=1.5] at (A) {$A$};
-	\node[left, scale=1.5] at (B) {$B$};
-	\node[right, scale=1.5] at (C) {$C$};
-	\node[right, scale=1.5] at (D) {$D$};
-	\node[below, scale=1.5] at (0,0) {$O$};
-	\node[below, scale=1.5] at (0,-1) {$x+4$};
-	\node[left, scale=1.5] at (-2,0) {$x$};
-
-
-\end{tikzpicture}
-\end{document}
-  </textarea>
-  <br />
-  <button id="render-btn">Render</button>
-  <div id="error"></div>
-  <div id="output"></div>
-
-  <script type="module">
-    import { compile } from "/matikzy.js";
-
-    document.getElementById("compile-btn").addEventListener("click", compileMatikzy);
-    document.getElementById("render-btn").addEventListener("click", render);
-
-    function compileMatikzy() {
-      const matikzy = document.getElementById("matikzy").value.trim();
-      const compileError = document.getElementById("compile-error");
-      compileError.textContent = "";
-      try {
-        document.getElementById("tikz").value = compile(matikzy);
-      } catch (e) {
-        compileError.textContent = e.message;
+  <head>
+    <meta charset="utf-8" />
+    <title>Skafis Tikz</title>
+    <style>
+      :root {
+        --bg: #f8f8f8;
+        --surface: #ffffff;
+        --border: #d0d0d0;
+        --text: #1a1a1a;
+        --text-muted: #555;
+        --accent: #3b6fd4;
+        --accent-hover: #2d57b0;
+        --btn-text: #ffffff;
+        --error: #c0392b;
+        --output-bg: #ffffff;
+        --textarea-bg: #ffffff;
+        --stats-val: #111;
       }
-    }
 
-    async function render() {
-      const tikz = document.getElementById("tikz").value;
-      const error = document.getElementById("error");
-      const output = document.getElementById("output");
-      error.textContent = "";
-      output.innerHTML = "Rendering...";
-      try {
-        const res = await fetch("/render", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lang: "tikz", content: tikz })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        output.innerHTML = await res.text();
-        loadStats();
-      } catch (e) {
-        output.innerHTML = "";
-        error.textContent = e.message;
+      [data-theme="dark"] {
+        --bg: #111318;
+        --surface: #1e2128;
+        --border: #2e3240;
+        --text: #e2e4ea;
+        --text-muted: #8a8f9e;
+        --accent: #5c8cf5;
+        --accent-hover: #7aa3ff;
+        --btn-text: #ffffff;
+        --error: #e05252;
+        --output-bg: #1e2128;
+        --textarea-bg: #161920;
+        --stats-val: #e2e4ea;
       }
-    }
 
-    async function loadStats() {
-      const el = document.getElementById("stats");
-      try {
-        const res = await fetch("/stats");
-        if (!res.ok) throw new Error();
-        const s = await res.json();
-        const cacheRate = s.requests > 0 ? Math.round(s.cache_hits / s.requests * 100) : 0;
-        el.innerHTML = [
-          `<span>requests <b>${s.requests}</b></span>`,
-          `<span>renders <b>${s.renders}</b></span>`,
-          `<span>cache hits <b>${s.cache_hits}</b> (${cacheRate}%)</span>`,
-          `<span>errors <b>${s.errors}</b></span>`,
-          `<span>queue full <b>${s.queue_full}</b></span>`,
-        ].join("");
-      } catch {
-        el.textContent = "Stats unavailable";
+      * {
+        box-sizing: border-box;
       }
-    }
 
-    loadStats();
-  </script>
-</body>
+      body {
+        font-family: monospace;
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1.5rem 3rem;
+        background: var(--bg);
+        color: var(--text);
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.25rem;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.4rem;
+        letter-spacing: 0.03em;
+      }
+
+      #theme-toggle {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        border-radius: 6px;
+        padding: 0.3rem 0.75rem;
+        font-size: 13px;
+        font-family: monospace;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          color 0.15s;
+      }
+      #theme-toggle:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      textarea {
+        width: 100%;
+        font-family: monospace;
+        font-size: 13px;
+        background: var(--textarea-bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.6rem 0.75rem;
+        resize: vertical;
+        transition:
+          border-color 0.15s,
+          background 0.2s,
+          color 0.2s;
+        outline: none;
+      }
+      textarea:focus {
+        border-color: var(--accent);
+      }
+
+      button.action-btn {
+        margin-top: 0.5rem;
+        padding: 0.45rem 1.3rem;
+        font-size: 13px;
+        font-family: monospace;
+        cursor: pointer;
+        background: var(--accent);
+        color: var(--btn-text);
+        border: none;
+        border-radius: 6px;
+        transition: background 0.15s;
+      }
+      button.action-btn:hover {
+        background: var(--accent-hover);
+      }
+
+      [data-theme="dark"] #output svg {
+        filter: invert(1);
+      }
+
+      #output {
+        margin-top: 1.5rem;
+        min-height: 100px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1rem;
+        background: var(--output-bg);
+        position: relative;
+        transition:
+          background 0.2s,
+          border-color 0.2s;
+      }
+
+      .error-msg {
+        color: var(--error);
+        margin-top: 0.35rem;
+        font-size: 13px;
+        min-height: 1em;
+      }
+
+      label {
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        display: block;
+        margin-top: 1.25rem;
+        margin-bottom: 0.35rem;
+      }
+
+      #stats {
+        display: flex;
+        gap: 0;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--surface);
+        transition:
+          background 0.2s,
+          border-color 0.2s;
+      }
+      #stats span {
+        white-space: nowrap;
+        padding: 0.45rem 1rem;
+        border-right: 1px solid var(--border);
+      }
+      #stats span:last-child {
+        border-right: none;
+      }
+      #stats b {
+        color: var(--stats-val);
+      }
+      #stats.loading {
+        padding: 0.45rem 1rem;
+        border: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h2>Skafis Tikz</h2>
+      <button id="theme-toggle">dark mode</button>
+    </header>
+    <div id="stats" class="loading">Loading stats...</div>
+
+    <label for="matikzy">Matikzy</label>
+    <textarea
+      id="matikzy"
+      style="height: 80px"
+      placeholder="interval-arcs: =-= [a] _+_ (b) =-= >x"
+    >
+interval-arcs: =-= [a] _+_ (b) =-= >x</textarea
+    >
+    <button id="compile-btn" class="action-btn">Compile to TikZ</button>
+    <div id="compile-error" class="error-msg"></div>
+
+    <label for="tikz">TikZ</label>
+    <textarea id="tikz" style="height: 180px"> </textarea>
+    <button id="render-btn" class="action-btn">Render</button>
+    <div id="error" class="error-msg"></div>
+    <div id="output"></div>
+
+    <script type="module">
+      import { compile } from "/matikzy.js";
+
+      document
+        .getElementById("compile-btn")
+        .addEventListener("click", compileMatikzy);
+      document.getElementById("render-btn").addEventListener("click", render);
+
+      function compileMatikzy() {
+        const matikzy = document.getElementById("matikzy").value.trim();
+        const compileError = document.getElementById("compile-error");
+        compileError.textContent = "";
+        try {
+          document.getElementById("tikz").value = compile(matikzy);
+        } catch (e) {
+          compileError.textContent = e.message;
+        }
+      }
+
+      async function render() {
+        const tikz = document.getElementById("tikz").value;
+        const error = document.getElementById("error");
+        const output = document.getElementById("output");
+        error.textContent = "";
+        output.innerHTML = "Rendering...";
+        try {
+          const res = await fetch("/render", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lang: "tikz", content: tikz }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          output.innerHTML = await res.text();
+          loadStats();
+        } catch (e) {
+          output.innerHTML = "";
+          error.textContent = e.message;
+        }
+      }
+
+      async function loadStats() {
+        const el = document.getElementById("stats");
+        try {
+          const res = await fetch("/stats");
+          if (!res.ok) throw new Error();
+          const s = await res.json();
+          const cacheRate =
+            s.requests > 0 ? Math.round((s.cache_hits / s.requests) * 100) : 0;
+          el.classList.remove("loading");
+          el.innerHTML = [
+            `<span>requests <b>${s.requests}</b></span>`,
+            `<span>renders <b>${s.renders}</b></span>`,
+            `<span>cache hits <b>${s.cache_hits}</b> (${cacheRate}%)</span>`,
+            `<span>errors <b>${s.errors}</b></span>`,
+            `<span>queue full <b>${s.queue_full}</b></span>`,
+          ].join("");
+        } catch {
+          el.textContent = "Stats unavailable";
+        }
+      }
+
+      loadStats();
+
+      const toggle = document.getElementById("theme-toggle");
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+      function applyTheme(dark) {
+        document.documentElement.setAttribute(
+          "data-theme",
+          dark ? "dark" : "light",
+        );
+        toggle.textContent = dark ? "light mode" : "dark mode";
+      }
+
+      applyTheme(prefersDark.matches);
+      prefersDark.addEventListener("change", (e) => applyTheme(e.matches));
+      toggle.addEventListener("click", () => {
+        applyTheme(
+          document.documentElement.getAttribute("data-theme") !== "dark",
+        );
+      });
+    </script>
+  </body>
 </html>
