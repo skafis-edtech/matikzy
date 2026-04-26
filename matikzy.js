@@ -9,7 +9,7 @@ function register(prefix, syntaxCheck, compile) {
 // ─── interval-arcs: ────────────────────────────────────────────────────────────────
 
 function parseIntervalArcsTokens(content) {
-  const tokenRegex = /=([^=]*)=|\[([^\]]+)\]|\(([^)]+)\)|_([^_]*)_|>(\S+)/g;
+  const tokenRegex = /=([^=]*)=|\[([^\]]+)\]|\(([^)]+)\)|\|(\S+)\||_([^_]*)_|>(\S*)/g;
   const tokens = [];
   const parseErrors = [];
   let match;
@@ -23,14 +23,16 @@ function parseIntervalArcsTokens(content) {
     lastIndex = match.index + match[0].length;
 
     if (match[1] !== undefined) tokens.push({ type: "hatch", label: match[1] });
-    else if (match[5] !== undefined)
-      tokens.push({ type: "arrow", label: match[5] });
+    else if (match[6] !== undefined)
+      tokens.push({ type: "arrow", label: match[6] });
     else if (match[2] !== undefined)
       tokens.push({ type: "point", dot: "solid", label: match[2] });
     else if (match[3] !== undefined)
       tokens.push({ type: "point", dot: "hollow", label: match[3] });
     else if (match[4] !== undefined)
-      tokens.push({ type: "sign", label: match[4] });
+      tokens.push({ type: "mark", label: match[4] });
+    else if (match[5] !== undefined)
+      tokens.push({ type: "sign", label: match[5] });
   }
 
   return { tokens, parseErrors };
@@ -39,19 +41,16 @@ function parseIntervalArcsTokens(content) {
 function intervalArcsSyntaxCheck(content) {
   const errors = [];
 
-  if (!/>(\S+)$/.test(content)) errors.push("Must end with >...");
-
   const { tokens, parseErrors } = parseIntervalArcsTokens(content);
   errors.push(...parseErrors);
 
-  const points = tokens.filter((t) => t.type === "point");
+  const points = tokens.filter((t) => t.type === "point" || t.type === "mark");
   const signs = tokens.filter((t) => t.type === "sign");
   const hatches = tokens.filter((t) => t.type === "hatch");
   const arrows = tokens.filter((t) => t.type === "arrow");
 
   if (points.length === 0)
-    errors.push("Must have at least one point defined with [n] or (n)");
-  if (arrows.length === 0) errors.push("Missing >x at end");
+    errors.push("Must have at least one point defined with [n], (n), or |n|");
   if (arrows.length > 1) errors.push("Only one >x allowed");
   if (arrows.length === 1 && tokens[tokens.length - 1].type !== "arrow")
     errors.push(">x must be the last token");
@@ -59,7 +58,7 @@ function intervalArcsSyntaxCheck(content) {
   points.forEach((p) => {
     if (p.label.trim() === "")
       errors.push(
-        `Empty point label: ${p.dot === "solid" ? "[...]" : "(...)"}`,
+        `Empty point label: ${p.type === "mark" ? "|...|" : p.dot === "solid" ? "[...]" : "(...)"}`,
       );
   });
 
@@ -82,17 +81,18 @@ function intervalArcsSyntaxCheck(content) {
         );
       expectedType = "point";
     } else {
-      if (tok.type !== "point")
-        errors.push(`Expected a point [n] or (n) after sign/hatch token`);
+      if (tok.type !== "point" && tok.type !== "mark")
+        errors.push(`Expected a point [n], (n), or |n| after sign/hatch token`);
       expectedType = "sign_or_hatch";
     }
   }
 
-  const beforeArrow = tokens[tokens.length - 2];
+  const lastMeaningful =
+    arrows.length === 1 ? tokens[tokens.length - 2] : tokens[tokens.length - 1];
   if (
-    beforeArrow &&
-    beforeArrow.type !== "hatch" &&
-    beforeArrow.type !== "sign"
+    lastMeaningful &&
+    lastMeaningful.type !== "hatch" &&
+    lastMeaningful.type !== "sign"
   )
     errors.push("Missing sign or =-= after last point");
 
@@ -112,12 +112,12 @@ function intervalArcsCompile(content) {
   const SPACING = 2;
   const START_X = -3;
   const xRadius = SPACING / 2;
-  const points = tokens.filter((t) => t.type === "point");
+  const points = tokens.filter((t) => t.type === "point" || t.type === "mark");
   points.forEach((p, i) => {
     p.x = START_X + i * SPACING;
   });
 
-  const arrowLabel = tokens.find((t) => t.type === "arrow")?.label ?? "x";
+  const arrowLabel = tokens.find((t) => t.type === "arrow")?.label ?? null;
   const lastPointX = points[points.length - 1].x;
   const axisStart = points[0].x - 1.0;
   const axisEnd = lastPointX + 1.0;
@@ -128,7 +128,7 @@ function intervalArcsCompile(content) {
   for (const tok of tokens) {
     if (tok.type === "hatch") {
       inHatch = true;
-    } else if (tok.type === "point") {
+    } else if (tok.type === "point" || tok.type === "mark") {
       if (inHatch) {
         hatchSegments.push({ from: prevX, to: tok.x });
         inHatch = false;
@@ -147,20 +147,27 @@ function intervalArcsCompile(content) {
 
   lines.push(`% Axis`);
   lines.push(`\\draw[line width=1pt] (${axisStart},0) -- (${axisEnd},0);`);
-  lines.push(
-    `\\fill (${axisEnd},0) -- (${axisEnd - 0.2},0.1) -- (${axisEnd - 0.2},-0.1) -- cycle;`,
-  );
-  lines.push(
-    `\\node[below, scale=1.5] at (${axisEnd - 0.1},0) {$${arrowLabel}$};`,
-  );
+  if (arrowLabel !== null) {
+    lines.push(
+      `\\fill (${axisEnd},0) -- (${axisEnd - 0.2},0.1) -- (${axisEnd - 0.2},-0.1) -- cycle;`,
+    );
+    if (arrowLabel !== "")
+      lines.push(
+        `\\node[below, scale=1.5] at (${axisEnd - 0.1},0) {$${arrowLabel}$};`,
+      );
+  }
 
   lines.push(`% Points`);
   points.forEach((p) => {
-    lines.push(
-      p.dot === "solid"
-        ? `\\fill (${p.x},0) circle (3pt);`
-        : `\\draw[line width=1.5pt, fill=white] (${p.x},0) circle (3.5pt);`,
-    );
+    if (p.type === "mark") {
+      lines.push(`\\draw[line width=1pt] (${p.x},-0.12) -- (${p.x},0.12);`);
+    } else {
+      lines.push(
+        p.dot === "solid"
+          ? `\\fill (${p.x},0) circle (3pt);`
+          : `\\draw[line width=1.5pt, fill=white] (${p.x},0) circle (3.5pt);`,
+      );
+    }
     lines.push(`\\node[below, scale=1.5] at (${p.x},0) {$${p.label}$};`);
   });
 
