@@ -124,7 +124,7 @@ function intervalArcsSyntaxCheck(content) {
   return { valid: errors.length === 0, errors };
 }
 
-function intervalArcsCompile(content, closedOnly = false) {
+function intervalArcsCompile(content, closedOnly = false, noArcs = false) {
   const { topLabel, bottomLabel, rest } = extractLeftLabels(content);
   const { tokens } = parseIntervalArcsTokens(rest);
 
@@ -224,18 +224,20 @@ function intervalArcsCompile(content, closedOnly = false) {
     if (sign)
       lines.push(`\\node[above, scale=1.5] at (${signX},0) {$${sign}$};`);
 
-    if (!isFirst && !isLast)
-      lines.push(
-        `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
-      );
-    else if (isFirst && !closedOnly)
-      lines.push(
-        `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
-      );
-    else if (isLast && !closedOnly)
-      lines.push(
-        `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
-      );
+    if (!noArcs) {
+      if (!isFirst && !isLast)
+        lines.push(
+          `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
+        );
+      else if (isFirst && !closedOnly)
+        lines.push(
+          `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+        );
+      else if (isLast && !closedOnly)
+        lines.push(
+          `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+        );
+    }
   }
 
   lines.push(`% Arrows below`);
@@ -287,6 +289,12 @@ register(
   "interval-arcs[closed-only]: ",
   intervalArcsSyntaxCheck,
   (c) => intervalArcsCompile(c, true),
+);
+register("interval: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, false, true));
+register(
+  "interval[closed-only]: ",
+  intervalArcsSyntaxCheck,
+  (c) => intervalArcsCompile(c, true, true),
 );
 
 // ─── function: ────────────────────────────────────────────────────────────────
