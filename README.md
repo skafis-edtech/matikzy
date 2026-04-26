@@ -78,7 +78,7 @@ The idea of syntax and tikz formatting is "humanly" thought of. But the code - m
 
 ## Syntax
 
-### interval-arcs
+### interval-arcs (outdated)
 
 BNF:
 
