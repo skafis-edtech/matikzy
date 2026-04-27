@@ -78,28 +78,14 @@ The idea of syntax and tikz formatting is "humanly" thought of. But the code - m
 
 ## Syntax
 
-### interval-arcs (outdated)
+(todo: include BNFs)
 
-BNF:
+### interval-arcs
 
-```
-<matikzy>       ::= "interval-arcs: " <interval-arcs>
+...
 
-<interval-arcs>      ::= <segment> <point> <segment> { <point> <segment> } <arrow>
+### unit-circle
 
-<segment>       ::= <hatch> | <sign>
+rotangle:
 
-<hatch>         ::= "=" <label> "="
-
-<sign>          ::= "_" <label> "_"
-
-<point>         ::= <solid-point> | <hollow-point>
-
-<solid-point>   ::= "[" <label> "]"
-
-<hollow-point>  ::= "(" <label> ")"
-
-<arrow>         ::= ">" <label>
-
-<label>         ::= <non-empty-string>
-```
+`<degrees-int>|<rad-with-pi>|<0-15>`, in case of ambiguity - priority degrees->rad->int
