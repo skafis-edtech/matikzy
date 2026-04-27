@@ -25,31 +25,69 @@ function extractLeftLabels(content) {
 }
 
 function parseIntervalArcsTokens(content) {
-  const tokenRegex = /=([^=]*)=(down|up)?|\[([^\]]+)\]|\(([^)]+)\)|\|(\S+)\||_([^_]*)_(down|up)?|>(\S*)/g;
   const tokens = [];
   const parseErrors = [];
-  let match;
-  let lastIndex = 0;
+  let i = 0;
 
-  while ((match = tokenRegex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      const gap = content.slice(lastIndex, match.index).trim();
+  function skipWS() {
+    while (i < content.length && /\s/.test(content[i])) i++;
+  }
+
+  function readBalanced(open, close) {
+    let depth = 1;
+    const start = i;
+    while (i < content.length) {
+      if (content[i] === open) depth++;
+      else if (content[i] === close) {
+        depth--;
+        if (depth === 0) { i++; return content.slice(start, i - 1); }
+      }
+      i++;
+    }
+    return content.slice(start);
+  }
+
+  function readUntil(close) {
+    const start = i;
+    while (i < content.length && content[i] !== close) i++;
+    const result = content.slice(start, i);
+    i++;
+    return result;
+  }
+
+  function tryDirection() {
+    const m = content.slice(i).match(/^(down|up)/);
+    if (m) { i += m[1].length; return m[1]; }
+    return null;
+  }
+
+  while (i < content.length) {
+    skipWS();
+    if (i >= content.length) break;
+    const ch = content[i++];
+
+    if (ch === "[") {
+      tokens.push({ type: "point", dot: "solid", label: readBalanced("[", "]") });
+    } else if (ch === "(") {
+      tokens.push({ type: "point", dot: "hollow", label: readBalanced("(", ")") });
+    } else if (ch === "|") {
+      tokens.push({ type: "mark", label: readUntil("|") });
+    } else if (ch === "=") {
+      const label = readUntil("=");
+      tokens.push({ type: "hatch", label, direction: tryDirection() });
+    } else if (ch === "_") {
+      const label = readUntil("_");
+      tokens.push({ type: "sign", label, direction: tryDirection() });
+    } else if (ch === ">") {
+      const start = i;
+      while (i < content.length && !/\s/.test(content[i])) i++;
+      tokens.push({ type: "arrow", label: content.slice(start, i) });
+    } else {
+      const start = i - 1;
+      while (i < content.length && !/[\s\[(|=_>]/.test(content[i])) i++;
+      const gap = content.slice(start, i).trim();
       if (gap) parseErrors.push(`Unrecognized syntax: "${gap}"`);
     }
-    lastIndex = match.index + match[0].length;
-
-    if (match[1] !== undefined)
-      tokens.push({ type: "hatch", label: match[1], direction: match[2] ?? null });
-    else if (match[8] !== undefined)
-      tokens.push({ type: "arrow", label: match[8] });
-    else if (match[3] !== undefined)
-      tokens.push({ type: "point", dot: "solid", label: match[3] });
-    else if (match[4] !== undefined)
-      tokens.push({ type: "point", dot: "hollow", label: match[4] });
-    else if (match[5] !== undefined)
-      tokens.push({ type: "mark", label: match[5] });
-    else if (match[6] !== undefined)
-      tokens.push({ type: "sign", label: match[6], direction: match[7] ?? null });
   }
 
   return { tokens, parseErrors };
@@ -124,7 +162,7 @@ function intervalArcsSyntaxCheck(content) {
   return { valid: errors.length === 0, errors };
 }
 
-function intervalArcsCompile(content, closedOnly = false, noArcs = false) {
+function intervalArcsCompile(content, noLeft = false, noRight = false, noArcs = false) {
   const { topLabel, bottomLabel, rest } = extractLeftLabels(content);
   const { tokens } = parseIntervalArcsTokens(rest);
 
@@ -229,11 +267,11 @@ function intervalArcsCompile(content, closedOnly = false, noArcs = false) {
         lines.push(
           `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
         );
-      else if (isFirst && !closedOnly)
+      else if (isFirst && !noLeft)
         lines.push(
           `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
         );
-      else if (isLast && !closedOnly)
+      else if (isLast && !noRight)
         lines.push(
           `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
         );
@@ -285,17 +323,12 @@ function intervalArcsCompile(content, closedOnly = false, noArcs = false) {
 }
 
 register("interval-arcs: ", intervalArcsSyntaxCheck, intervalArcsCompile);
-register(
-  "interval-arcs[closed-only]: ",
-  intervalArcsSyntaxCheck,
-  (c) => intervalArcsCompile(c, true),
-);
-register("interval: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, false, true));
-register(
-  "interval[closed-only]: ",
-  intervalArcsSyntaxCheck,
-  (c) => intervalArcsCompile(c, true, true),
-);
+register("interval-arcs[no-left]: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, true, false));
+register("interval-arcs[no-right]: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, false, true));
+register("interval-arcs[no-left][no-right]: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, true, true));
+register("interval-arcs[closed-only]: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, true, true));
+register("interval: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, false, false, true));
+register("interval[closed-only]: ", intervalArcsSyntaxCheck, (c) => intervalArcsCompile(c, true, true, true));
 
 // ─── function: ────────────────────────────────────────────────────────────────
 
