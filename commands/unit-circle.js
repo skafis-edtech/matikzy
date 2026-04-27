@@ -1,9 +1,7 @@
 const RADIUS = 2.5;
 
-// Standard unit circle angles in order. Enum index = position in this list (1-based).
-// Integers 1-16 are treated as enumeration; larger integers are treated as degrees.
-// When ambiguous (e.g. could be either), degrees take precedence — but since all
-// standard degree values (30, 45, 60 …) are > 16, there is no ambiguity in practice.
+// Standard unit circle angles in order. Any integer n maps to this table via
+// modulo-16 (1-based, wrapping). Positive → CCW, negative → CW.
 const ANGLE_TABLE = [
   { enum:  1, deg:  30, x:  2.1651, y:  1.25   },
   { enum:  2, deg:  45, x:  1.7678, y:  1.7678 },
@@ -28,34 +26,11 @@ function fmt(n) {
 }
 
 // Parse "pi" notation (input already lowercased, whitespace stripped).
-// Handles: pi, 2pi, pi/6, 2pi/3, 1/2pi, 3/4pi, 0.5pi, 11pi/6 …
+// Only accepts <int>/<int>pi — e.g. "1/2pi", "3/4pi", "11/6pi", "1/1pi"
 function parsePiRadians(s) {
-  let m;
-
-  // (N/D)pi — e.g. "1/2pi", "3/4pi"
-  m = s.match(/^(\d+)\/(\d+)pi(?:\/(\d+))?$/);
-  if (m) {
-    const coeff = parseInt(m[1]) / parseInt(m[2]);
-    const denom = m[3] ? parseInt(m[3]) : 1;
-    return (coeff / denom) * Math.PI;
-  }
-
-  // Npi or Npi/D — e.g. "2pi", "3pi/4", "11pi/6", "0.5pi"
-  m = s.match(/^(\d+(?:\.\d+)?)pi(?:\/(\d+))?$/);
-  if (m) {
-    const coeff = parseFloat(m[1]);
-    const denom = m[2] ? parseInt(m[2]) : 1;
-    return (coeff / denom) * Math.PI;
-  }
-
-  // pi or pi/D — e.g. "pi", "pi/6", "pi/2"
-  m = s.match(/^pi(?:\/(\d+))?$/);
-  if (m) {
-    const denom = m[1] ? parseInt(m[1]) : 1;
-    return (1 / denom) * Math.PI;
-  }
-
-  return null;
+  const m = s.match(/^(\d+)\/(\d+)pi$/);
+  if (!m) return null;
+  return (parseInt(m[1]) / parseInt(m[2])) * Math.PI;
 }
 
 function coordsFromDeg(deg) {
@@ -86,13 +61,17 @@ function parseAngle(val) {
   const num = Number(s);
   if (isNaN(num)) return { error: `Cannot parse angle: "${val}"` };
 
-  // Small integer → enumeration index (1–16)
-  if (Number.isInteger(num) && num >= 1 && num <= 16) {
-    const entry = ANGLE_TABLE.find(e => e.enum === num);
-    return { x: entry.x, y: entry.y };
+  if (Number.isInteger(num)) {
+    // Degrees take priority: normalize to (0, 360] and check against standard angles
+    const normalized = ((num % 360) + 360) % 360 || 360;
+    const degEntry = ANGLE_TABLE.find(e => e.deg === normalized);
+    if (degEntry) return { x: degEntry.x, y: degEntry.y };
+    // Otherwise → modulo-16 enumeration (positive = CCW, negative = CW)
+    const idx = ((num - 1) % 16 + 16) % 16;
+    return { x: ANGLE_TABLE[idx].x, y: ANGLE_TABLE[idx].y };
   }
 
-  // Everything else → degrees (includes 0, >16, decimals)
+  // Non-integer decimal → degrees
   return coordsFromDeg(num);
 }
 
@@ -122,11 +101,11 @@ function syntaxCheck(content) {
   const trimmed = content.trim();
   if (trimmed === "") return { valid: true, errors: [] };
 
-  const m = trimmed.match(/^rotangle\s+(.+)$/);
+  const m = trimmed.match(/^rotangle\s+(\S+)(?:\s+(\(\)|\[\]))?$/);
   if (!m)
     return {
       valid: false,
-      errors: [`Unknown argument: "${trimmed}". Expected: rotangle <angle>`],
+      errors: [`Unknown argument: "${trimmed}". Expected: rotangle <angle> [() or []]`],
     };
 
   const result = parseAngle(m[1]);
@@ -140,10 +119,16 @@ function compile(content) {
   const trimmed = content.trim();
 
   if (trimmed !== "") {
-    const m = trimmed.match(/^rotangle\s+(.+)$/);
+    const m = trimmed.match(/^rotangle\s+(\S+)(?:\s+(\(\)|\[\]))?$/);
     const { x, y } = parseAngle(m[1]);
+    const point = m[2];
     lines.push(``, `% Rotation angle`);
     lines.push(`\\draw[line width=1pt] (0,0) -- (${fmt(x)}, ${fmt(y)});`);
+    if (point === "()") {
+      lines.push(`\\draw[line width=1.2pt, fill=white] (${fmt(x)}, ${fmt(y)}) circle (2pt);`);
+    } else if (point === "[]") {
+      lines.push(`\\draw[line width=1.2pt, fill=black] (${fmt(x)}, ${fmt(y)}) circle (2pt);`);
+    }
   }
 
   return lines.join("\n");
