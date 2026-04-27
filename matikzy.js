@@ -1,6 +1,7 @@
 import intervalArcsCommands from "./commands/interval-arcs.js";
 import functionCommands from "./commands/function.js";
 import unitCircleCommands from "./commands/unit-circle.js";
+import cuboidCommands from "./commands/cuboid.js";
 
 // ─── Command registry ─────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ const allCommands = [
   ...intervalArcsCommands,
   ...functionCommands,
   ...unitCircleCommands,
+  ...cuboidCommands,
 ];
 
 allCommands.forEach(({ prefix, syntaxCheck, compile }) =>
