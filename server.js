@@ -77,6 +77,7 @@ function normalize(tikz) {
 
 app.get("/", (_, res) => res.sendFile("public/demo.html", { root: "." }));
 app.get("/matikzy.js", (_, res) => res.sendFile("matikzy.js", { root: "." }));
+app.use("/commands", express.static("commands"));
 
 function checkTikzSyntax(code) {
   if (!code.trim()) return "Empty TikZ code";
