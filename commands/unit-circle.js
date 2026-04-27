@@ -102,12 +102,11 @@ const BASE_LINES = [
   `\\node[below, scale=1.5] at (-0.4,-2.5) {$-1$};`,
   ``,
   `% Center point`,
-  `\\node[below, scale=1.5] at (-0.3,0) {$O$};`,
 ];
 
+// angle: stops at { or whitespace. {arcLabel} is optional arc annotation.
 // Bracket: (label) = hollow, [label] = filled. Label may be empty.
-// Uses greedy .* so nested parens/brackets in the label are fine.
-const ROTANGLE_RE = /^rotangle\s+(\S+)(?:\s+(?:\((.*)\)|\[(.*)\]))?$/;
+const ROTANGLE_RE = /^rotangle\s+([^\s{]+)(?:\{([^}]*)\})?(?:\s+(?:\((.*)\)|\[(.*)\]))?$/;
 
 function syntaxCheck(content) {
   const trimmed = content.trim();
@@ -120,7 +119,7 @@ function syntaxCheck(content) {
       errors: [`Unknown argument: "${trimmed}". Expected: rotangle <angle> [(label) or [label]]`],
     };
 
-  const result = parseAngle(m[1]);
+  const result = parseAngle(m[1]);  // m[1] is still the angle value
   if (result.error) return { valid: false, errors: [result.error] };
 
   return { valid: true, errors: [] };
@@ -130,12 +129,25 @@ function compile(content) {
   const lines = [...BASE_LINES];
   const trimmed = content.trim();
 
+  let rotCoords = null;
   if (trimmed !== "") {
     const m = trimmed.match(ROTANGLE_RE);
-    const { x, y, deg } = parseAngle(m[1]);
-    const hollow = m[2] !== undefined;   // () branch matched
-    const filled = m[3] !== undefined;   // [] branch matched
-    const label = hollow ? m[2] : filled ? m[3] : null;
+    rotCoords = parseAngle(m[1]);
+  }
+
+  const oInQ3 = rotCoords && rotCoords.x < 0 && rotCoords.y < 0;
+  lines.push(oInQ3
+    ? `\\node[below, scale=1.5] at (0.3,0.1) {$O$};`
+    : `\\node[below, scale=1.5] at (-0.3,0) {$O$};`
+  );
+
+  if (trimmed !== "") {
+    const m = trimmed.match(ROTANGLE_RE);
+    const { x, y, deg } = rotCoords;
+    const arcLabel = m[2] || null;
+    const hollow = m[3] !== undefined;   // () branch matched
+    const filled = m[4] !== undefined;   // [] branch matched
+    const label = hollow ? m[3] : filled ? m[4] : null;
 
     const arcRad = (deg * Math.PI) / 180;
     const cosA = Math.cos(arcRad);
@@ -158,6 +170,15 @@ function compile(content) {
     lines.push(`\\draw[thick] (0.6,0) arc[start angle=0, end angle=${deg}, x radius=0.6, y radius=0.6];`);
     lines.push(`\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`);
     lines.push(`\\draw[line width=1pt] (0,0) -- (${fmt(x)}, ${fmt(y)});`);
+
+    if (arcLabel) {
+      const midRad = arcRad / 2;
+      const cosMid = Math.cos(midRad);
+      const sinMid = Math.sin(midRad);
+      const lblX = fmt(0.9 * cosMid);
+      const lblY = fmt(0.9 * sinMid);
+      lines.push(`\\node[scale=1.5] at (${lblX}, ${lblY}) {$${arcLabel}$};`);
+    }
 
     if (hollow || filled) {
       const fill = hollow ? "white" : "black";
