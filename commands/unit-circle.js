@@ -26,11 +26,12 @@ function fmt(n) {
 }
 
 // Parse "pi" notation (input already lowercased, whitespace stripped).
-// Only accepts <int>/<int>pi — e.g. "1/2pi", "3/4pi", "11/6pi", "1/1pi"
+// Only accepts [−]<int>/<int>pi — e.g. "1/2pi", "-3/4pi", "11/6pi"
 function parsePiRadians(s) {
-  const m = s.match(/^(\d+)\/(\d+)pi$/);
+  const m = s.match(/^(-?)(\d+)\/(\d+)pi$/);
   if (!m) return null;
-  return (parseInt(m[1]) / parseInt(m[2])) * Math.PI;
+  const sign = m[1] === "-" ? -1 : 1;
+  return sign * (parseInt(m[2]) / parseInt(m[3])) * Math.PI;
 }
 
 function coordsFromDeg(deg) {
@@ -43,18 +44,21 @@ function coordsFromDeg(deg) {
   };
 }
 
-// Returns { x, y } or { error: string }
+// Returns { x, y, deg } or { error: string }
 function parseAngle(val) {
   const s = val.trim().toLowerCase().replace(/\s+/g, "");
 
   if (s.includes("pi")) {
     const rad = parsePiRadians(s);
     if (rad === null) return { error: `Cannot parse pi notation: "${val}"` };
-    const entry = ANGLE_TABLE.find(e => Math.abs((e.deg * Math.PI) / 180 - rad) < 1e-9);
-    if (entry) return { x: entry.x, y: entry.y };
+    const normalizedRad = ((rad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const entry = ANGLE_TABLE.find(e => Math.abs((e.deg * Math.PI) / 180 - normalizedRad) < 1e-9);
+    const deg = parseFloat((rad * 180 / Math.PI).toFixed(4));
+    if (entry) return { x: entry.x, y: entry.y, deg };
     return {
       x: parseFloat((RADIUS * Math.cos(rad)).toFixed(4)),
       y: parseFloat((RADIUS * Math.sin(rad)).toFixed(4)),
+      deg,
     };
   }
 
@@ -65,14 +69,18 @@ function parseAngle(val) {
     // Degrees take priority: normalize to (0, 360] and check against standard angles
     const normalized = ((num % 360) + 360) % 360 || 360;
     const degEntry = ANGLE_TABLE.find(e => e.deg === normalized);
-    if (degEntry) return { x: degEntry.x, y: degEntry.y };
+    if (degEntry) return { x: degEntry.x, y: degEntry.y, deg: num };
     // Otherwise → modulo-16 enumeration (positive = CCW, negative = CW)
     const idx = ((num - 1) % 16 + 16) % 16;
-    return { x: ANGLE_TABLE[idx].x, y: ANGLE_TABLE[idx].y };
+    const e = ANGLE_TABLE[idx];
+    // Negative input → negative arc angle (CW); avoid 0 by mapping 360 → -360
+    const arcDeg = num < 0 ? (e.deg - 360 || -360) : e.deg;
+    return { x: e.x, y: e.y, deg: arcDeg };
   }
 
   // Non-integer decimal → degrees
-  return coordsFromDeg(num);
+  const coords = coordsFromDeg(num);
+  return { ...coords, deg: num };
 }
 
 const BASE_LINES = [
@@ -124,12 +132,31 @@ function compile(content) {
 
   if (trimmed !== "") {
     const m = trimmed.match(ROTANGLE_RE);
-    const { x, y } = parseAngle(m[1]);
+    const { x, y, deg } = parseAngle(m[1]);
     const hollow = m[2] !== undefined;   // () branch matched
     const filled = m[3] !== undefined;   // [] branch matched
     const label = hollow ? m[2] : filled ? m[3] : null;
 
+    const arcRad = (deg * Math.PI) / 180;
+    const cosA = Math.cos(arcRad);
+    const sinA = Math.sin(arcRad);
+    const arcX = fmt(0.6 * cosA);
+    const arcY = fmt(0.6 * sinA);
+    // Arrow rotated slightly inward from the tangent so it sits on the arc line.
+    // CCW arc (positive deg): rotate CW (-14°). CW arc (negative deg): rotate CCW (+14°).
+    const cw = deg < 0;
+    const arrowRad = arcRad + ((cw ? 14 : -14) * Math.PI) / 180;
+    const cosAr = Math.cos(arrowRad);
+    const sinAr = Math.sin(arrowRad);
+    // CCW tangent: (-sinAr, cosAr) — CW tangent: (sinAr, -cosAr)
+    // Wings: tip − 0.2·tangent ± 0.1·normal(cosAr, sinAr)
+    const w1x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
+    const w1y = fmt(0.6 * sinA + (cw ?  1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
+    const w2x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
+    const w2y = fmt(0.6 * sinA + (cw ?  1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
     lines.push(``, `% Rotation angle`);
+    lines.push(`\\draw[thick] (0.6,0) arc[start angle=0, end angle=${deg}, x radius=0.6, y radius=0.6];`);
+    lines.push(`\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`);
     lines.push(`\\draw[line width=1pt] (0,0) -- (${fmt(x)}, ${fmt(y)});`);
 
     if (hollow || filled) {
