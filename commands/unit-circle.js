@@ -97,15 +97,19 @@ const BASE_LINES = [
   `\\node[below, scale=1.5] at (-0.3,0) {$O$};`,
 ];
 
+// Bracket: (label) = hollow, [label] = filled. Label may be empty.
+// Uses greedy .* so nested parens/brackets in the label are fine.
+const ROTANGLE_RE = /^rotangle\s+(\S+)(?:\s+(?:\((.*)\)|\[(.*)\]))?$/;
+
 function syntaxCheck(content) {
   const trimmed = content.trim();
   if (trimmed === "") return { valid: true, errors: [] };
 
-  const m = trimmed.match(/^rotangle\s+(\S+)(?:\s+(\(\)|\[\]))?$/);
+  const m = trimmed.match(ROTANGLE_RE);
   if (!m)
     return {
       valid: false,
-      errors: [`Unknown argument: "${trimmed}". Expected: rotangle <angle> [() or []]`],
+      errors: [`Unknown argument: "${trimmed}". Expected: rotangle <angle> [(label) or [label]]`],
     };
 
   const result = parseAngle(m[1]);
@@ -119,15 +123,24 @@ function compile(content) {
   const trimmed = content.trim();
 
   if (trimmed !== "") {
-    const m = trimmed.match(/^rotangle\s+(\S+)(?:\s+(\(\)|\[\]))?$/);
+    const m = trimmed.match(ROTANGLE_RE);
     const { x, y } = parseAngle(m[1]);
-    const point = m[2];
+    const hollow = m[2] !== undefined;   // () branch matched
+    const filled = m[3] !== undefined;   // [] branch matched
+    const label = hollow ? m[2] : filled ? m[3] : null;
+
     lines.push(``, `% Rotation angle`);
     lines.push(`\\draw[line width=1pt] (0,0) -- (${fmt(x)}, ${fmt(y)});`);
-    if (point === "()") {
-      lines.push(`\\draw[line width=1.2pt, fill=white] (${fmt(x)}, ${fmt(y)}) circle (2pt);`);
-    } else if (point === "[]") {
-      lines.push(`\\draw[line width=1.2pt, fill=black] (${fmt(x)}, ${fmt(y)}) circle (2pt);`);
+
+    if (hollow || filled) {
+      const fill = hollow ? "white" : "black";
+      lines.push(`\\draw[line width=1.2pt, fill=${fill}] (${fmt(x)}, ${fmt(y)}) circle (2pt);`);
+
+      if (label) {
+        const align = x < 0 ? "left" : "right";
+        const labelY = fmt(y < 0 ? y - 0.3 : y + 0.3);
+        lines.push(`\\node[${align}, scale=1.5] at (${fmt(x)}, ${labelY}) {$${label}$};`);
+      }
     }
   }
 
