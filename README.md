@@ -4,6 +4,8 @@ Demo page: https://tikz.simtukas.lt
 
 License: [GPLv3](./LICENSE.txt) - if you modify, you have to open source it.
 
+_Keep in mind that most of this is vibe coded. But the language itself is not - its syntax and examples with tikz are made manually._
+
 ## Example
 
 ```
