@@ -193,6 +193,17 @@ function parseExpLine(line) {
   return { exp: true, a, ...parseRanges(m, 2) };
 }
 
+function parseCircleLine(line) {
+  if (!/^graph\s+circle\b/.test(line)) return null;
+  const cm = line.match(/(?<![a-zA-Z])\(([^;]+);([^)]+)\)/);
+  const rm = line.match(/\br=([^\s]+)/);
+  const cx = cm ? evalNum(cm[1]) : 0;
+  const cy = cm ? evalNum(cm[2]) : 0;
+  const r  = rm ? evalNum(rm[1]) : 2;
+  if (isNaN(cx) || isNaN(cy) || isNaN(r) || r <= 0) return null;
+  return { circle: true, cx, cy, r };
+}
+
 function parseHyperbolaLine(line) {
   const baseMatch = line.match(new RegExp(`^graph\\s+hyperbola\\s+(.*?)${RANGES_RE.source}$`));
   if (!baseMatch) return null;
@@ -228,6 +239,7 @@ function parseContent(content, defaultExtent = 3) {
       ...segments.map(parseCbrtLine).filter(Boolean),
       ...segments.map(parseLogLine).filter(Boolean),
       ...segments.map(parseExpLine).filter(Boolean),
+      ...segments.map(parseCircleLine).filter(Boolean),
     ],
   };
 }
@@ -235,6 +247,8 @@ function parseContent(content, defaultExtent = 3) {
 function syntaxCheck(content, defaultExtent = 3) {
   if (/\baxis\b/.test(content))
     return { valid: false, errors: ['Use "axes" not "axis"'] };
+  if (/\bgraph\s+circle\b.*[a-zA-Z]\(/.test(content))
+    return { valid: false, errors: ['Circle center must be "(x;y)" with no letter before the parenthesis'] };
   const p = parseContent(content.trim(), defaultExtent);
   if (isNaN(p.xMin) || isNaN(p.xMax))
     return { valid: false, errors: ["Invalid x range"] };
@@ -336,6 +350,12 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           if (lo < hi)
             lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${g.k}/\\x});`);
         }
+        continue;
+      }
+
+      if (g.circle) {
+        const f = (n) => parseFloat(n.toFixed(6));
+        lines.push(`\\draw[thick] (${f(g.cx)},${f(g.cy)}) circle (${f(g.r)});`);
         continue;
       }
 

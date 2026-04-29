@@ -43,7 +43,7 @@ TYPE:
 - hyperbola (k=sth) for y=k/x
 - cubic, sqrt, cbrt
 - log, exp (a=2 or a=1/2 or a=0.5), default a=2
-- circle (x,y,r)
+- circle (x,y,r) - (0;0) r=3
 - sin,cos,tg,ctg
 - generic - polynomial through points (verteces and passing points)
 
