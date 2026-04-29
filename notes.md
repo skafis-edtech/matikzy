@@ -38,12 +38,12 @@ TODO:
 
 TYPE:
 
-- line (y=kx+b; 2 points; x=a)
+- line (y=kx+b (with a/b fractions); 2 points; x=a)
 - parabola (abc;amn;axx)
 - cube, sqrt, cbrt
 - log, exp (2, 0.5)
 - circle (x,y,r)
-- up-down-polynomial.
+- polynomial through points (verteces and passing points)
 
 TODO:
 

@@ -56,6 +56,68 @@ function parsePointLine(line) {
   return { x, y, label, pointStyle, xLine: rest.includes("x-line"), yLine: rest.includes("y-line") };
 }
 
+function evalNum(s) {
+  if (!s || s === "+") return 1;
+  if (s === "-") return -1;
+  const sign = s[0] === "-" ? -1 : 1;
+  const abs = s.replace(/^[+-]/, "");
+  const slash = abs.indexOf("/");
+  return slash !== -1
+    ? sign * parseFloat(abs.slice(0, slash)) / parseFloat(abs.slice(slash + 1))
+    : parseFloat(s);
+}
+
+function parseLinearExpr(expr) {
+  const s = expr.replace(/\s+/g, "");
+  const N = `\\d+(?:/\\d+|\\.\\d*)?`;
+  const mxMatch = s.match(new RegExp(`^([+-]?(?:${N})?)x([+-](?:${N}))?$`));
+  if (mxMatch) {
+    return { m: evalNum(mxMatch[1] || "1"), b: mxMatch[2] ? evalNum(mxMatch[2]) : 0 };
+  }
+  const cMatch = s.match(new RegExp(`^([+-]?${N})$`));
+  if (cMatch) return { m: 0, b: evalNum(cMatch[1]) };
+  return null;
+}
+
+const RANGES_RE = /(?:\s+x\[([^;]+);([^\]]+)\])?(?:\s+y\[([^;]+);([^\]]+)\])?$/;
+
+function parseRanges(m, offset) {
+  return {
+    xFrom: m[offset]     != null ? parseFloat(m[offset])     : null,
+    xTo:   m[offset + 1] != null ? parseFloat(m[offset + 1]) : null,
+    yFrom: m[offset + 2] != null ? parseFloat(m[offset + 2]) : null,
+    yTo:   m[offset + 3] != null ? parseFloat(m[offset + 3]) : null,
+  };
+}
+
+function parseGraphLine(line) {
+  // Form 1: y=mx+b
+  const eqMatch = line.match(new RegExp(`^graph\\s+line\\s+y=([^\\s]+)${RANGES_RE.source}`));
+  if (eqMatch) {
+    const expr = parseLinearExpr(eqMatch[1]);
+    if (expr) return { m: expr.m, b: expr.b, ...parseRanges(eqMatch, 2) };
+  }
+
+  // Form 2: two points (x1;y1) (x2;y2)
+  const ptMatch = line.match(new RegExp(`^graph\\s+line\\s+\\(([^;]+);([^)]+)\\)\\s+\\(([^;]+);([^)]+)\\)${RANGES_RE.source}`));
+  if (ptMatch) {
+    const x1 = parseFloat(ptMatch[1]), y1 = parseFloat(ptMatch[2]);
+    const x2 = parseFloat(ptMatch[3]), y2 = parseFloat(ptMatch[4]);
+    if (x1 === x2) return null;
+    const slope = (y2 - y1) / (x2 - x1);
+    return { m: slope, b: y1 - slope * x1, ...parseRanges(ptMatch, 5) };
+  }
+
+  // Form 3: x=c (vertical line, c may be a fraction)
+  const vMatch = line.match(new RegExp(`^graph\\s+line\\s+x=([^\\s]+)${RANGES_RE.source}`));
+  if (vMatch) {
+    const x = evalNum(vMatch[1]);
+    if (!isNaN(x)) return { vertical: true, x, ...parseRanges(vMatch, 2) };
+  }
+
+  return null;
+}
+
 function parseContent(content) {
   const lines = content.split("\n").map((l) => l.trim());
   const xParsed = lines.map(parseAxisLine).find((p) => p?.axis === "x");
@@ -65,6 +127,7 @@ function parseContent(content) {
     xMin: xParsed.min, xMax: xParsed.max, xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yMin: yParsed.min, yMax: yParsed.max, yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
     points: lines.map(parsePointLine).filter(Boolean),
+    graphs: lines.map(parseGraphLine).filter(Boolean),
   };
 }
 
@@ -92,7 +155,7 @@ const UNIT_CM = 1.2;
 const EXT = 0.5;
 
 function compile(content, grid = false) {
-  const { xMin, xMax, xTicks, yMin, yMax, yTicks, points } = parseContent(
+  const { xMin, xMax, xTicks, yMin, yMax, yTicks, points, graphs } = parseContent(
     content.trim(),
   );
 
@@ -109,6 +172,37 @@ function compile(content, grid = false) {
       lines.push(`\\draw[gray, line width=0.5pt] (${i},${yStart}) -- (${i},${yEnd});`);
     for (let i = Math.ceil(yMin); i <= Math.floor(yMax); i++)
       lines.push(`\\draw[gray, line width=0.5pt] (${xStart},${i}) -- (${xEnd},${i});`);
+  }
+
+  if (graphs.length > 0) {
+    lines.push(`% Graphs`);
+    for (const g of graphs) {
+      if (g.vertical) {
+        const yLo = g.yFrom ?? yStart;
+        const yHi = g.yTo   ?? yEnd;
+        lines.push(`\\draw[thick] (${g.x},${yLo}) -- (${g.x},${yHi});`);
+        continue;
+      }
+
+      let xLo = g.xFrom ?? xStart;
+      let xHi = g.xTo   ?? xEnd;
+      const yLo = g.yFrom ?? yStart;
+      const yHi = g.yTo   ?? yEnd;
+
+      if (g.m !== 0) {
+        const xAtYLo = (yLo - g.b) / g.m;
+        const xAtYHi = (yHi - g.b) / g.m;
+        xLo = Math.max(xLo, Math.min(xAtYLo, xAtYHi));
+        xHi = Math.min(xHi, Math.max(xAtYLo, xAtYHi));
+      } else {
+        if (g.b < yLo || g.b > yHi) continue;
+      }
+
+      if (xLo >= xHi) continue;
+      const y1 = parseFloat((g.m * xLo + g.b).toFixed(6));
+      const y2 = parseFloat((g.m * xHi + g.b).toFixed(6));
+      lines.push(`\\draw[thick] (${xLo},${y1}) -- (${xHi},${y2});`);
+    }
   }
 
   lines.push(`% X Axis`);
