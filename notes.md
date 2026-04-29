@@ -40,7 +40,7 @@ TYPE:
 
 - line (y=kx+b (with a/b fractions); 2 points; x=a)
 - parabola (abc;amn;axx) - `graph parabola a=1 b=2 c=4`, `a=1 x{1;3}`, `a=1 v(1;3)`.
-- hyperbola (y=k/x)
+- hyperbola (k=sth) for y=k/x
 - cube, sqrt, cbrt
 - log, exp (2, 0.5)
 - circle (x,y,r)

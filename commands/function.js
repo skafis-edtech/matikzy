@@ -159,6 +159,21 @@ function parseParabolaLine(line) {
   return { parabola: true, a, b, c, ...ranges };
 }
 
+function parseHyperbolaLine(line) {
+  const baseMatch = line.match(new RegExp(`^graph\\s+hyperbola\\s+(.*?)${RANGES_RE.source}$`));
+  if (!baseMatch) return null;
+
+  const body = baseMatch[1].trim();
+  const ranges = parseRanges(baseMatch, 2);
+
+  const kMatch = body.match(/\bk=([^\s]+)/);
+  if (!kMatch) return null;
+  const k = evalNum(kMatch[1]);
+  if (isNaN(k) || k === 0) return null;
+
+  return { hyperbola: true, k, ...ranges };
+}
+
 function parseContent(content, defaultExtent = 3) {
   const segments = content
     .split(/\s+(?=axes\b|graph\b|point\b)/)
@@ -173,6 +188,7 @@ function parseContent(content, defaultExtent = 3) {
     graphs: [
       ...segments.map(parseGraphLine).filter(Boolean),
       ...segments.map(parseParabolaLine).filter(Boolean),
+      ...segments.map(parseHyperbolaLine).filter(Boolean),
     ],
   };
 }
@@ -253,6 +269,26 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         const f = (n) => parseFloat(n.toFixed(6));
         const expr = `{(${f(g.a)}*\\x + ${f(g.b)})*\\x + ${f(g.c)}}`;
         lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, ${expr});`);
+        continue;
+      }
+
+      if (g.hyperbola) {
+        const eps = 0.01;
+        const f = (n) => parseFloat(n.toFixed(6));
+        const xLo = g.xFrom ?? xStart;
+        const xHi = g.xTo   ?? xEnd;
+        if (xHi > 0) {
+          const lo = Math.max(xLo, eps);
+          const hi = xHi;
+          if (lo < hi)
+            lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${g.k}/\\x});`);
+        }
+        if (xLo < 0) {
+          const lo = xLo;
+          const hi = Math.min(xHi, -eps);
+          if (lo < hi)
+            lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${g.k}/\\x});`);
+        }
         continue;
       }
 
