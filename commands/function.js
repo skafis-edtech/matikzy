@@ -395,6 +395,9 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           const asyms = [];
           for (let n = Math.floor(xLo) - 1; n <= Math.ceil(xHi) + 1; n++)
             if (isAsymptote(n)) asyms.push(n);
+          for (const a of asyms)
+            if (a > xLo && a < xHi)
+              lines.push(`\\draw[dashed, line width=0.8pt] (${f(a)},${f(yStart)}) -- (${f(a)},${f(yEnd)});`);
           let prev = xLo;
           for (const a of asyms) {
             if (a - eps <= prev) { prev = Math.max(prev, a + eps); continue; }
