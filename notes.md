@@ -1,0 +1,50 @@
+# Notes
+
+## Intervals
+
+1. arcs - all, closed-only, no-left, no-right, none.
+2. points - hallow, filled, tick.
+3. regions - hatched, not hatched.
+4. above - region labels.
+5. below - up down arrows.
+6. left labels - above, below.
+7. axis arrow and label.
+
+TODO:
+
+- mark the min
+- individual points on line
+- overlapping intervals
+
+## Unit circle
+
+1. Template
+2. Rotable - enum/rad/deg, label, point (hallow, fill, none; label)
+
+TODO:
+
+- spiral rotation
+
+## Functions
+
+TODO:
+
+1. Axes - from,to.
+2. Grid - yes,no.
+3. Ticks - all,listed(label).
+4. Point - filled,hollow,nothing;label;dotted-line-to-axis-x;dotted-line-to-axis-y
+5. graph - xfromto;yfromto;TYPE;transform(f(x) form)
+6. area - bucket fill with one point coords; label in center.
+
+TYPE:
+
+- line (y=kx+b; 2 points; x=a)
+- parabola (abc;amn;axx)
+- cube, sqrt, cbrt
+- log, exp (2, 0.5)
+- circle (x,y,r)
+- up-down-polynomial.
+
+TODO:
+
+- angle.
