@@ -41,11 +41,11 @@ TYPE:
 - line (y=kx+b (with a/b fractions); 2 points; x=a)
 - parabola (abc;amn;axx) - `graph parabola a=1 b=2 c=4`, `a=1 x{1;3}`, `a=1 v(1;3)`.
 - hyperbola (k=sth) for y=k/x
-- cube, sqrt, cbrt
-- log, exp (2, 0.5)
+- cubic, sqrt, cbrt
+- log, exp (a=2 or a=1/2 or a=0.5), default a=2
 - circle (x,y,r)
 - sin,cos,tg,ctg
-- polynomial through points (verteces and passing points)
+- generic - polynomial through points (verteces and passing points)
 
 xfromto, yfromto: nothing, x[2;3], x[2;], x[;2]
 

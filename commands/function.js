@@ -159,6 +159,40 @@ function parseParabolaLine(line) {
   return { parabola: true, a, b, c, ...ranges };
 }
 
+function parseCubicLine(line) {
+  const baseMatch = line.match(new RegExp(`^graph\\s+cubic${RANGES_RE.source}$`));
+  if (!baseMatch) return null;
+  return { cubic: true, ...parseRanges(baseMatch, 1) };
+}
+
+function parseSqrtLine(line) {
+  const m = line.match(new RegExp(`^graph\\s+sqrt${RANGES_RE.source}$`));
+  if (!m) return null;
+  return { sqrt: true, ...parseRanges(m, 1) };
+}
+
+function parseCbrtLine(line) {
+  const m = line.match(new RegExp(`^graph\\s+cbrt${RANGES_RE.source}$`));
+  if (!m) return null;
+  return { cbrt: true, ...parseRanges(m, 1) };
+}
+
+function parseLogLine(line) {
+  const m = line.match(new RegExp(`^graph\\s+log(?:\\s+a=([^\\s]+))?${RANGES_RE.source}$`));
+  if (!m) return null;
+  const a = m[1] ? evalNum(m[1]) : 2;
+  if (isNaN(a) || a <= 0 || a === 1) return null;
+  return { log: true, a, ...parseRanges(m, 2) };
+}
+
+function parseExpLine(line) {
+  const m = line.match(new RegExp(`^graph\\s+exp(?:\\s+a=([^\\s]+))?${RANGES_RE.source}$`));
+  if (!m) return null;
+  const a = m[1] ? evalNum(m[1]) : 2;
+  if (isNaN(a) || a <= 0 || a === 1) return null;
+  return { exp: true, a, ...parseRanges(m, 2) };
+}
+
 function parseHyperbolaLine(line) {
   const baseMatch = line.match(new RegExp(`^graph\\s+hyperbola\\s+(.*?)${RANGES_RE.source}$`));
   if (!baseMatch) return null;
@@ -189,6 +223,11 @@ function parseContent(content, defaultExtent = 3) {
       ...segments.map(parseGraphLine).filter(Boolean),
       ...segments.map(parseParabolaLine).filter(Boolean),
       ...segments.map(parseHyperbolaLine).filter(Boolean),
+      ...segments.map(parseCubicLine).filter(Boolean),
+      ...segments.map(parseSqrtLine).filter(Boolean),
+      ...segments.map(parseCbrtLine).filter(Boolean),
+      ...segments.map(parseLogLine).filter(Boolean),
+      ...segments.map(parseExpLine).filter(Boolean),
     ],
   };
 }
@@ -272,6 +311,14 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         continue;
       }
 
+      if (g.cubic) {
+        const f = (n) => parseFloat(n.toFixed(6));
+        const xLo = g.xFrom ?? xStart;
+        const xHi = g.xTo   ?? xEnd;
+        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {\\x*\\x*\\x});`);
+        continue;
+      }
+
       if (g.hyperbola) {
         const eps = 0.01;
         const f = (n) => parseFloat(n.toFixed(6));
@@ -289,6 +336,50 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           if (lo < hi)
             lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${g.k}/\\x});`);
         }
+        continue;
+      }
+
+      if (g.sqrt) {
+        const f = (n) => parseFloat(n.toFixed(6));
+        const lo = Math.max(g.xFrom ?? 0, 0);
+        const hi = g.xTo ?? xEnd;
+        if (lo < hi)
+          lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {sqrt(\\x)});`);
+        continue;
+      }
+
+      if (g.cbrt) {
+        const f = (n) => parseFloat(n.toFixed(6));
+        const xLo = g.xFrom ?? xStart;
+        const xHi = g.xTo   ?? xEnd;
+        if (xLo < 0) {
+          const hi = Math.min(xHi, 0);
+          if (xLo <= hi)
+            lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(hi)}, samples=60, smooth] (\\x, {-((-\\x)^(1/3))});`);
+        }
+        if (xHi > 0) {
+          const lo = Math.max(xLo, 0);
+          if (lo <= xHi)
+            lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(xHi)}, samples=60, smooth] (\\x, {\\x^(1/3)});`);
+        }
+        continue;
+      }
+
+      if (g.log) {
+        const f = (n) => parseFloat(n.toFixed(6));
+        const eps = 0.01;
+        const lo = Math.max(g.xFrom ?? eps, eps);
+        const hi = g.xTo ?? xEnd;
+        if (lo < hi)
+          lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {ln(\\x)/ln(${g.a})});`);
+        continue;
+      }
+
+      if (g.exp) {
+        const f = (n) => parseFloat(n.toFixed(6));
+        const lo = g.xFrom ?? xStart;
+        const hi = g.xTo   ?? xEnd;
+        lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {exp(\\x*ln(${g.a}))});`);
         continue;
       }
 
