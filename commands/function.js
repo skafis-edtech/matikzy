@@ -18,9 +18,14 @@ function parseTicks(tickStr, min, max) {
 }
 
 function parseAxisLine(line) {
-  const m = line.match(/^axis\s+([xy])\s+\[([^;]+);([^\]]+)\](?:\s*\{([^}]*)\})?$/);
+  const m = line.match(/^axis\s+([xy])(?:\s+\[([^;]+);([^\]]+)\])?(?:\s*\{([^}]*)\})?$/);
   if (!m) return null;
-  return { axis: m[1], min: parseFloat(m[2]), max: parseFloat(m[3]), tickStr: m[4] };
+  return {
+    axis: m[1],
+    min: m[2] != null ? parseFloat(m[2]) : -3,
+    max: m[3] != null ? parseFloat(m[3]) : 3,
+    tickStr: m[4],
+  };
 }
 
 function parsePointLine(line) {
@@ -79,15 +84,11 @@ function parseLinearExpr(expr) {
   return null;
 }
 
-const RANGES_RE = /(?:\s+x\[([^;]+);([^\]]+)\])?(?:\s+y\[([^;]+);([^\]]+)\])?$/;
+const RANGES_RE = /(?:\s+x\[([^;]*);([^\]]*)\])?(?:\s+y\[([^;]*);([^\]]*)\])?$/;
 
 function parseRanges(m, offset) {
-  return {
-    xFrom: m[offset]     != null ? parseFloat(m[offset])     : null,
-    xTo:   m[offset + 1] != null ? parseFloat(m[offset + 1]) : null,
-    yFrom: m[offset + 2] != null ? parseFloat(m[offset + 2]) : null,
-    yTo:   m[offset + 3] != null ? parseFloat(m[offset + 3]) : null,
-  };
+  const p = (s) => (s != null && s !== "") ? parseFloat(s) : null;
+  return { xFrom: p(m[offset]), xTo: p(m[offset + 1]), yFrom: p(m[offset + 2]), yTo: p(m[offset + 3]) };
 }
 
 function parseGraphLine(line) {
@@ -118,28 +119,64 @@ function parseGraphLine(line) {
   return null;
 }
 
-function parseContent(content) {
-  const lines = content.split("\n").map((l) => l.trim());
-  const xParsed = lines.map(parseAxisLine).find((p) => p?.axis === "x");
-  const yParsed = lines.map(parseAxisLine).find((p) => p?.axis === "y");
-  if (!xParsed || !yParsed) return null;
+function parseParabolaLine(line) {
+  const baseMatch = line.match(new RegExp(`^graph\\s+parabola\\s+(.*?)${RANGES_RE.source}$`));
+  if (!baseMatch) return null;
+
+  const body = baseMatch[1].trim();
+  const ranges = parseRanges(baseMatch, 2);
+
+  const aMatch = body.match(/\ba=([^\s]+)/);
+  if (!aMatch) return null;
+  const a = evalNum(aMatch[1]);
+  if (isNaN(a) || a === 0) return null;
+
+  // Factored form: x{r1;r2}
+  const factMatch = body.match(/\bx\{([^;]+);([^}]+)\}/);
+  if (factMatch) {
+    const r1 = evalNum(factMatch[1].trim()), r2 = evalNum(factMatch[2].trim());
+    if (isNaN(r1) || isNaN(r2)) return null;
+    return { parabola: true, a, b: -a*(r1+r2), c: a*r1*r2, ...ranges };
+  }
+
+  // Vertex form: v(h;k)
+  const vertMatch = body.match(/\bv\(([^;]+);([^)]+)\)/);
+  if (vertMatch) {
+    const h = evalNum(vertMatch[1].trim()), k = evalNum(vertMatch[2].trim());
+    if (isNaN(h) || isNaN(k)) return null;
+    return { parabola: true, a, b: -2*a*h, c: a*h*h+k, ...ranges };
+  }
+
+  // Standard form: a=n b=n c=n
+  const bMatch = body.match(/\bb=([^\s]+)/);
+  const cMatch = body.match(/\bc=([^\s]+)/);
+  const b = bMatch ? evalNum(bMatch[1]) : 0;
+  const c = cMatch ? evalNum(cMatch[1]) : 0;
+  if (isNaN(b) || isNaN(c)) return null;
+  return { parabola: true, a, b, c, ...ranges };
+}
+
+function parseContent(content, defaultExtent = 3) {
+  const segments = content
+    .split(/\s+(?=axis\b|graph\b|point\b)/)
+    .map((s) => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const DEFAULT_AXIS = { min: -defaultExtent, max: defaultExtent, tickStr: undefined };
+  const xParsed = segments.map(parseAxisLine).find((p) => p?.axis === "x") ?? { axis: "x", ...DEFAULT_AXIS };
+  const yParsed = segments.map(parseAxisLine).find((p) => p?.axis === "y") ?? { axis: "y", ...DEFAULT_AXIS };
   return {
     xMin: xParsed.min, xMax: xParsed.max, xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yMin: yParsed.min, yMax: yParsed.max, yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
-    points: lines.map(parsePointLine).filter(Boolean),
-    graphs: lines.map(parseGraphLine).filter(Boolean),
+    points: segments.map(parsePointLine).filter(Boolean),
+    graphs: [
+      ...segments.map(parseGraphLine).filter(Boolean),
+      ...segments.map(parseParabolaLine).filter(Boolean),
+    ],
   };
 }
 
-function syntaxCheck(content) {
-  const p = parseContent(content.trim());
-  if (!p)
-    return {
-      valid: false,
-      errors: [
-        "Expected: axis x [min;max] and axis y [min;max] lines (optionally with {ticks} or {all})",
-      ],
-    };
+function syntaxCheck(content, defaultExtent = 3) {
+  const p = parseContent(content.trim(), defaultExtent);
   if (isNaN(p.xMin) || isNaN(p.xMax))
     return { valid: false, errors: ["Invalid x range"] };
   if (isNaN(p.yMin) || isNaN(p.yMax))
@@ -154,15 +191,20 @@ function syntaxCheck(content) {
 const UNIT_CM = 1.2;
 const EXT = 0.5;
 
-function compile(content, grid = false) {
+function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   const { xMin, xMax, xTicks, yMin, yMax, yTicks, points, graphs } = parseContent(
-    content.trim(),
+    content.trim(), defaultExtent,
   );
 
-  const xStart = xMin - EXT;
-  const xEnd = xMax + EXT;
-  const yStart = yMin - EXT;
-  const yEnd = yMax + EXT;
+  const ext      = EXT;
+  const arrowLen = 0.2 / tikzScale;
+  const arrowWid = 0.1 / tikzScale;
+  const tickH    = 0.12;
+
+  const xStart = xMin - ext;
+  const xEnd = xMax + ext;
+  const yStart = yMin - ext;
+  const yEnd = yMax + ext;
 
   const lines = [];
 
@@ -181,6 +223,30 @@ function compile(content, grid = false) {
         const yLo = g.yFrom ?? yStart;
         const yHi = g.yTo   ?? yEnd;
         lines.push(`\\draw[thick] (${g.x},${yLo}) -- (${g.x},${yHi});`);
+        continue;
+      }
+
+      if (g.parabola) {
+        let xLo = g.xFrom ?? xStart;
+        let xHi = g.xTo   ?? xEnd;
+        const yLo = g.yFrom ?? yStart;
+        const yHi = g.yTo   ?? yEnd;
+        // Clip by the y-bound that can shrink the domain (upper for ∪, lower for ∩)
+        const solveY = (yB) => {
+          const d = g.b*g.b - 4*g.a*(g.c - yB);
+          if (d < 0) return null;
+          const sq = Math.sqrt(d);
+          return [(-g.b - sq)/(2*g.a), (-g.b + sq)/(2*g.a)].sort((u,v) => u-v);
+        };
+        const clipRoots = g.a > 0 ? solveY(yHi) : solveY(yLo);
+        if (clipRoots) {
+          xLo = Math.max(xLo, clipRoots[0]);
+          xHi = Math.min(xHi, clipRoots[1]);
+        }
+        if (xLo >= xHi) continue;
+        const f = (n) => parseFloat(n.toFixed(6));
+        const expr = `{(${f(g.a)}*\\x + ${f(g.b)})*\\x + ${f(g.c)}}`;
+        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, ${expr});`);
         continue;
       }
 
@@ -207,17 +273,13 @@ function compile(content, grid = false) {
 
   lines.push(`% X Axis`);
   lines.push(`\\draw[line width=1pt] (${xStart},0) -- (${xEnd},0);`);
-  lines.push(
-    `\\fill (${xEnd},0) -- (${xEnd - 0.2},0.1) -- (${xEnd - 0.2},-0.1) -- cycle;`,
-  );
-  lines.push(`\\node[below, scale=1.5] at (${xEnd - 0.1},0) {$x$};`);
+  lines.push(`\\fill (${xEnd},0) -- (${xEnd - arrowLen},${arrowWid}) -- (${xEnd - arrowLen},${-arrowWid}) -- cycle;`);
+  lines.push(`\\node[below, scale=1.5] at (${xEnd - arrowWid},0) {$x$};`);
 
   lines.push(`% Y Axis`);
   lines.push(`\\draw[line width=1pt] (0,${yStart}) -- (0,${yEnd});`);
-  lines.push(
-    `\\fill (0,${yEnd}) -- (-0.1,${yEnd - 0.2}) -- (0.1,${yEnd - 0.2}) -- cycle;`,
-  );
-  lines.push(`\\node[left, scale=1.5] at (0,${yEnd - 0.1}) {$y$};`);
+  lines.push(`\\fill (0,${yEnd}) -- (${-arrowWid},${yEnd - arrowLen}) -- (${arrowWid},${yEnd - arrowLen}) -- cycle;`);
+  lines.push(`\\node[left, scale=1.5] at (0,${yEnd - arrowWid}) {$y$};`);
 
   const zeroXTick = xTicks.find((t) => t.value === "0");
   const zeroYTick = yTicks.find((t) => t.value === "0");
@@ -225,13 +287,13 @@ function compile(content, grid = false) {
 
   lines.push(`% X Ticks`);
   for (const t of xTicks) {
-    lines.push(`\\draw[line width=1pt] (${t.value},-0.12) -- (${t.value},0.12);`);
+    lines.push(`\\draw[line width=1pt] (${t.value},${-tickH}) -- (${t.value},${tickH});`);
     if (t.value !== "0") lines.push(`\\node[below, scale=1.5] at (${t.value},0) {$${t.label}$};`);
   }
 
   lines.push(`% Y Ticks`);
   for (const t of yTicks) {
-    lines.push(`\\draw[line width=1pt] (-0.12,${t.value}) -- (0.12,${t.value});`);
+    lines.push(`\\draw[line width=1pt] (${-tickH},${t.value}) -- (${tickH},${t.value});`);
     if (t.value !== "0") lines.push(`\\node[left, scale=1.5] at (0,${t.value}) {$${t.label}$};`);
   }
 
@@ -251,10 +313,13 @@ function compile(content, grid = false) {
     }
   }
 
-  return `\\begin{document}\n\n\\begin{tikzpicture}[x=${UNIT_CM}cm,y=${UNIT_CM}cm]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
+  const scaleOpt = tikzScale !== 1 ? `, scale=${tikzScale}` : "";
+  return `\\begin{document}\n\n\\begin{tikzpicture}[x=${UNIT_CM}cm,y=${UNIT_CM}cm${scaleOpt}]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
 }
 
 export default [
-  { prefix: "function:", syntaxCheck, compile: (c) => compile(c) },
-  { prefix: "function[grid]:", syntaxCheck, compile: (c) => compile(c, true) },
+  { prefix: "function:",         syntaxCheck,                          compile: (c) => compile(c) },
+  { prefix: "function[grid]:",   syntaxCheck,                          compile: (c) => compile(c, true) },
+  { prefix: "function[small]:",       syntaxCheck, compile: (c) => compile(c, false, 3, 1/3) },
+  { prefix: "function[small][grid]:", syntaxCheck, compile: (c) => compile(c, true,  3, 1/3) },
 ];

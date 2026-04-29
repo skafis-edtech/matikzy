@@ -29,8 +29,8 @@ TODO:
 
 TODO:
 
-1. Axes - from,to.
-2. Grid - yes,no.
+1. Axes - from,to. (default suggestion - [-3;3])
+2. Grid - yes,no; Small - yes,no
 3. Ticks - all,listed(label).
 4. Point - filled,hollow,nothing;label;dotted-line-to-axis-x;dotted-line-to-axis-y
 5. graph - xfromto;yfromto;TYPE;transform(f(x) form)
@@ -39,11 +39,15 @@ TODO:
 TYPE:
 
 - line (y=kx+b (with a/b fractions); 2 points; x=a)
-- parabola (abc;amn;axx)
+- parabola (abc;amn;axx) - `graph parabola a=1 b=2 c=4`, `a=1 x{1;3}`, `a=1 v(1;3)`.
+- hyperbola (y=k/x)
 - cube, sqrt, cbrt
 - log, exp (2, 0.5)
 - circle (x,y,r)
+- sin,cos,tg,ctg
 - polynomial through points (verteces and passing points)
+
+xfromto, yfromto: nothing, x[2;3], x[2;], x[;2]
 
 TODO:
 
