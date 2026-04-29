@@ -47,4 +47,4 @@ TYPE:
 
 TODO:
 
-- angle.
+- angles.

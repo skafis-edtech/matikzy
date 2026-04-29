@@ -23,6 +23,39 @@ function parseAxisLine(line) {
   return { axis: m[1], min: parseFloat(m[2]), max: parseFloat(m[3]), tickStr: m[4] };
 }
 
+function parsePointLine(line) {
+  const m = line.match(/^point\s+\(([^;]+);([^)]+)\)(.*)/);
+  if (!m) return null;
+  const x = parseFloat(m[1].trim());
+  const y = parseFloat(m[2].trim());
+  let rest = m[3].trim();
+
+  let label = null;
+  let pointStyle = null;
+
+  const filledMatch = rest.match(/^\[([^\]]*)\](.*)/);
+  if (filledMatch) {
+    label = filledMatch[1].trim() || null;
+    pointStyle = "filled";
+    rest = filledMatch[2].trim();
+  } else {
+    const hollowMatch = rest.match(/^\(([^;)]*)\)(.*)/);
+    if (hollowMatch) {
+      label = hollowMatch[1].trim() || null;
+      pointStyle = "hollow";
+      rest = hollowMatch[2].trim();
+    } else {
+      const words = rest.split(/\s+/);
+      if (words[0] && words[0] !== "x-line" && words[0] !== "y-line") {
+        label = words[0];
+        rest = words.slice(1).join(" ");
+      }
+    }
+  }
+
+  return { x, y, label, pointStyle, xLine: rest.includes("x-line"), yLine: rest.includes("y-line") };
+}
+
 function parseContent(content) {
   const lines = content.split("\n").map((l) => l.trim());
   const xParsed = lines.map(parseAxisLine).find((p) => p?.axis === "x");
@@ -31,6 +64,7 @@ function parseContent(content) {
   return {
     xMin: xParsed.min, xMax: xParsed.max, xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yMin: yParsed.min, yMax: yParsed.max, yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
+    points: lines.map(parsePointLine).filter(Boolean),
   };
 }
 
@@ -58,7 +92,7 @@ const UNIT_CM = 1.2;
 const EXT = 0.5;
 
 function compile(content, grid = false) {
-  const { xMin, xMax, xTicks, yMin, yMax, yTicks } = parseContent(
+  const { xMin, xMax, xTicks, yMin, yMax, yTicks, points } = parseContent(
     content.trim(),
   );
 
@@ -108,6 +142,20 @@ function compile(content, grid = false) {
   }
 
   if (zeroTick) lines.push(`\\node[below left, scale=1.5] at (0,0) {$${zeroTick.label}$};`);
+
+  if (points.length > 0) {
+    lines.push(`% Points`);
+    for (const p of points) {
+      if (p.xLine) lines.push(`\\draw[dotted, line width=1pt] (${p.x},${p.y}) -- (${p.x},0);`);
+      if (p.yLine) lines.push(`\\draw[dotted, line width=1pt] (${p.x},${p.y}) -- (0,${p.y});`);
+      if (p.pointStyle === "filled") lines.push(`\\fill (${p.x},${p.y}) circle (2.5pt);`);
+      else if (p.pointStyle === "hollow") lines.push(`\\draw[line width=1pt, fill=white] (${p.x},${p.y}) circle (2.5pt);`);
+      if (p.label) {
+        const pos = p.x === 0 && p.y === 0 ? "below left" : `${p.y < 0 ? "below" : "above"} ${p.x < 0 ? "left" : "right"}`;
+        lines.push(`\\node[${pos}, scale=1.5] at (${p.x},${p.y}) {$${p.label}$};`);
+      }
+    }
+  }
 
   return `\\begin{document}\n\n\\begin{tikzpicture}[x=${UNIT_CM}cm,y=${UNIT_CM}cm]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
 }
