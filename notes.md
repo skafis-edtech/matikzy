@@ -44,7 +44,7 @@ TYPE:
 - cubic, sqrt, cbrt
 - log, exp (a=2 or a=1/2 or a=0.5), default a=2
 - circle (x,y,r) - (0;0) r=3
-- sin,cos,tg,ctg
+- sin,cos,tg,ctg - scaled so 1 means pi/2
 - generic - polynomial through points (verteces and passing points)
 
 xfromto, yfromto: nothing, x[2;3], x[2;], x[;2]

@@ -18,16 +18,39 @@ function parseTicks(tickStr, min, max) {
 }
 
 function parseAxesSeg(seg, defaultExtent) {
-  const parseOne = (m) => ({
-    min: m[1] != null && m[1] !== "" ? parseFloat(m[1]) : -defaultExtent,
-    max: m[2] != null && m[2] !== "" ? parseFloat(m[2]) : defaultExtent,
-    tickStr: m[3],
-  });
-  const xm = seg.match(/\bx(?:\[([^;]*);([^\]]*)\])?(?:\s*\{([^}]*)\})?/);
-  const ym = seg.match(/\by(?:\[([^;]*);([^\]]*)\])?(?:\s*\{([^}]*)\})?/);
+  function balancedBrace(s, pos) {
+    let depth = 0, i = pos;
+    while (i < s.length) {
+      if (s[i] === "{") depth++;
+      else if (s[i] === "}") { if (--depth === 0) return s.slice(pos + 1, i); }
+      i++;
+    }
+    return null;
+  }
+
+  function parseOne(s, i) {
+    let min = -defaultExtent, max = defaultExtent, tickStr = undefined;
+    while (i < s.length && /\s/.test(s[i])) i++;
+    if (s[i] === "[") {
+      const end = s.indexOf("]", i);
+      if (end !== -1) {
+        const [lo, hi] = s.slice(i + 1, end).split(";");
+        if (lo && lo.trim()) min = parseFloat(lo);
+        if (hi && hi.trim()) max = parseFloat(hi);
+        i = end + 1;
+      }
+    }
+    while (i < s.length && /\s/.test(s[i])) i++;
+    if (s[i] === "{") tickStr = balancedBrace(s, i);
+    return { min, max, tickStr };
+  }
+
+  const xIdx = seg.search(/\bx(?=[\s\[{]|$)/);
+  const yIdx = seg.search(/\by(?=[\s\[{]|$)/);
+  const def = { min: -defaultExtent, max: defaultExtent, tickStr: undefined };
   return {
-    x: xm ? parseOne(xm) : { min: -defaultExtent, max: defaultExtent, tickStr: undefined },
-    y: ym ? parseOne(ym) : { min: -defaultExtent, max: defaultExtent, tickStr: undefined },
+    x: xIdx !== -1 ? parseOne(seg, xIdx + 1) : def,
+    y: yIdx !== -1 ? parseOne(seg, yIdx + 1) : def,
   };
 }
 
@@ -193,6 +216,14 @@ function parseExpLine(line) {
   return { exp: true, a, ...parseRanges(m, 2) };
 }
 
+function parseTrigLine(line) {
+  const m = line.match(new RegExp(`^graph\\s+(sin|cos|tan|tg|cot|ctg)${RANGES_RE.source}$`));
+  if (!m) return null;
+  const raw = m[1];
+  const fn = raw === "tg" ? "tan" : raw === "ctg" ? "cot" : raw;
+  return { trig: fn, ...parseRanges(m, 2) };
+}
+
 function parseCircleLine(line) {
   if (!/^graph\s+circle\b/.test(line)) return null;
   const cm = line.match(/(?<![a-zA-Z])\(([^;]+);([^)]+)\)/);
@@ -239,6 +270,7 @@ function parseContent(content, defaultExtent = 3) {
       ...segments.map(parseCbrtLine).filter(Boolean),
       ...segments.map(parseLogLine).filter(Boolean),
       ...segments.map(parseExpLine).filter(Boolean),
+      ...segments.map(parseTrigLine).filter(Boolean),
       ...segments.map(parseCircleLine).filter(Boolean),
     ],
   };
@@ -350,6 +382,39 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           if (lo < hi)
             lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${g.k}/\\x});`);
         }
+        continue;
+      }
+
+      if (g.trig) {
+        const f = (n) => parseFloat(n.toFixed(6));
+        const xLo = g.xFrom ?? xStart;
+        const xHi = g.xTo   ?? xEnd;
+
+        const drawBranches = (expr, isAsymptote) => {
+          const eps = 0.04;
+          const asyms = [];
+          for (let n = Math.floor(xLo) - 1; n <= Math.ceil(xHi) + 1; n++)
+            if (isAsymptote(n)) asyms.push(n);
+          let prev = xLo;
+          for (const a of asyms) {
+            if (a - eps <= prev) { prev = Math.max(prev, a + eps); continue; }
+            const hi = Math.min(a - eps, xHi);
+            if (prev < hi)
+              lines.push(`\\draw[thick] plot[domain=${f(prev)}:${f(hi)}, samples=60, smooth] (\\x, {${expr}});`);
+            prev = a + eps;
+          }
+          if (prev < xHi)
+            lines.push(`\\draw[thick] plot[domain=${f(prev)}:${f(xHi)}, samples=60, smooth] (\\x, {${expr}});`);
+        };
+
+        if (g.trig === "sin")
+          lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {sin(\\x * 90)});`);
+        else if (g.trig === "cos")
+          lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {cos(\\x * 90)});`);
+        else if (g.trig === "tan")
+          drawBranches("tan(\\x * 90)", (n) => n % 2 !== 0);
+        else if (g.trig === "cot")
+          drawBranches("cos(\\x * 90) / sin(\\x * 90)", (n) => n % 2 === 0);
         continue;
       }
 
