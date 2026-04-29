@@ -17,14 +17,17 @@ function parseTicks(tickStr, min, max) {
     });
 }
 
-function parseAxisLine(line) {
-  const m = line.match(/^axis\s+([xy])(?:\s+\[([^;]+);([^\]]+)\])?(?:\s*\{([^}]*)\})?$/);
-  if (!m) return null;
+function parseAxesSeg(seg, defaultExtent) {
+  const parseOne = (m) => ({
+    min: m[1] != null && m[1] !== "" ? parseFloat(m[1]) : -defaultExtent,
+    max: m[2] != null && m[2] !== "" ? parseFloat(m[2]) : defaultExtent,
+    tickStr: m[3],
+  });
+  const xm = seg.match(/\bx(?:\[([^;]*);([^\]]*)\])?(?:\s*\{([^}]*)\})?/);
+  const ym = seg.match(/\by(?:\[([^;]*);([^\]]*)\])?(?:\s*\{([^}]*)\})?/);
   return {
-    axis: m[1],
-    min: m[2] != null ? parseFloat(m[2]) : -3,
-    max: m[3] != null ? parseFloat(m[3]) : 3,
-    tickStr: m[4],
+    x: xm ? parseOne(xm) : { min: -defaultExtent, max: defaultExtent, tickStr: undefined },
+    y: ym ? parseOne(ym) : { min: -defaultExtent, max: defaultExtent, tickStr: undefined },
   };
 }
 
@@ -158,12 +161,11 @@ function parseParabolaLine(line) {
 
 function parseContent(content, defaultExtent = 3) {
   const segments = content
-    .split(/\s+(?=axis\b|graph\b|point\b)/)
+    .split(/\s+(?=axes\b|graph\b|point\b)/)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter(Boolean);
-  const DEFAULT_AXIS = { min: -defaultExtent, max: defaultExtent, tickStr: undefined };
-  const xParsed = segments.map(parseAxisLine).find((p) => p?.axis === "x") ?? { axis: "x", ...DEFAULT_AXIS };
-  const yParsed = segments.map(parseAxisLine).find((p) => p?.axis === "y") ?? { axis: "y", ...DEFAULT_AXIS };
+  const axesSeg = segments.find((s) => s.startsWith("axes"));
+  const { x: xParsed, y: yParsed } = parseAxesSeg(axesSeg ?? "axes", defaultExtent);
   return {
     xMin: xParsed.min, xMax: xParsed.max, xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yMin: yParsed.min, yMax: yParsed.max, yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
@@ -176,6 +178,8 @@ function parseContent(content, defaultExtent = 3) {
 }
 
 function syntaxCheck(content, defaultExtent = 3) {
+  if (/\baxis\b/.test(content))
+    return { valid: false, errors: ['Use "axes" not "axis"'] };
   const p = parseContent(content.trim(), defaultExtent);
   if (isNaN(p.xMin) || isNaN(p.xMax))
     return { valid: false, errors: ["Invalid x range"] };
@@ -218,6 +222,8 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
   if (graphs.length > 0) {
     lines.push(`% Graphs`);
+    lines.push(`\\begin{scope}`);
+    lines.push(`\\clip (${xStart},${yStart}) rectangle (${xEnd},${yEnd});`);
     for (const g of graphs) {
       if (g.vertical) {
         const yLo = g.yFrom ?? yStart;
@@ -269,6 +275,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       const y2 = parseFloat((g.m * xHi + g.b).toFixed(6));
       lines.push(`\\draw[thick] (${xLo},${y1}) -- (${xHi},${y2});`);
     }
+    lines.push(`\\end{scope}`);
   }
 
   lines.push(`% X Axis`);
