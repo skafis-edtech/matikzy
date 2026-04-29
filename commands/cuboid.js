@@ -3,7 +3,9 @@ function syntaxCheck(_content) {
 }
 
 function compile(_content) {
-  return String.raw`
+  return String.raw`\begin{document}
+
+\begin{tikzpicture}
     % Front face
     \coordinate (A) at (0,0);
     \coordinate (B) at (1,0);
@@ -28,7 +30,9 @@ function compile(_content) {
     \draw (D) -- (H);
     \draw (F) -- (G) -- (H);
     \draw (F) -- (G);
-`;
+\end{tikzpicture}
+
+\end{document}`;
 }
 
 export default [{ prefix: "cuboid:", syntaxCheck, compile }];

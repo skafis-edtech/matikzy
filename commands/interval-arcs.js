@@ -309,7 +309,7 @@ function compile(content, noLeft = false, noRight = false, noArcs = false) {
     lines.push(`}`);
   });
 
-  return lines.join("\n");
+  return `\\begin{document}\n\n\\begin{tikzpicture}\n${lines.join("\n")}\n\\end{tikzpicture}\n\n\\end{document}`;
 }
 
 export default [

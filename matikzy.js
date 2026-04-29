@@ -49,6 +49,5 @@ export function compile(matikzy) {
   const check = handler.syntaxCheck(content);
   if (!check.valid)
     throw new Error("Syntax errors:\n" + check.errors.join("\n"));
-  const tikzContent = handler.compile(content);
-  return `\\begin{document}\n\\begin{tikzpicture}\n${tikzContent}\n\\end{tikzpicture}\n\\end{document}`;
+  return handler.compile(content);
 }

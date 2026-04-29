@@ -192,7 +192,7 @@ function compile(content) {
     }
   }
 
-  return lines.join("\n");
+  return `\\begin{document}\n\n\\begin{tikzpicture}\n${lines.join("\n")}\n\\end{tikzpicture}\n\n\\end{document}`;
 }
 
 export default [
