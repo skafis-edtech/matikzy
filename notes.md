@@ -51,6 +51,18 @@ TYPE:
 
 xfromto, yfromto: nothing, x[2;3], x[2;], x[;2]
 
+transform:
+
+```
+  graph sin >> +2 *3
+  graph tan >> shift(1) neg
+  graph sqrt >> xflip
+  graph parabola a=1 >> abs
+  graph sin >> neg abs
+```
+
+WIP...
+
 TODO:
 
 - angles.

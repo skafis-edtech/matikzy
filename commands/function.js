@@ -117,6 +117,36 @@ function parseRanges(m, offset) {
   return { xFrom: p(m[offset]), xTo: p(m[offset + 1]), yFrom: p(m[offset + 2]), yTo: p(m[offset + 3]) };
 }
 
+function parseTransformTokens(str) {
+  const N = `[+-]?(?:\\d+(?:/\\d+|\\.\\d*)?|\\.\\d+)`;
+  const re = new RegExp(
+    `(neg|xflip|abs)` +
+    `|shift\\((${N})\\)` +
+    `|(?:xscale|xs)\\((${N})\\)` +
+    `|([+-](?:\\d+(?:/\\d+|\\.\\d*)?|\\.\\d+))` +
+    `|\\*(${N})`,
+    'g'
+  );
+  const tokens = [];
+  let m;
+  while ((m = re.exec(str)) !== null) {
+    if (m[1] === 'neg')   tokens.push({ type: 'neg' });
+    else if (m[1] === 'xflip') tokens.push({ type: 'hflip' });
+    else if (m[1] === 'abs')   tokens.push({ type: 'abs' });
+    else if (m[2] != null) tokens.push({ type: 'hshift', value: evalNum(m[2]) });
+    else if (m[3] != null) tokens.push({ type: 'hscale', value: evalNum(m[3]) });
+    else if (m[4] != null) tokens.push({ type: 'vshift', value: evalNum(m[4]) });
+    else if (m[5] != null) tokens.push({ type: 'vscale', value: evalNum(m[5]) });
+  }
+  return tokens;
+}
+
+function extractTransforms(line) {
+  const idx = line.indexOf('>>');
+  if (idx === -1) return { clean: line, transforms: [] };
+  return { clean: line.slice(0, idx).trim(), transforms: parseTransformTokens(line.slice(idx + 2)) };
+}
+
 function parseGraphLine(line) {
   // Form 1: y=mx+b
   const eqMatch = line.match(new RegExp(`^graph\\s+line\\s+y=([^\\s]+)${RANGES_RE.source}`));
@@ -290,18 +320,15 @@ function parseContent(content, defaultExtent = 3) {
     yMin: yParsed.min, yMax: yParsed.max, yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
     points: segments.map(parsePointLine).filter(Boolean),
     graphs: [
-      ...segments.map(parseGraphLine).filter(Boolean),
-      ...segments.map(parseParabolaLine).filter(Boolean),
-      ...segments.map(parseHyperbolaLine).filter(Boolean),
-      ...segments.map(parseCubicLine).filter(Boolean),
-      ...segments.map(parseSqrtLine).filter(Boolean),
-      ...segments.map(parseCbrtLine).filter(Boolean),
-      ...segments.map(parseLogLine).filter(Boolean),
-      ...segments.map(parseExpLine).filter(Boolean),
-      ...segments.map(parseTrigLine).filter(Boolean),
-      ...segments.map(parseCircleLine).filter(Boolean),
-      ...segments.map(parseGenericLine).filter(Boolean),
-    ],
+      parseGraphLine, parseParabolaLine, parseHyperbolaLine,
+      parseCubicLine, parseSqrtLine, parseCbrtLine,
+      parseLogLine, parseExpLine, parseTrigLine,
+      parseCircleLine, parseGenericLine,
+    ].flatMap(fn => segments.map(seg => {
+      const { clean, transforms } = extractTransforms(seg);
+      const g = fn(clean);
+      return g ? { ...g, transforms } : null;
+    }).filter(Boolean)),
   };
 }
 
@@ -342,6 +369,28 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
   const lines = [];
 
+  const fn = (v) => parseFloat(v.toFixed(6)).toString();
+  const applyXTr = (x, tr) => { for (const t of tr) { if (t.type==='hshift') x+=t.value; else if (t.type==='hscale') x*=t.value; else if (t.type==='hflip') x=-x; } return x; };
+  const invXTr  = (x, tr) => { for (let i=tr.length-1;i>=0;i--) { const t=tr[i]; if (t.type==='hshift') x-=t.value; else if (t.type==='hscale'&&t.value!==0) x/=t.value; else if (t.type==='hflip') x=-x; } return x; };
+  const applyYTr = (y, tr) => { for (const t of tr) { if (t.type==='vshift') y+=t.value; else if (t.type==='vscale') y*=t.value; else if (t.type==='neg') y=-y; else if (t.type==='abs') y=Math.abs(y); } return y; };
+  const trExpr = (expr, tr) => {
+    if (!tr || !tr.length) return expr;
+    let xSub = '\\x';
+    for (const t of tr) {
+      if (t.type==='hshift') xSub=`(${xSub}+(${fn(t.value)}))`;
+      else if (t.type==='hscale') xSub=`((${fn(t.value)})*(${xSub}))`;
+      else if (t.type==='hflip') xSub=`(-(${xSub}))`;
+    }
+    let y = xSub==='\\x' ? expr : expr.split('\\x').join(xSub);
+    for (const t of tr) {
+      if (t.type==='vshift') y=`(${y}+(${fn(t.value)}))`;
+      else if (t.type==='vscale') y=`((${fn(t.value)})*(${y}))`;
+      else if (t.type==='neg') y=`(-(${y}))`;
+      else if (t.type==='abs') y=`abs(${y})`;
+    }
+    return y;
+  };
+
   if (grid) {
     lines.push(`% Grid`);
     for (let i = Math.ceil(xMin); i <= Math.floor(xMax); i++)
@@ -355,133 +404,110 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     lines.push(`\\begin{scope}`);
     lines.push(`\\clip (${xStart},${yStart}) rectangle (${xEnd},${yEnd});`);
     for (const g of graphs) {
+      const tr = g.transforms || [];
+      const f = (n) => parseFloat(n.toFixed(6));
+
       if (g.vertical) {
-        const yLo = g.yFrom ?? yStart;
-        const yHi = g.yTo   ?? yEnd;
-        lines.push(`\\draw[thick] (${g.x},${yLo}) -- (${g.x},${yHi});`);
+        const x = applyXTr(g.x, tr);
+        const yA = applyYTr(g.yFrom ?? yStart, tr);
+        const yB = applyYTr(g.yTo   ?? yEnd,   tr);
+        lines.push(`\\draw[thick] (${f(x)},${f(Math.min(yA,yB))}) -- (${f(x)},${f(Math.max(yA,yB))});`);
         continue;
       }
 
       if (g.parabola) {
         let xLo = g.xFrom ?? xStart;
         let xHi = g.xTo   ?? xEnd;
-        const yLo = g.yFrom ?? yStart;
-        const yHi = g.yTo   ?? yEnd;
-        // Clip by the y-bound that can shrink the domain (upper for ∪, lower for ∩)
-        const solveY = (yB) => {
-          const d = g.b*g.b - 4*g.a*(g.c - yB);
-          if (d < 0) return null;
-          const sq = Math.sqrt(d);
-          return [(-g.b - sq)/(2*g.a), (-g.b + sq)/(2*g.a)].sort((u,v) => u-v);
-        };
-        const clipRoots = g.a > 0 ? solveY(yHi) : solveY(yLo);
-        if (clipRoots) {
-          xLo = Math.max(xLo, clipRoots[0]);
-          xHi = Math.min(xHi, clipRoots[1]);
+        if (!tr.length) {
+          const yLo = g.yFrom ?? yStart, yHi = g.yTo ?? yEnd;
+          const solveY = (yB) => { const d=g.b*g.b-4*g.a*(g.c-yB); if(d<0)return null; const sq=Math.sqrt(d); return [(-g.b-sq)/(2*g.a),(-g.b+sq)/(2*g.a)].sort((u,v)=>u-v); };
+          const cr = g.a>0?solveY(yHi):solveY(yLo);
+          if (cr) { xLo=Math.max(xLo,cr[0]); xHi=Math.min(xHi,cr[1]); }
         }
         if (xLo >= xHi) continue;
-        const f = (n) => parseFloat(n.toFixed(6));
-        const expr = `{(${f(g.a)}*\\x + ${f(g.b)})*\\x + ${f(g.c)}}`;
-        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, ${expr});`);
+        const base = `(${f(g.a)}*\\x + ${f(g.b)})*\\x + ${f(g.c)}`;
+        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base,tr)}});`);
         continue;
       }
 
       if (g.cubic) {
-        const f = (n) => parseFloat(n.toFixed(6));
-        const xLo = g.xFrom ?? xStart;
-        const xHi = g.xTo   ?? xEnd;
-        const coeffs = [
-          { c: g.d, j: 0 }, { c: g.c, j: 1 }, { c: g.b, j: 2 }, { c: g.a, j: 3 },
-        ].filter(t => Math.abs(t.c) > 1e-9);
-        const expr = coeffs.length === 0 ? "0"
-          : coeffs.map(({ c, j }, i) => {
-              const cs = f(c);
-              const term = j === 0 ? `${cs}` : j === 1 ? `${cs}*\\x` : `${cs}*\\x^${j}`;
-              return i === 0 ? term : (c >= 0 ? "+" : "") + term;
-            }).join("");
-        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${expr}});`);
+        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const coeffs = [{c:g.d,j:0},{c:g.c,j:1},{c:g.b,j:2},{c:g.a,j:3}].filter(t=>Math.abs(t.c)>1e-9);
+        const base = coeffs.length===0 ? "0"
+          : coeffs.map(({c,j},i)=>{ const cs=f(c); const term=j===0?`${cs}`:j===1?`${cs}*\\x`:`${cs}*\\x^${j}`; return i===0?term:(c>=0?"+":"")+term; }).join("");
+        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base,tr)}});`);
         continue;
       }
 
       if (g.hyperbola) {
         const eps = 0.01;
-        const f = (n) => parseFloat(n.toFixed(6));
-        const xLo = g.xFrom ?? xStart;
-        const xHi = g.xTo   ?? xEnd;
-        if (xHi > 0) {
-          const lo = Math.max(xLo, eps);
-          const hi = xHi;
-          if (lo < hi)
-            lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${g.k}/\\x});`);
-        }
-        if (xLo < 0) {
-          const lo = xLo;
-          const hi = Math.min(xHi, -eps);
-          if (lo < hi)
-            lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${g.k}/\\x});`);
+        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const singScreen = invXTr(0, tr); // where the asymptote is in screen coords
+        const base = `${f(g.k)}/\\x`;
+        const drawHBranch = (lo, hi) => {
+          if (lo < hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${trExpr(base,tr)}});`);
+        };
+        if (singScreen > xLo && singScreen < xHi) {
+          drawHBranch(xLo, singScreen - eps);
+          drawHBranch(singScreen + eps, xHi);
+        } else {
+          drawHBranch(xLo, xHi);
         }
         continue;
       }
 
       if (g.trig) {
-        const f = (n) => parseFloat(n.toFixed(6));
-        const xLo = g.xFrom ?? xStart;
-        const xHi = g.xTo   ?? xEnd;
-
-        const drawBranches = (expr, isAsymptote) => {
+        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const drawBranches = (baseExpr, isAsymptote) => {
+          const expr = trExpr(baseExpr, tr);
           const eps = 0.04;
+          const fLo = applyXTr(xLo, tr), fHi = applyXTr(xHi, tr);
+          const fMin = Math.min(fLo, fHi), fMax = Math.max(fLo, fHi);
           const asyms = [];
-          for (let n = Math.floor(xLo) - 1; n <= Math.ceil(xHi) + 1; n++)
-            if (isAsymptote(n)) asyms.push(n);
+          for (let n = Math.floor(fMin)-2; n <= Math.ceil(fMax)+2; n++)
+            if (isAsymptote(n)) { const sx=invXTr(n,tr); if(sx>xLo&&sx<xHi) asyms.push(sx); }
+          asyms.sort((a,b)=>a-b);
           for (const a of asyms)
-            if (a > xLo && a < xHi)
-              lines.push(`\\draw[darkgray, dashed, line width=0.8pt] (${f(a)},${f(yStart)}) -- (${f(a)},${f(yEnd)});`);
+            lines.push(`\\draw[darkgray, dashed, line width=0.8pt] (${f(a)},${f(yStart)}) -- (${f(a)},${f(yEnd)});`);
           let prev = xLo;
           for (const a of asyms) {
-            if (a - eps <= prev) { prev = Math.max(prev, a + eps); continue; }
-            const hi = Math.min(a - eps, xHi);
-            if (prev < hi)
-              lines.push(`\\draw[thick] plot[domain=${f(prev)}:${f(hi)}, samples=60, smooth] (\\x, {${expr}});`);
-            prev = a + eps;
+            if (a-eps<=prev){prev=Math.max(prev,a+eps);continue;}
+            const hi=Math.min(a-eps,xHi);
+            if(prev<hi) lines.push(`\\draw[thick] plot[domain=${f(prev)}:${f(hi)}, samples=60, smooth] (\\x, {${expr}});`);
+            prev=a+eps;
           }
-          if (prev < xHi)
-            lines.push(`\\draw[thick] plot[domain=${f(prev)}:${f(xHi)}, samples=60, smooth] (\\x, {${expr}});`);
+          if (prev<xHi) lines.push(`\\draw[thick] plot[domain=${f(prev)}:${f(xHi)}, samples=60, smooth] (\\x, {${expr}});`);
         };
-
-        if (g.trig === "sin")
-          lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {sin(\\x * 90)});`);
-        else if (g.trig === "cos")
-          lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {cos(\\x * 90)});`);
-        else if (g.trig === "tan")
-          drawBranches("tan(\\x * 90)", (n) => n % 2 !== 0);
-        else if (g.trig === "cot")
-          drawBranches("cos(\\x * 90) / sin(\\x * 90)", (n) => n % 2 === 0);
+        const sinExpr = trExpr("sin(\\x * 90)", tr);
+        const cosExpr = trExpr("cos(\\x * 90)", tr);
+        if (g.trig==="sin")      lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {${sinExpr}});`);
+        else if (g.trig==="cos") lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {${cosExpr}});`);
+        else if (g.trig==="tan") drawBranches("tan(\\x * 90)", n=>n%2!==0);
+        else if (g.trig==="cot") drawBranches("cos(\\x * 90) / sin(\\x * 90)", n=>n%2===0);
         continue;
       }
 
       if (g.generic) {
-        const pts = [...g.points].sort((a, b) => a.x - b.x);
+        const rawPts = [...g.points].sort((a,b)=>a.x-b.x);
+        const pts = rawPts.map(p => ({ ...p, x: applyXTr(p.x, tr), y: applyYTr(p.y, tr) }));
         const np = pts.length;
         if (np < 2) continue;
-        const f = (v) => parseFloat(v.toFixed(4));
+        const fv = (v) => parseFloat(v.toFixed(4));
         if (!g.smooth) {
-          const path = pts.map(p => `(${f(p.x)},${f(p.y)})`).join(" -- ");
-          lines.push(`\\draw[thick] ${path};`);
+          lines.push(`\\draw[thick] ${pts.map(p=>`(${fv(p.x)},${fv(p.y)})`).join(" -- ")};`);
         } else {
-          const slopes = pts.map((pt, i) => {
+          const slopes = pts.map((pt,i) => {
             if (pt.vertex) return 0;
-            if (i === 0) return (pts[1].y - pts[0].y) / (pts[1].x - pts[0].x);
-            if (i === np - 1) return (pts[np-1].y - pts[np-2].y) / (pts[np-1].x - pts[np-2].x);
-            return (pts[i+1].y - pts[i-1].y) / (pts[i+1].x - pts[i-1].x);
+            if (i===0) return (pts[1].y-pts[0].y)/(pts[1].x-pts[0].x);
+            if (i===np-1) return (pts[np-1].y-pts[np-2].y)/(pts[np-1].x-pts[np-2].x);
+            return (pts[i+1].y-pts[i-1].y)/(pts[i+1].x-pts[i-1].x);
           });
-          let path = `(${f(pts[0].x)},${f(pts[0].y)})`;
-          for (let i = 0; i < np - 1; i++) {
-            const x0 = pts[i].x, y0 = pts[i].y, m0 = slopes[i];
-            const x1 = pts[i+1].x, y1 = pts[i+1].y, m1 = slopes[i+1];
-            const dx = x1 - x0;
-            const c1 = `(${f(x0 + dx/3)},${f(y0 + dx*m0/3)})`;
-            const c2 = `(${f(x1 - dx/3)},${f(y1 - dx*m1/3)})`;
-            path += ` .. controls ${c1} and ${c2} .. (${f(x1)},${f(y1)})`;
+          let path = `(${fv(pts[0].x)},${fv(pts[0].y)})`;
+          for (let i=0;i<np-1;i++) {
+            const x0=pts[i].x,y0=pts[i].y,m0=slopes[i];
+            const x1=pts[i+1].x,y1=pts[i+1].y,m1=slopes[i+1];
+            const dx=x1-x0;
+            path+=` .. controls (${fv(x0+dx/3)},${fv(y0+dx*m0/3)}) and (${fv(x1-dx/3)},${fv(y1-dx*m1/3)}) .. (${fv(x1)},${fv(y1)})`;
           }
           lines.push(`\\draw[thick] ${path};`);
         }
@@ -489,73 +515,49 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.circle) {
-        const f = (n) => parseFloat(n.toFixed(6));
         lines.push(`\\draw[thick] (${f(g.cx)},${f(g.cy)}) circle (${f(g.r)});`);
         continue;
       }
 
       if (g.sqrt) {
-        const f = (n) => parseFloat(n.toFixed(6));
-        const lo = Math.max(g.xFrom ?? 0, 0);
-        const hi = g.xTo ?? xEnd;
-        if (lo < hi)
-          lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {sqrt(\\x)});`);
+        const lo = g.xFrom ?? 0, hi = g.xTo ?? xEnd;
+        if (lo < hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("sqrt(\\x)",tr)}});`);
         continue;
       }
 
       if (g.cbrt) {
-        const f = (n) => parseFloat(n.toFixed(6));
-        const xLo = g.xFrom ?? xStart;
-        const xHi = g.xTo   ?? xEnd;
-        if (xLo < 0) {
-          const hi = Math.min(xHi, 0);
-          if (xLo <= hi)
-            lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(hi)}, samples=60, smooth] (\\x, {-((-\\x)^(1/3))});`);
-        }
-        if (xHi > 0) {
-          const lo = Math.max(xLo, 0);
-          if (lo <= xHi)
-            lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(xHi)}, samples=60, smooth] (\\x, {\\x^(1/3)});`);
-        }
+        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        if (xLo < 0) { const hi=Math.min(xHi,0); if(xLo<=hi) lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("-((-\\x)^(1/3))",tr)}});`); }
+        if (xHi > 0) { const lo=Math.max(xLo,0); if(lo<=xHi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr("\\x^(1/3)",tr)}});`); }
         continue;
       }
 
       if (g.log) {
-        const f = (n) => parseFloat(n.toFixed(6));
-        const eps = 0.01;
-        const lo = Math.max(g.xFrom ?? eps, eps);
-        const hi = g.xTo ?? xEnd;
-        if (lo < hi)
-          lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {ln(\\x)/ln(${g.a})});`);
+        const eps=0.01, lo=Math.max(g.xFrom??eps,eps), hi=g.xTo??xEnd;
+        if (lo<hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`ln(\\x)/ln(${f(g.a)})`,tr)}});`);
         continue;
       }
 
       if (g.exp) {
-        const f = (n) => parseFloat(n.toFixed(6));
-        const lo = g.xFrom ?? xStart;
-        const hi = g.xTo   ?? xEnd;
-        lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {exp(\\x*ln(${g.a}))});`);
+        const lo=g.xFrom??xStart, hi=g.xTo??xEnd;
+        lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`exp(\\x*ln(${f(g.a)}))`,tr)}});`);
         continue;
       }
 
-      let xLo = g.xFrom ?? xStart;
-      let xHi = g.xTo   ?? xEnd;
-      const yLo = g.yFrom ?? yStart;
-      const yHi = g.yTo   ?? yEnd;
-
-      if (g.m !== 0) {
-        const xAtYLo = (yLo - g.b) / g.m;
-        const xAtYHi = (yHi - g.b) / g.m;
-        xLo = Math.max(xLo, Math.min(xAtYLo, xAtYHi));
-        xHi = Math.min(xHi, Math.max(xAtYLo, xAtYHi));
-      } else {
-        if (g.b < yLo || g.b > yHi) continue;
+      // linear line fallthrough
+      {
+        let xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const yLo = g.yFrom ?? yStart, yHi = g.yTo ?? yEnd;
+        if (g.m !== 0) {
+          const xAtYLo = (yLo-g.b)/g.m, xAtYHi = (yHi-g.b)/g.m;
+          xLo = Math.max(xLo, Math.min(xAtYLo,xAtYHi));
+          xHi = Math.min(xHi, Math.max(xAtYLo,xAtYHi));
+        } else { if (g.b<yLo||g.b>yHi) continue; }
+        if (xLo>=xHi) continue;
+        const base = `${f(g.m)}*\\x+(${f(g.b)})`;
+        const expr = trExpr(base, tr);
+        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=2] (\\x, {${expr}});`);
       }
-
-      if (xLo >= xHi) continue;
-      const y1 = parseFloat((g.m * xLo + g.b).toFixed(6));
-      const y2 = parseFloat((g.m * xHi + g.b).toFixed(6));
-      lines.push(`\\draw[thick] (${xLo},${y1}) -- (${xHi},${y2});`);
     }
     lines.push(`\\end{scope}`);
   }
