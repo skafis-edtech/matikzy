@@ -117,34 +117,37 @@ function parseRanges(m, offset) {
   return { xFrom: p(m[offset]), xTo: p(m[offset + 1]), yFrom: p(m[offset + 2]), yTo: p(m[offset + 3]) };
 }
 
-function parseTransformTokens(str) {
-  const N = `[+-]?(?:\\d+(?:/\\d+|\\.\\d*)?|\\.\\d+)`;
-  const re = new RegExp(
-    `(neg|xflip|abs)` +
-    `|shift\\((${N})\\)` +
-    `|(?:xscale|xs)\\((${N})\\)` +
-    `|([+-](?:\\d+(?:/\\d+|\\.\\d*)?|\\.\\d+))` +
-    `|\\*(${N})`,
-    'g'
-  );
-  const tokens = [];
+function parseOneTransform(s) {
+  s = s.trim();
+  const num  = `(?:\\d+(?:/\\d+|\\.\\d*)?|\\.\\d+)`;
+  const snum = `[+-]?${num}`;
+  const ssnum = `[+-]${num}`;
   let m;
-  while ((m = re.exec(str)) !== null) {
-    if (m[1] === 'neg')   tokens.push({ type: 'neg' });
-    else if (m[1] === 'xflip') tokens.push({ type: 'hflip' });
-    else if (m[1] === 'abs')   tokens.push({ type: 'abs' });
-    else if (m[2] != null) tokens.push({ type: 'hshift', value: evalNum(m[2]) });
-    else if (m[3] != null) tokens.push({ type: 'hscale', value: evalNum(m[3]) });
-    else if (m[4] != null) tokens.push({ type: 'vshift', value: evalNum(m[4]) });
-    else if (m[5] != null) tokens.push({ type: 'vscale', value: evalNum(m[5]) });
-  }
-  return tokens;
+  if (s === '|f(x)|') return { type: 'abs' };
+  if (s === '-f(x)')  return { type: 'neg' };
+  if (s === 'f(-x)')  return { type: 'hflip' };
+  m = s.match(new RegExp(`^(${snum})\\*?f\\(x\\)$`));
+  if (m) return { type: 'vscale', value: evalNum(m[1]) };
+  m = s.match(new RegExp(`^f\\(x\\)(${ssnum})$`));
+  if (m) return { type: 'vshift', value: evalNum(m[1]) };
+  m = s.match(new RegExp(`^f\\(x(${ssnum})\\)$`));
+  if (m) return { type: 'hshift', value: evalNum(m[1]) };
+  m = s.match(new RegExp(`^f\\((${snum})\\*?x\\)$`));
+  if (m) return { type: 'hscale', value: evalNum(m[1]) };
+  return null;
 }
 
 function extractTransforms(line) {
-  const idx = line.indexOf('>>');
-  if (idx === -1) return { clean: line, transforms: [] };
-  return { clean: line.slice(0, idx).trim(), transforms: parseTransformTokens(line.slice(idx + 2)) };
+  const parts = line.split('>>');
+  const clean = parts[0].trim();
+  if (parts.length === 1) return { clean, transforms: [], postRanges: {} };
+  // Peel trailing x[...] y[...] ranges from the last transform part (post-transform = screen coords)
+  const last = parts[parts.length - 1];
+  const rangesM = last.match(RANGES_RE);
+  const postRanges = rangesM ? parseRanges(rangesM, 1) : {};
+  const cleanLast = last.slice(0, last.length - (rangesM ? rangesM[0].length : 0));
+  const trParts = [...parts.slice(1, -1), cleanLast];
+  return { clean, transforms: trParts.map(parseOneTransform).filter(Boolean), postRanges };
 }
 
 function parseGraphLine(line) {
@@ -325,9 +328,9 @@ function parseContent(content, defaultExtent = 3) {
       parseLogLine, parseExpLine, parseTrigLine,
       parseCircleLine, parseGenericLine,
     ].flatMap(fn => segments.map(seg => {
-      const { clean, transforms } = extractTransforms(seg);
+      const { clean, transforms, postRanges } = extractTransforms(seg);
       const g = fn(clean);
-      return g ? { ...g, transforms } : null;
+      return g ? { ...g, transforms, postRanges } : null;
     }).filter(Boolean)),
   };
 }
@@ -405,7 +408,17 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     lines.push(`\\clip (${xStart},${yStart}) rectangle (${xEnd},${yEnd});`);
     for (const g of graphs) {
       const tr = g.transforms || [];
+      const pr = g.postRanges || {};
       const f = (n) => parseFloat(n.toFixed(6));
+      // x[a;b] before >> = pre-transform domain → convert to screen coords via invXTr
+      // x[a;b] after  >> = post-transform screen coords → use directly
+      const xLoEff = pr.xFrom ?? (g.xFrom != null ? invXTr(g.xFrom, tr) : null);
+      const xHiEff = pr.xTo   ?? (g.xTo   != null ? invXTr(g.xTo,   tr) : null);
+      const yLoEff = pr.yFrom ?? g.yFrom ?? null;
+      const yHiEff = pr.yTo   ?? g.yTo   ?? null;
+      const domX = () => [xLoEff != null && xHiEff != null
+        ? [Math.min(xLoEff, xHiEff), Math.max(xLoEff, xHiEff)]
+        : [xLoEff ?? xStart, xHiEff ?? xEnd]][0];
 
       if (g.vertical) {
         const x = applyXTr(g.x, tr);
@@ -416,8 +429,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.parabola) {
-        let xLo = g.xFrom ?? xStart;
-        let xHi = g.xTo   ?? xEnd;
+        let [xLo, xHi] = domX();
         if (!tr.length) {
           const yLo = g.yFrom ?? yStart, yHi = g.yTo ?? yEnd;
           const solveY = (yB) => { const d=g.b*g.b-4*g.a*(g.c-yB); if(d<0)return null; const sq=Math.sqrt(d); return [(-g.b-sq)/(2*g.a),(-g.b+sq)/(2*g.a)].sort((u,v)=>u-v); };
@@ -431,7 +443,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.cubic) {
-        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const [xLo, xHi] = domX();
         const coeffs = [{c:g.d,j:0},{c:g.c,j:1},{c:g.b,j:2},{c:g.a,j:3}].filter(t=>Math.abs(t.c)>1e-9);
         const base = coeffs.length===0 ? "0"
           : coeffs.map(({c,j},i)=>{ const cs=f(c); const term=j===0?`${cs}`:j===1?`${cs}*\\x`:`${cs}*\\x^${j}`; return i===0?term:(c>=0?"+":"")+term; }).join("");
@@ -441,7 +453,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
       if (g.hyperbola) {
         const eps = 0.01;
-        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const [xLo, xHi] = domX();
         const singScreen = invXTr(0, tr); // where the asymptote is in screen coords
         const base = `${f(g.k)}/\\x`;
         const drawHBranch = (lo, hi) => {
@@ -457,7 +469,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.trig) {
-        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const [xLo, xHi] = domX();
         const drawBranches = (baseExpr, isAsymptote) => {
           const expr = trExpr(baseExpr, tr);
           const eps = 0.04;
@@ -520,33 +532,35 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.sqrt) {
-        const lo = g.xFrom ?? 0, hi = g.xTo ?? xEnd;
+        const [rawSqrtLo, rawSqrtHi] = domX();
+        const lo = Math.max(rawSqrtLo, 0), hi = rawSqrtHi;
         if (lo < hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("sqrt(\\x)",tr)}});`);
         continue;
       }
 
       if (g.cbrt) {
-        const xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        const [xLo, xHi] = domX();
         if (xLo < 0) { const hi=Math.min(xHi,0); if(xLo<=hi) lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("-((-\\x)^(1/3))",tr)}});`); }
         if (xHi > 0) { const lo=Math.max(xLo,0); if(lo<=xHi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr("\\x^(1/3)",tr)}});`); }
         continue;
       }
 
       if (g.log) {
-        const eps=0.01, lo=Math.max(g.xFrom??eps,eps), hi=g.xTo??xEnd;
+        const [rawLogLo, rawLogHi] = domX();
+        const logEps=0.01, lo=Math.max(rawLogLo, logEps), hi=rawLogHi;
         if (lo<hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`ln(\\x)/ln(${f(g.a)})`,tr)}});`);
         continue;
       }
 
       if (g.exp) {
-        const lo=g.xFrom??xStart, hi=g.xTo??xEnd;
+        const [lo, hi] = domX();
         lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`exp(\\x*ln(${f(g.a)}))`,tr)}});`);
         continue;
       }
 
       // linear line fallthrough
       {
-        let xLo = g.xFrom ?? xStart, xHi = g.xTo ?? xEnd;
+        let [xLo, xHi] = domX();
         const yLo = g.yFrom ?? yStart, yHi = g.yTo ?? yEnd;
         if (g.m !== 0) {
           const xAtYLo = (yLo-g.b)/g.m, xAtYHi = (yHi-g.b)/g.m;
