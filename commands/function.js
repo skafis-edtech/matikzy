@@ -183,9 +183,17 @@ function parseParabolaLine(line) {
 }
 
 function parseCubicLine(line) {
-  const baseMatch = line.match(new RegExp(`^graph\\s+cubic${RANGES_RE.source}$`));
-  if (!baseMatch) return null;
-  return { cubic: true, ...parseRanges(baseMatch, 1) };
+  const m = line.match(new RegExp(`^graph\\s+cubic(?:\\s+(.*?))?${RANGES_RE.source}$`));
+  if (!m) return null;
+  const body = m[1] ?? "";
+  return {
+    cubic: true,
+    a: body.match(/\ba=([^\s]+)/) ? evalNum(body.match(/\ba=([^\s]+)/)[1]) : 1,
+    b: body.match(/\bb=([^\s]+)/) ? evalNum(body.match(/\bb=([^\s]+)/)[1]) : 0,
+    c: body.match(/\bc=([^\s]+)/) ? evalNum(body.match(/\bc=([^\s]+)/)[1]) : 0,
+    d: body.match(/\bd=([^\s]+)/) ? evalNum(body.match(/\bd=([^\s]+)/)[1]) : 0,
+    ...parseRanges(m, 2),
+  };
 }
 
 function parseSqrtLine(line) {
@@ -222,6 +230,26 @@ function parseTrigLine(line) {
   const raw = m[1];
   const fn = raw === "tg" ? "tan" : raw === "ctg" ? "cot" : raw;
   return { trig: fn, ...parseRanges(m, 2) };
+}
+
+
+
+function parseGenericLine(line) {
+  const baseMatch = line.match(new RegExp(`^graph\\s+generic(\\[smooth\\])?\\s+(.*?)${RANGES_RE.source}$`));
+  if (!baseMatch) return null;
+  const smooth = !!baseMatch[1];
+  const body = baseMatch[2].trim();
+  const ranges = parseRanges(baseMatch, 3);
+  const points = [];
+  const re = /([v^])?\(([^;]+);([^)]+)\)/g;
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    const x = evalNum(m[2].trim()), y = evalNum(m[3].trim());
+    if (isNaN(x) || isNaN(y)) return null;
+    points.push({ x, y, vertex: m[1] === "v" || m[1] === "^", vtype: m[1] ?? null });
+  }
+  if (points.length < 1) return null;
+  return { generic: true, smooth, points, ...ranges };
 }
 
 function parseCircleLine(line) {
@@ -272,6 +300,7 @@ function parseContent(content, defaultExtent = 3) {
       ...segments.map(parseExpLine).filter(Boolean),
       ...segments.map(parseTrigLine).filter(Boolean),
       ...segments.map(parseCircleLine).filter(Boolean),
+      ...segments.map(parseGenericLine).filter(Boolean),
     ],
   };
 }
@@ -361,7 +390,16 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         const f = (n) => parseFloat(n.toFixed(6));
         const xLo = g.xFrom ?? xStart;
         const xHi = g.xTo   ?? xEnd;
-        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {\\x*\\x*\\x});`);
+        const coeffs = [
+          { c: g.d, j: 0 }, { c: g.c, j: 1 }, { c: g.b, j: 2 }, { c: g.a, j: 3 },
+        ].filter(t => Math.abs(t.c) > 1e-9);
+        const expr = coeffs.length === 0 ? "0"
+          : coeffs.map(({ c, j }, i) => {
+              const cs = f(c);
+              const term = j === 0 ? `${cs}` : j === 1 ? `${cs}*\\x` : `${cs}*\\x^${j}`;
+              return i === 0 ? term : (c >= 0 ? "+" : "") + term;
+            }).join("");
+        lines.push(`\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${expr}});`);
         continue;
       }
 
@@ -397,7 +435,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             if (isAsymptote(n)) asyms.push(n);
           for (const a of asyms)
             if (a > xLo && a < xHi)
-              lines.push(`\\draw[dashed, line width=0.8pt] (${f(a)},${f(yStart)}) -- (${f(a)},${f(yEnd)});`);
+              lines.push(`\\draw[darkgray, dashed, line width=0.8pt] (${f(a)},${f(yStart)}) -- (${f(a)},${f(yEnd)});`);
           let prev = xLo;
           for (const a of asyms) {
             if (a - eps <= prev) { prev = Math.max(prev, a + eps); continue; }
@@ -418,6 +456,35 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           drawBranches("tan(\\x * 90)", (n) => n % 2 !== 0);
         else if (g.trig === "cot")
           drawBranches("cos(\\x * 90) / sin(\\x * 90)", (n) => n % 2 === 0);
+        continue;
+      }
+
+      if (g.generic) {
+        const pts = [...g.points].sort((a, b) => a.x - b.x);
+        const np = pts.length;
+        if (np < 2) continue;
+        const f = (v) => parseFloat(v.toFixed(4));
+        if (!g.smooth) {
+          const path = pts.map(p => `(${f(p.x)},${f(p.y)})`).join(" -- ");
+          lines.push(`\\draw[thick] ${path};`);
+        } else {
+          const slopes = pts.map((pt, i) => {
+            if (pt.vertex) return 0;
+            if (i === 0) return (pts[1].y - pts[0].y) / (pts[1].x - pts[0].x);
+            if (i === np - 1) return (pts[np-1].y - pts[np-2].y) / (pts[np-1].x - pts[np-2].x);
+            return (pts[i+1].y - pts[i-1].y) / (pts[i+1].x - pts[i-1].x);
+          });
+          let path = `(${f(pts[0].x)},${f(pts[0].y)})`;
+          for (let i = 0; i < np - 1; i++) {
+            const x0 = pts[i].x, y0 = pts[i].y, m0 = slopes[i];
+            const x1 = pts[i+1].x, y1 = pts[i+1].y, m1 = slopes[i+1];
+            const dx = x1 - x0;
+            const c1 = `(${f(x0 + dx/3)},${f(y0 + dx*m0/3)})`;
+            const c2 = `(${f(x1 - dx/3)},${f(y1 - dx*m1/3)})`;
+            path += ` .. controls ${c1} and ${c2} .. (${f(x1)},${f(y1)})`;
+          }
+          lines.push(`\\draw[thick] ${path};`);
+        }
         continue;
       }
 
