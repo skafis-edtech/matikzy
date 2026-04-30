@@ -178,55 +178,126 @@ function parseGraphLine(line) {
   return null;
 }
 
+function gaussianElim(mat) {
+  const n = mat.length;
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let row = col + 1; row < n; row++)
+      if (Math.abs(mat[row][col]) > Math.abs(mat[pivot][col])) pivot = row;
+    [mat[col], mat[pivot]] = [mat[pivot], mat[col]];
+    if (Math.abs(mat[col][col]) < 1e-12) return null;
+    for (let row = 0; row < n; row++) {
+      if (row === col) continue;
+      const f = mat[row][col] / mat[col][col];
+      for (let k = col; k <= n; k++) mat[row][k] -= f * mat[col][k];
+    }
+  }
+  return mat.map((row, i) => row[n] / row[i]);
+}
+
+function parsePoints(body, count) {
+  const re = /\(([^;]+);([^)]+)\)/g;
+  const pts = [];
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    const x = evalNum(m[1].trim()), y = evalNum(m[2].trim());
+    if (isNaN(x) || isNaN(y)) return null;
+    pts.push([x, y]);
+  }
+  return pts.length === count ? pts : null;
+}
+
 function parseParabolaLine(line) {
-  const baseMatch = line.match(new RegExp(`^graph\\s+parabola\\s+(.*?)${RANGES_RE.source}$`));
+  const baseMatch = line.match(new RegExp(`^graph\\s+parabola(?:\\s+(.*?))?${RANGES_RE.source}$`));
   if (!baseMatch) return null;
 
-  const body = baseMatch[1].trim();
+  const body = (baseMatch[1] ?? "").trim();
   const ranges = parseRanges(baseMatch, 2);
 
-  const aMatch = body.match(/\ba=([^\s]+)/);
-  if (!aMatch) return null;
-  const a = evalNum(aMatch[1]);
-  if (isNaN(a) || a === 0) return null;
+  if (!body) return { parabola: true, a: 1, b: 0, c: 0, ...ranges };
 
-  // Factored form: x{r1;r2}
-  const factMatch = body.match(/\bx\{([^;]+);([^}]+)\}/);
-  if (factMatch) {
-    const r1 = evalNum(factMatch[1].trim()), r2 = evalNum(factMatch[2].trim());
-    if (isNaN(r1) || isNaN(r2)) return null;
+  const N = `\\d+(?:/\\d+|\\.\\d*)?|\\.\\d+`;
+  const C = `[+-]?(?:${N})?`;  // optional leading coefficient (empty → 1)
+  const S = `[+-](?:${N})?`;   // explicitly-signed term
+
+  // 3-point form: (x1;y1) (x2;y2) (x3;y3)
+  if (/^\(/.test(body)) {
+    const pts = parsePoints(body, 3);
+    if (!pts) return null;
+    const mat = pts.map(([x, y]) => [x*x, x, 1, y]);
+    const coeffs = gaussianElim(mat);
+    if (!coeffs) return null;
+    return { parabola: true, a: coeffs[0], b: coeffs[1], c: coeffs[2], ...ranges };
+  }
+
+  if (!body.startsWith('y=')) return null;
+  const expr = body.slice(2);
+  let m;
+
+  // Vertex form: y=a(x±off)^2±n
+  const vRe = new RegExp(`^(${C})\\(x(${S})\\)\\^2(${S})?$`);
+  if ((m = expr.match(vRe))) {
+    const a = evalNum(m[1]), h = -evalNum(m[2]), n = m[3] ? evalNum(m[3]) : 0;
+    if (isNaN(a) || a === 0 || isNaN(h) || isNaN(n)) return null;
+    return { parabola: true, a, b: -2*a*h, c: a*h*h+n, ...ranges };
+  }
+
+  // Factored form: y=a(x±r1)(x±r2)
+  const fRe = new RegExp(`^(${C})\\(x(${S})\\)\\(x(${S})\\)$`);
+  if ((m = expr.match(fRe))) {
+    const a = evalNum(m[1]), r1 = -evalNum(m[2]), r2 = -evalNum(m[3]);
+    if (isNaN(a) || a === 0 || isNaN(r1) || isNaN(r2)) return null;
     return { parabola: true, a, b: -a*(r1+r2), c: a*r1*r2, ...ranges };
   }
 
-  // Vertex form: v(h;k)
-  const vertMatch = body.match(/\bv\(([^;]+);([^)]+)\)/);
-  if (vertMatch) {
-    const h = evalNum(vertMatch[1].trim()), k = evalNum(vertMatch[2].trim());
-    if (isNaN(h) || isNaN(k)) return null;
-    return { parabola: true, a, b: -2*a*h, c: a*h*h+k, ...ranges };
+  // Standard form: y=ax^2±bx±c
+  const stdRe = new RegExp(`^(${C})x\\^2(?:(${S})x)?(${S})?$`);
+  if ((m = expr.match(stdRe))) {
+    const a = evalNum(m[1]), b = m[2] ? evalNum(m[2]) : 0, c = m[3] ? evalNum(m[3]) : 0;
+    if (isNaN(a) || a === 0 || isNaN(b) || isNaN(c)) return null;
+    return { parabola: true, a, b, c, ...ranges };
   }
 
-  // Standard form: a=n b=n c=n
-  const bMatch = body.match(/\bb=([^\s]+)/);
-  const cMatch = body.match(/\bc=([^\s]+)/);
-  const b = bMatch ? evalNum(bMatch[1]) : 0;
-  const c = cMatch ? evalNum(cMatch[1]) : 0;
-  if (isNaN(b) || isNaN(c)) return null;
-  return { parabola: true, a, b, c, ...ranges };
+  return null;
 }
 
 function parseCubicLine(line) {
-  const m = line.match(new RegExp(`^graph\\s+cubic(?:\\s+(.*?))?${RANGES_RE.source}$`));
-  if (!m) return null;
-  const body = m[1] ?? "";
-  return {
-    cubic: true,
-    a: body.match(/\ba=([^\s]+)/) ? evalNum(body.match(/\ba=([^\s]+)/)[1]) : 1,
-    b: body.match(/\bb=([^\s]+)/) ? evalNum(body.match(/\bb=([^\s]+)/)[1]) : 0,
-    c: body.match(/\bc=([^\s]+)/) ? evalNum(body.match(/\bc=([^\s]+)/)[1]) : 0,
-    d: body.match(/\bd=([^\s]+)/) ? evalNum(body.match(/\bd=([^\s]+)/)[1]) : 0,
-    ...parseRanges(m, 2),
-  };
+  const baseMatch = line.match(new RegExp(`^graph\\s+cubic(?:\\s+(.*?))?${RANGES_RE.source}$`));
+  if (!baseMatch) return null;
+
+  const body = (baseMatch[1] ?? "").trim();
+  const ranges = parseRanges(baseMatch, 2);
+
+  const N = `\\d+(?:/\\d+|\\.\\d*)?|\\.\\d+`;
+  const C = `[+-]?(?:${N})?`;
+  const S = `[+-](?:${N})?`;
+
+  // 4-point form: (x1;y1) (x2;y2) (x3;y3) (x4;y4)
+  if (/^\(/.test(body)) {
+    const pts = parsePoints(body, 4);
+    if (!pts) return null;
+    const mat = pts.map(([x, y]) => [x*x*x, x*x, x, 1, y]);
+    const coeffs = gaussianElim(mat);
+    if (!coeffs) return null;
+    return { cubic: true, a: coeffs[0], b: coeffs[1], c: coeffs[2], d: coeffs[3], ...ranges };
+  }
+
+  // Standard form: y=ax^3±bx^2±cx±d
+  if (body.startsWith('y=')) {
+    const expr = body.slice(2);
+    const stdRe = new RegExp(`^(${C})x\\^3(?:(${S})x\\^2)?(?:(${S})x)?(${S})?$`);
+    const m = expr.match(stdRe);
+    if (!m) return null;
+    const a = evalNum(m[1]), b = m[2] ? evalNum(m[2]) : 0;
+    const c = m[3] ? evalNum(m[3]) : 0, d = m[4] ? evalNum(m[4]) : 0;
+    if (isNaN(a) || a === 0 || isNaN(b) || isNaN(c) || isNaN(d)) return null;
+    return { cubic: true, a, b, c, d, ...ranges };
+  }
+
+  // bare "graph cubic" → x^3
+  if (!body) return { cubic: true, a: 1, b: 0, c: 0, d: 0, ...ranges };
+
+  return null;
 }
 
 function parseSqrtLine(line) {
@@ -661,7 +732,21 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
       if (g.sqrt) {
         const [rawSqrtLo, rawSqrtHi] = domX();
-        const lo = Math.max(rawSqrtLo, 0), hi = rawSqrtHi;
+        let lo = rawSqrtLo, hi = rawSqrtHi;
+        // The sqrt argument in screen coords is a*\x + b; valid when a*\x + b >= 0
+        let a = 1, b = 0;
+        for (const t of tr) {
+          if (t.type === 'hshift')       { b += t.value; }
+          else if (t.type === 'hscale')  { a *= t.value; b *= t.value; }
+          else if (t.type === 'hflip')   { a = -a; b = -b; }
+        }
+        if (Math.abs(a) < 1e-9) {
+          if (b < 0) continue;
+        } else {
+          const threshold = -b / a;
+          if (a > 0) lo = Math.max(lo, threshold);
+          else       hi = Math.min(hi, threshold);
+        }
         if (lo < hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("sqrt(\\x)",tr)}});`);
         continue;
       }
@@ -675,8 +760,23 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
       if (g.log) {
         const [rawLogLo, rawLogHi] = domX();
-        const logEps=0.01, lo=Math.max(rawLogLo, logEps), hi=rawLogHi;
-        if (lo<hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`ln(\\x)/ln(${f(g.a)})`,tr)}});`);
+        let lo = rawLogLo, hi = rawLogHi;
+        const logEps = 0.01;
+        // The log argument in screen coords is a*\x + b; valid when a*\x + b > 0
+        let a = 1, b = 0;
+        for (const t of tr) {
+          if (t.type === 'hshift')       { b += t.value; }
+          else if (t.type === 'hscale')  { a *= t.value; b *= t.value; }
+          else if (t.type === 'hflip')   { a = -a; b = -b; }
+        }
+        if (Math.abs(a) < 1e-9) {
+          if (b <= 0) continue;
+        } else {
+          const threshold = -b / a;
+          if (a > 0) lo = Math.max(lo, threshold + logEps);
+          else       hi = Math.min(hi, threshold - logEps);
+        }
+        if (lo < hi) lines.push(`\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`ln(\\x)/ln(${f(g.a)})`,tr)}});`);
         continue;
       }
 

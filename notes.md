@@ -37,7 +37,7 @@ TODO:
 TYPE:
 
 - line (y=kx+b (with a/b fractions); 2 points; x=a)
-- parabola (abc;amn;axx) - `graph parabola a=1 b=2 c=4`, `a=1 x{1;3}`, `a=1 v(1;3)`.
+- parabola (abc;amn;axx) - `graph parabola y=ax^2+bx+c`, `y=a(x-x_1)(x-x_2)`, `y=a(x-m)^2+n`, `(x;y) (x_2;y_2) (x_3; y_3)`
 - hyperbola (k=sth) for y=k/x
 - cubic (can give 4 points), sqrt, cbrt
 - log, exp (a=2 or a=1/2 or a=0.5), default a=2
@@ -61,6 +61,20 @@ transform:
   >>|f(x)|
 ```
 
+```
+  Parabola — exactly one of:
+  - graph parabola y=ax^2+bx+c — e.g. y=2x^2-3x+1
+  - graph parabola y=a(x-m)^2+n — e.g. y=-(x+2)^2+5
+  - graph parabola y=a(x-r1)(x-r2) — e.g. y=2(x-1)(x+3)
+  - graph parabola (x1;y1) (x2;y2) (x3;y3) — 3 points
+  - graph parabola alone - draws x^2
+
+  Cubic — exactly one of:
+  - graph cubic y=ax^3+bx^2+cx+d — e.g. y=x^3-2x^2+x
+  - graph cubic (x1;y1) (x2;y2) (x3;y3) (x4;y4) — 4 points
+  - graph cubic alone — draws x^3
+```
+
 WIP...
 
 TODO:
@@ -70,7 +84,7 @@ TODO:
 - angles.
 - scale axes.
 - medium scale; make tick labels a bit smaller... for medium and for small.
-- f(x-1) transformation
+- f(x-1) transformation DONE
 - naming axes
 - make medium scale the default - rn it's too big.
 - generic line can go not like function
