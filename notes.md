@@ -27,8 +27,6 @@ TODO:
 
 ## Functions
 
-TODO:
-
 1. Axes - from,to. (default suggestion - [-3;3])
 2. Grid - yes,no; Small - yes,no
 3. Ticks - all,listed(label).
@@ -67,4 +65,12 @@ WIP...
 
 TODO:
 
+- small graph dots not scale.
+- parabola with 3 points.
 - angles.
+- scale axes.
+- medium scale; make tick labels a bit smaller... for medium and for small.
+- f(x-1) transformation
+- naming axes
+- make medium scale the default - rn it's too big.
+- generic line can go not like function

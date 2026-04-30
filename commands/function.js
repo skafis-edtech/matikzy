@@ -285,6 +285,14 @@ function parseGenericLine(line) {
   return { generic: true, smooth, points, ...ranges };
 }
 
+function parseAreaLine(line) {
+  const m = line.match(/^area\s+\(([^;]+);([^)]+)\)\s*(.*?)\s*$/);
+  if (!m) return null;
+  const x = parseFloat(m[1]), y = parseFloat(m[2]);
+  if (isNaN(x) || isNaN(y)) return null;
+  return { area: true, x, y, label: m[3].trim() };
+}
+
 function parseCircleLine(line) {
   if (!/^graph\s+circle\b/.test(line)) return null;
   const cm = line.match(/(?<![a-zA-Z])\(([^;]+);([^)]+)\)/);
@@ -313,7 +321,7 @@ function parseHyperbolaLine(line) {
 
 function parseContent(content, defaultExtent = 3) {
   const segments = content
-    .split(/\s+(?=axes\b|graph\b|point\b)/)
+    .split(/\s+(?=axes\b|graph\b|point\b|area\b)/)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const axesSeg = segments.find((s) => s.startsWith("axes"));
@@ -322,6 +330,7 @@ function parseContent(content, defaultExtent = 3) {
     xMin: xParsed.min, xMax: xParsed.max, xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yMin: yParsed.min, yMax: yParsed.max, yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
     points: segments.map(parsePointLine).filter(Boolean),
+    areas: segments.map(parseAreaLine).filter(Boolean),
     graphs: [
       parseGraphLine, parseParabolaLine, parseHyperbolaLine,
       parseCubicLine, parseSqrtLine, parseCbrtLine,
@@ -356,7 +365,7 @@ const UNIT_CM = 1.2;
 const EXT = 0.5;
 
 function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
-  const { xMin, xMax, xTicks, yMin, yMax, yTicks, points, graphs } = parseContent(
+  const { xMin, xMax, xTicks, yMin, yMax, yTicks, points, graphs, areas } = parseContent(
     content.trim(), defaultExtent,
   );
 
@@ -402,10 +411,129 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       lines.push(`\\draw[gray, line width=0.5pt] (${xStart},${i}) -- (${xEnd},${i});`);
   }
 
-  if (graphs.length > 0) {
+  if (graphs.length > 0 || areas.length > 0) {
     lines.push(`% Graphs`);
     lines.push(`\\begin{scope}`);
     lines.push(`\\clip (${xStart},${yStart}) rectangle (${xEnd},${yEnd});`);
+
+    // Area fills: raster flood-fill, rendered before curves so curves sit on top
+    if (areas.length > 0) {
+      const GW = 300, GH = 300;
+      // Grid bounded by the drawn axes extent (same as the clip rectangle)
+      const xToC = (x) => Math.max(0, Math.min(GW-1, Math.round((x-xStart)/(xEnd-xStart)*(GW-1))));
+      const yToR = (y) => Math.max(0, Math.min(GH-1, Math.round((y-yStart)/(yEnd-yStart)*(GH-1))));
+      const cToX = (c) => xStart + c/(GW-1)*(xEnd-xStart);
+      const rToY = (r) => yStart + r/(GH-1)*(yEnd-yStart);
+      const cW = (xEnd-xStart)/GW, cH = (yEnd-yStart)/GH;
+      const fA = (v) => parseFloat(v.toFixed(4)).toString();
+
+      const wallGrid = new Uint8Array(GW*GH);
+      const mark = (c,r) => { if(c>=0&&c<GW&&r>=0&&r<GH) wallGrid[r*GW+c]=1; };
+      const bres = (c0,r0,c1,r1) => {
+        const dc=Math.abs(c1-c0),dr=Math.abs(r1-r0),sc=c0<c1?1:-1,sr=r0<r1?1:-1;
+        let e=dc-dr,c=c0,r=r0;
+        for(;;){ mark(c,r); if(c===c1&&r===r1) break; const e2=2*e; if(e2>-dr){e-=dr;c+=sc;} if(e2<dc){e+=dc;r+=sr;} }
+      };
+
+      // Boundary walls set 3 pixels inward from the axes edge
+      const BM = 3;
+      for(let c=0;c<GW;c++) for(let m=0;m<BM;m++){mark(c,m);mark(c,GH-1-m);}
+      for(let r=0;r<GH;r++) for(let m=0;m<BM;m++){mark(m,r);mark(GW-1-m,r);}
+
+      // Rasterize all drawn graphs, sampling within axes range
+      const SAMP = GW*3;
+      for (const g of graphs) {
+        const tr = g.transforms||[];
+        const inv = (x) => invXTr(x,tr);
+        const apY = (y) => applyYTr(y,tr);
+        const apX = (x) => applyXTr(x,tr);
+
+        if (g.vertical) {
+          const sc=xToC(apX(g.x)); for(let r=0;r<GH;r++) mark(sc,r); continue;
+        }
+        if (g.circle) {
+          let pc=null,pr=null;
+          for(let i=0;i<=SAMP;i++){
+            const th=2*Math.PI*i/SAMP, c=xToC(g.cx+g.r*Math.cos(th)), r=yToR(g.cy+g.r*Math.sin(th));
+            if(pc!==null) bres(pc,pr,c,r); else mark(c,r); pc=c;pr=r;
+          }
+          continue;
+        }
+
+        let evalY=null;
+        if(g.parabola)      evalY=(sx)=>{const u=inv(sx);return apY(g.a*u*u+g.b*u+g.c);};
+        else if(g.cubic)    evalY=(sx)=>{const u=inv(sx);return apY(((g.a*u+g.b)*u+g.c)*u+g.d);};
+        else if(g.trig==='sin') evalY=(sx)=>apY(Math.sin(inv(sx)*Math.PI/2));
+        else if(g.trig==='cos') evalY=(sx)=>apY(Math.cos(inv(sx)*Math.PI/2));
+        else if(g.trig==='tan') evalY=(sx)=>{const v=Math.tan(inv(sx)*Math.PI/2);return Math.abs(v)>50?null:apY(v);};
+        else if(g.trig==='cot') evalY=(sx)=>{const s=Math.sin(inv(sx)*Math.PI/2);return Math.abs(s)<0.01?null:apY(Math.cos(inv(sx)*Math.PI/2)/s);};
+        else if(g.sqrt)     evalY=(sx)=>{const u=inv(sx);return u<0?null:apY(Math.sqrt(u));};
+        else if(g.cbrt)     evalY=(sx)=>apY(Math.cbrt(inv(sx)));
+        else if(g.log)      evalY=(sx)=>{const u=inv(sx);return u<=0?null:apY(Math.log(u)/Math.log(g.a));};
+        else if(g.exp)      evalY=(sx)=>apY(Math.pow(g.a,inv(sx)));
+        else if(g.hyperbola)evalY=(sx)=>{const u=inv(sx);return Math.abs(u)<0.01?null:apY(g.k/u);};
+        else if(g.generic){
+          const pts=[...g.points].sort((a,b)=>a.x-b.x).map(p=>({x:apX(p.x),y:apY(p.y)}));
+          evalY=(sx)=>{
+            if(pts.length<2||sx<pts[0].x||sx>pts[pts.length-1].x) return null;
+            for(let i=0;i<pts.length-1;i++) if(sx>=pts[i].x&&sx<=pts[i+1].x){const t=(sx-pts[i].x)/(pts[i+1].x-pts[i].x);return pts[i].y+t*(pts[i+1].y-pts[i].y);}
+            return null;
+          };
+        } else {
+          evalY=(sx)=>apY(g.m*inv(sx)+g.b);
+        }
+        if(!evalY) continue;
+
+        let pc=null,pr=null;
+        for(let i=0;i<=SAMP;i++){
+          const sx=xStart+(xEnd-xStart)*i/SAMP, sy=evalY(sx);
+          if(sy==null||!isFinite(sy)){pc=null;pr=null;continue;}
+          const c=xToC(sx), r=yToR(sy);
+          if(pc!==null) bres(pc,pr,c,r); else mark(c,r);
+          pc=c; pr=r;
+        }
+      }
+
+      // Per area: BFS then output a single staircase polygon (no opacity, no color mixing)
+      for(const ag of areas){
+        const grid=wallGrid.slice();
+        const sc=xToC(ag.x), sr=yToR(ag.y);
+        if(sc<0||sc>=GW||sr<0||sr>=GH||grid[sr*GW+sc]===1) continue;
+        const q=new Int32Array(GW*GH); let qH=0,qT=0;
+        q[qT++]=sr*GW+sc; grid[sr*GW+sc]=2;
+        while(qH<qT){
+          const idx=q[qH++], c=idx%GW, r=(idx/GW)|0;
+          if(c>0   &&grid[r*GW+c-1]===0){grid[r*GW+c-1]=2;q[qT++]=r*GW+c-1;}
+          if(c<GW-1&&grid[r*GW+c+1]===0){grid[r*GW+c+1]=2;q[qT++]=r*GW+c+1;}
+          if(r>0   &&grid[(r-1)*GW+c]===0){grid[(r-1)*GW+c]=2;q[qT++]=(r-1)*GW+c;}
+          if(r<GH-1&&grid[(r+1)*GW+c]===0){grid[(r+1)*GW+c]=2;q[qT++]=(r+1)*GW+c;}
+        }
+        // Collect per-row left/right boundaries and centroid
+        const lB=new Int32Array(GH).fill(-1), rB=new Int32Array(GH).fill(-1);
+        let sumC=0,sumR=0,cnt=0,mnR=GH,mxR=-1;
+        for(let r=0;r<GH;r++){
+          for(let c=0;c<GW;c++) if(grid[r*GW+c]===2){ if(lB[r]===-1) lB[r]=c; rB[r]=c; }
+          if(lB[r]!==-1){
+            const span=rB[r]-lB[r]+1;
+            sumC+=(lB[r]+rB[r])/2*span; sumR+=r*span; cnt+=span;
+            if(r<mnR) mnR=r; if(r>mxR) mxR=r;
+          }
+        }
+        if(mxR<mnR) continue;
+        // Build staircase polygon: right side ascending, left side descending
+        const pts=[]; let lpx=null,lpy=null;
+        const ap=(x,y)=>{const fx=fA(x),fy=fA(y);if(fx!==lpx||fy!==lpy){pts.push(`(${fx},${fy})`);lpx=fx;lpy=fy;}};
+        const step=Math.max(1,Math.round((mxR-mnR)/40));
+        for(let r=mnR;r<=mxR;r+=step) if(rB[r]!==-1){ ap(cToX(rB[r])+cW/2,rToY(r)-cH/2); ap(cToX(rB[r])+cW/2,rToY(r)+cH/2); }
+        if(rB[mxR]!==-1){ ap(cToX(rB[mxR])+cW/2,rToY(mxR)-cH/2); ap(cToX(rB[mxR])+cW/2,rToY(mxR)+cH/2); }
+        for(let r=mxR;r>=mnR;r-=step) if(lB[r]!==-1){ ap(cToX(lB[r])-cW/2,rToY(r)+cH/2); ap(cToX(lB[r])-cW/2,rToY(r)-cH/2); }
+        if(lB[mnR]!==-1){ ap(cToX(lB[mnR])-cW/2,rToY(mnR)+cH/2); ap(cToX(lB[mnR])-cW/2,rToY(mnR)-cH/2); }
+        lines.push(`\\fill[lightgray] ${pts.join(' -- ')} -- cycle;`);
+        if(ag.label&&cnt>0)
+          lines.push(`\\node[scale=1.2] at (${fA(cToX(Math.round(sumC/cnt)))},${fA(rToY(Math.round(sumR/cnt)))}) {$${ag.label}$};`);
+      }
+    }
+
     for (const g of graphs) {
       const tr = g.transforms || [];
       const pr = g.postRanges || {};
