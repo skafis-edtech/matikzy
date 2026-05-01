@@ -75,13 +75,15 @@ transform:
   - graph cubic alone — draws x^3
 ```
 
+`angle right (x1;y1) (x2;y2) (x3;y3) label`
+
 WIP...
 
 TODO:
 
 - small graph dots not scale. DONE
 - parabola with 3 points. DONE
-- angles.
+- angles. DONE
 - scale axes. DONE
 - medium scale; make tick labels a bit smaller... for medium and for small. DONE
 - f(x-1) transformation DONE
