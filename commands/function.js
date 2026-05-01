@@ -446,9 +446,19 @@ function parseGenericLine(line) {
     ),
   );
   if (!baseMatch) return null;
+
   const smooth = !!baseMatch[1];
   const body = baseMatch[2].trim();
   const ranges = parseRanges(baseMatch, 2);
+
+  // --- NEW: function mode ---
+  if (body.startsWith("y=")) {
+    const expr = body.slice(2).trim();
+    if (!expr) return null;
+    return { generic: true, smooth, expr, ...ranges };
+  }
+
+  // --- OLD: points mode ---
   const points = [];
   const re = /([v^])?\(([^;]+);([^)]+)\)/g;
   let m;
@@ -463,7 +473,9 @@ function parseGenericLine(line) {
       vtype: m[1] ?? null,
     });
   }
+
   if (points.length < 1) return null;
+
   return { generic: true, smooth, points, ...ranges };
 }
 
@@ -473,9 +485,12 @@ function parseAngleLine(line) {
   );
   if (!m) return null;
   const right = !!m[1];
-  const x1 = parseFloat(m[2]), y1 = parseFloat(m[3]);
-  const x2 = parseFloat(m[4]), y2 = parseFloat(m[5]);
-  const x3 = parseFloat(m[6]), y3 = parseFloat(m[7]);
+  const x1 = parseFloat(m[2]),
+    y1 = parseFloat(m[3]);
+  const x2 = parseFloat(m[4]),
+    y2 = parseFloat(m[5]);
+  const x3 = parseFloat(m[6]),
+    y3 = parseFloat(m[7]);
   const label = m[8].trim() || null;
   if ([x1, y1, x2, y2, x3, y3].some(isNaN)) return null;
   return { x1, y1, x2, y2, x3, y3, right, label };
@@ -990,12 +1005,17 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       const xHiEff = pr.xTo ?? (g.xTo != null ? invXTr(g.xTo, tr) : null);
       const yLoEff = pr.yFrom ?? g.yFrom ?? null;
       const yHiEff = pr.yTo ?? g.yTo ?? null;
-      const domX = () =>
-        [
-          xLoEff != null && xHiEff != null
-            ? [Math.min(xLoEff, xHiEff), Math.max(xLoEff, xHiEff)]
-            : [xLoEff ?? xStart, xHiEff ?? xEnd],
-        ][0];
+      const domX = () => {
+        let lo = xLoEff ?? xStart;
+        let hi = xHiEff ?? xEnd;
+
+        if (!isFinite(lo)) lo = xStart;
+        if (!isFinite(hi)) hi = xEnd;
+
+        if (lo > hi) [lo, hi] = [hi, lo];
+
+        return [lo, hi];
+      };
 
       if (g.vertical) {
         const x = applyXTr(g.x, tr);
@@ -1139,7 +1159,18 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.generic) {
-        // IMPORTANT: preserve listing order (no sorting)
+        // --- NEW: function expression mode ---
+        if (g.expr) {
+          const [xLo, xHi] = domX();
+          const expr = trExpr(g.expr.replace(/\bx\b/g, "\\x"), tr);
+
+          lines.push(
+            `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=80, smooth] (\\x, {${expr}});`,
+          );
+          continue;
+        }
+
+        // --- EXISTING: points mode ---
         const pts = g.points.map((p) => ({
           ...p,
           x: applyXTr(p.x, tr),
@@ -1416,32 +1447,40 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   if (angles.length > 0) {
     lines.push(`% Angles`);
     const R = 0.3;
-    const rx = R / xSc, ry = R / ySc;
+    const rx = R / xSc,
+      ry = R / ySc;
     for (const ang of angles) {
       const { x1, y1, x2, y2, x3, y3, right, label } = ang;
       // Physical-space direction vectors from vertex
-      const d1x = (x1 - x2) * xSc, d1y = (y1 - y2) * ySc;
-      const d3x = (x3 - x2) * xSc, d3y = (y3 - y2) * ySc;
+      const d1x = (x1 - x2) * xSc,
+        d1y = (y1 - y2) * ySc;
+      const d3x = (x3 - x2) * xSc,
+        d3y = (y3 - y2) * ySc;
       const mag1 = Math.sqrt(d1x * d1x + d1y * d1y);
       const mag3 = Math.sqrt(d3x * d3x + d3y * d3y);
       if (mag1 < 1e-9 || mag3 < 1e-9) continue;
-      const u1x = d1x / mag1, u1y = d1y / mag1;
-      const u3x = d3x / mag3, u3y = d3y / mag3;
+      const u1x = d1x / mag1,
+        u1y = d1y / mag1;
+      const u3x = d3x / mag3,
+        u3y = d3y / mag3;
       const lw = `line width=${(1 * styleScale).toFixed(3)}pt`;
 
       if (right) {
         // Right-angle square mark: open L-shape path
         // Each corner is at physical distance R from vertex along respective ray
-        const p1x = x2 + u1x * rx, p1y = y2 + u1y * ry;
-        const p3x = x2 + u3x * rx, p3y = y2 + u3y * ry;
-        const px = x2 + (u1x + u3x) * rx, py = y2 + (u1y + u3y) * ry;
+        const p1x = x2 + u1x * rx,
+          p1y = y2 + u1y * ry;
+        const p3x = x2 + u3x * rx,
+          p3y = y2 + u3y * ry;
+        const px = x2 + (u1x + u3x) * rx,
+          py = y2 + (u1y + u3y) * ry;
         lines.push(
           `\\draw[${lw}] (${fn(p1x)},${fn(p1y)}) -- (${fn(px)},${fn(py)}) -- (${fn(p3x)},${fn(p3y)});`,
         );
       } else {
         // Arc: parametric ellipse in physical-angle space
-        const a1 = Math.atan2(d1y, d1x) * 180 / Math.PI;
-        const a3raw = Math.atan2(d3y, d3x) * 180 / Math.PI;
+        const a1 = (Math.atan2(d1y, d1x) * 180) / Math.PI;
+        const a3raw = (Math.atan2(d3y, d3x) * 180) / Math.PI;
         let sweep = a3raw - a1;
         while (sweep > 180) sweep -= 360;
         while (sweep <= -180) sweep += 360;
@@ -1452,13 +1491,15 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (label) {
-        const bisX = u1x + u3x, bisY = u1y + u3y;
+        const bisX = u1x + u3x,
+          bisY = u1y + u3y;
         const bisMag = Math.sqrt(bisX * bisX + bisY * bisY);
         if (bisMag < 1e-9) continue;
-        const buX = bisX / bisMag, buY = bisY / bisMag;
+        const buX = bisX / bisMag,
+          buY = bisY / bisMag;
         const labelR = right ? R * Math.SQRT2 * 1.4 : R * 1.7;
-        const lx = x2 + buX * labelR / xSc;
-        const ly = y2 + buY * labelR / ySc;
+        const lx = x2 + (buX * labelR) / xSc;
+        const ly = y2 + (buY * labelR) / ySc;
         lines.push(
           `\\node[scale=${(1.2 * styleScale).toFixed(3)}] at (${fn(lx)},${fn(ly)}) {$${label}$};`,
         );
