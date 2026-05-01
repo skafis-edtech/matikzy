@@ -1308,11 +1308,20 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
   return `\\begin{document}\n\n\\begin{tikzpicture}[x=${UNIT_CM * tikzScale}cm,y=${UNIT_CM * tikzScale}cm]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
 }
-
 export default [
-  { prefix: "function:", syntaxCheck, compile: (c) => compile(c) },
-  { prefix: "function[grid]:", syntaxCheck, compile: (c) => compile(c, true) },
+  // DEFAULT = medium now
+  {
+    prefix: "function:",
+    syntaxCheck,
+    compile: (c) => compile(c, false, 3, 2 / 3),
+  },
+  {
+    prefix: "function[grid]:",
+    syntaxCheck,
+    compile: (c) => compile(c, true, 3, 2 / 3),
+  },
 
+  // MEDIUM (explicit, same as default)
   {
     prefix: "function[medium]:",
     syntaxCheck,
@@ -1324,6 +1333,19 @@ export default [
     compile: (c) => compile(c, true, 3, 2 / 3),
   },
 
+  // LARGE = previous default (scale 1)
+  {
+    prefix: "function[large]:",
+    syntaxCheck,
+    compile: (c) => compile(c, false, 3, 1),
+  },
+  {
+    prefix: "function[large][grid]:",
+    syntaxCheck,
+    compile: (c) => compile(c, true, 3, 1),
+  },
+
+  // SMALL stays unchanged
   {
     prefix: "function[small]:",
     syntaxCheck,

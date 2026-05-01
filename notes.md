@@ -79,12 +79,12 @@ WIP...
 
 TODO:
 
-- small graph dots not scale.
+- small graph dots not scale. DONE
 - parabola with 3 points. DONE
 - angles.
 - scale axes.
-- medium scale; make tick labels a bit smaller... for medium and for small.
+- medium scale; make tick labels a bit smaller... for medium and for small. DONE
 - f(x-1) transformation DONE
 - naming axes
-- make medium scale the default - rn it's too big.
+- make medium scale the default - rn it's too big. DONE
 - generic line can go not like function
