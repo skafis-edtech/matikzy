@@ -2,7 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Skafis Tikz</title>
+
+    <!-- SEO -->
+    <title>Šimtukas Tikz – Matikzy to TikZ Renderer</title>
+    <meta
+      name="description"
+      content="Šimtukas Tikz is an open-source tool to convert Matikzy syntax into TikZ and render it instantly in your browser."
+    />
+    <link rel="canonical" href="https://github.com/skafis-edtech/matikzy" />
+    <meta
+      name="keywords"
+      content="TikZ, LaTeX, math diagrams, Matikzy, renderer, open source, math visualization"
+    />
+    <meta name="author" content="Šimtukas Tikz" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Open Graph (for social sharing) -->
+    <meta property="og:title" content="Šimtukas Tikz" />
+    <meta
+      property="og:description"
+      content="Convert Matikzy syntax into TikZ and render diagrams instantly."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://github.com/skafis-edtech/matikzy"
+    />
+
+    <!-- Theme color -->
+    <meta name="theme-color" content="#3b6fd4" />
+
     <style>
       :root {
         --bg: #f8f8f8;
@@ -186,18 +215,29 @@
   </head>
   <body>
     <header>
-      <h2>Skafis Tikz</h2>
+      <h2>Šimtukas Tikz</h2>
       <button id="theme-toggle">dark mode</button>
     </header>
+
+    <p style="font-size: 13px; color: var(--text-muted); margin-top: -0.5rem">
+      Open source on
+      <a
+        href="https://github.com/skafis-edtech/matikzy"
+        target="_blank"
+        style="color: var(--accent); text-decoration: none"
+      >
+        GitHub
+      </a>
+    </p>
     <div id="stats" class="loading">Loading stats...</div>
 
-    <label for="matikzy">Matikzy</label>
+    <label for="matikzy">Matikzy (by Šimtukas) (beta)</label>
     <textarea
       id="matikzy"
       style="height: 80px"
       placeholder="interval-arcs: =-= [a] _+_ |b| =-= >x"
     >
-interval-arcs: =-= [a] _+_ (b) =-= >x</textarea
+function: graph parabola</textarea
     >
     <button id="compile-btn" class="action-btn">Compile to TikZ</button>
     <div id="compile-error" class="error-msg"></div>
