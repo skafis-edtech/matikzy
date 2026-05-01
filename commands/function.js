@@ -855,19 +855,91 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             return Math.abs(u) < 0.01 ? null : apY(g.k / u);
           };
         else if (g.generic) {
-          const pts = [...g.points]
-            .sort((a, b) => a.x - b.x)
-            .map((p) => ({ x: apX(p.x), y: apY(p.y) }));
-          evalY = (sx) => {
-            if (pts.length < 2 || sx < pts[0].x || sx > pts[pts.length - 1].x)
-              return null;
-            for (let i = 0; i < pts.length - 1; i++)
-              if (sx >= pts[i].x && sx <= pts[i + 1].x) {
-                const t = (sx - pts[i].x) / (pts[i + 1].x - pts[i].x);
-                return pts[i].y + t * (pts[i + 1].y - pts[i].y);
+          if (g.expr) {
+            evalY = (sx) => {
+              try {
+                const x = inv(sx);
+                const jsExpr = g.expr.replace(/\^/g, "**");
+                const y = Function("x", `return ${jsExpr}`)(x);
+                return isFinite(y) ? apY(y) : null;
+              } catch {
+                return null;
               }
-            return null;
-          };
+            };
+          } else {
+            const pts = [...g.points]
+              .sort((a, b) => a.x - b.x)
+              .map((p) => ({ x: apX(p.x), y: apY(p.y), vertex: p.vertex }));
+            const np = pts.length;
+
+            if (g.smooth && np >= 2) {
+              const slopes = pts.map((pt, i) => {
+                if (pt.vertex) return 0;
+                if (i === 0)
+                  return (pts[1].y - pts[0].y) / (pts[1].x - pts[0].x || 1e-9);
+                if (i === np - 1)
+                  return (
+                    (pts[np - 1].y - pts[np - 2].y) /
+                    (pts[np - 1].x - pts[np - 2].x || 1e-9)
+                  );
+                return (
+                  (pts[i + 1].y - pts[i - 1].y) /
+                  (pts[i + 1].x - pts[i - 1].x || 1e-9)
+                );
+              });
+              evalY = (sx) => {
+                if (sx < pts[0].x || sx > pts[np - 1].x) return null;
+                for (let i = 0; i < np - 1; i++) {
+                  if (sx >= pts[i].x && sx <= pts[i + 1].x) {
+                    const x0 = pts[i].x,
+                      y0 = pts[i].y,
+                      m0 = slopes[i];
+                    const x1 = pts[i + 1].x,
+                      y1 = pts[i + 1].y,
+                      m1 = slopes[i + 1];
+                    const dx = x1 - x0;
+                    if (dx < 1e-9) return (y0 + y1) / 2;
+                    const cp1x = x0 + dx / 3,
+                      cp1y = y0 + (dx * m0) / 3;
+                    const cp2x = x1 - dx / 3,
+                      cp2y = y1 - (dx * m1) / 3;
+                    let lo = 0,
+                      hi = 1;
+                    for (let iter = 0; iter < 32; iter++) {
+                      const tm = (lo + hi) / 2;
+                      const mt = 1 - tm;
+                      const bx =
+                        mt * mt * mt * x0 +
+                        3 * mt * mt * tm * cp1x +
+                        3 * mt * tm * tm * cp2x +
+                        tm * tm * tm * x1;
+                      if (bx < sx) lo = tm;
+                      else hi = tm;
+                    }
+                    const t = (lo + hi) / 2,
+                      mt = 1 - t;
+                    return (
+                      mt * mt * mt * y0 +
+                      3 * mt * mt * t * cp1y +
+                      3 * mt * t * t * cp2y +
+                      t * t * t * y1
+                    );
+                  }
+                }
+                return null;
+              };
+            } else {
+              evalY = (sx) => {
+                if (np < 2 || sx < pts[0].x || sx > pts[np - 1].x) return null;
+                for (let i = 0; i < np - 1; i++)
+                  if (sx >= pts[i].x && sx <= pts[i + 1].x) {
+                    const t = (sx - pts[i].x) / (pts[i + 1].x - pts[i].x);
+                    return pts[i].y + t * (pts[i + 1].y - pts[i].y);
+                  }
+                return null;
+              };
+            }
+          }
         } else {
           evalY = (sx) => apY(g.m * inv(sx) + g.b);
         }
