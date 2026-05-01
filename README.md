@@ -80,14 +80,4 @@ The idea of syntax and tikz formatting is "humanly" thought of. But the code - m
 
 ## Syntax
 
-(todo: include BNFs)
-
-### interval-arcs
-
-...
-
-### unit-circle
-
-rotangle:
-
-`<degrees-int>|<rad-with-pi>|<0-15>`, in case of ambiguity - priority degrees->rad->int
+See DOCS.md

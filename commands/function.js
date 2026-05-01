@@ -1546,15 +1546,15 @@ export default [
     compile: (c) => compile(c, true, 3, 1),
   },
 
-  // SMALL stays unchanged
+  // SMALL
   {
     prefix: "function[small]:",
     syntaxCheck,
-    compile: (c) => compile(c, false, 3, 1 / 3),
+    compile: (c) => compile(c, false, 3, 5 / 12),
   },
   {
     prefix: "function[small][grid]:",
     syntaxCheck,
-    compile: (c) => compile(c, true, 3, 1 / 3),
+    compile: (c) => compile(c, true, 3, 5 / 12),
   },
 ];
