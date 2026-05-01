@@ -699,11 +699,11 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     lines.push(`% Grid`);
     for (let i = Math.ceil(xMin); i <= Math.floor(xMax); i++)
       lines.push(
-        `\\draw[gray, line width=${(0.5 * styleScale).toFixed(3)}pt] (${i},${yStart}) -- (${i},${yEnd});`,
+        `\\draw[gray, line width=${(0.5 * styleScale).toFixed(3)}pt] (${i},${fn(yStart)}) -- (${i},${fn(yEnd)});`,
       );
     for (let i = Math.ceil(yMin); i <= Math.floor(yMax); i++)
       lines.push(
-        `\\draw[gray, line width=${(0.5 * styleScale).toFixed(3)}pt] (${xStart},${i}) -- (${xEnd},${i});`,
+        `\\draw[gray, line width=${(0.5 * styleScale).toFixed(3)}pt] (${fn(xStart)},${i}) -- (${fn(xEnd)},${i});`,
       );
   }
 
@@ -717,23 +717,27 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       const GW = 300,
         GH = 300;
       // Grid bounded by the drawn axes extent (same as the clip rectangle)
-      const xToC = (x) =>
-        Math.max(
+      const xToC = (x) => {
+        if (!isFinite(x)) return 0;
+        return Math.max(
           0,
           Math.min(
             GW - 1,
             Math.round(((x - xStart) / (xEnd - xStart)) * (GW - 1)),
           ),
         );
+      };
 
-      const yToR = (y) =>
-        Math.max(
+      const yToR = (y) => {
+        if (!isFinite(y)) return 0;
+        return Math.max(
           0,
           Math.min(
             GH - 1,
             Math.round(((y - yStart) / (yEnd - yStart)) * (GH - 1)),
           ),
         );
+      };
 
       const cToX = (c) => xStart + (c / (GW - 1)) * (xEnd - xStart);
 
@@ -1129,63 +1133,27 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       if (g.cubic) {
         let [xLo, xHi] = domX();
 
+        // HARD clamp to visible area
+        xLo = Math.max(xLo, xStart);
+        xHi = Math.min(xHi, xEnd);
         // Clip to y boundaries if no transforms
-        if (!tr.length && (g.yFrom != null || g.yTo != null)) {
+        if (!tr.length) {
           const yLo = g.yFrom ?? yStart;
           const yHi = g.yTo ?? yEnd;
 
-          // Find all x values where cubic crosses yLo and yHi
-          const findCrossings = (yBound) => {
-            // Solve: a*x^3 + b*x^2 + c*x + d = yBound
-            // => a*x^3 + b*x^2 + c*x + (d - yBound) = 0
-            const roots = [];
-            const samples = 500;
-            for (let i = 0; i < samples; i++) {
-              const x1 = xLo + (i / samples) * (xHi - xLo);
-              const x2 = xLo + ((i + 1) / samples) * (xHi - xLo);
-              const y1 = ((g.a * x1 + g.b) * x1 + g.c) * x1 + g.d;
-              const y2 = ((g.a * x2 + g.b) * x2 + g.c) * x2 + g.d;
-
-              // Check if crossing occurs between x1 and x2
-              if ((y1 - yBound) * (y2 - yBound) <= 0) {
-                // Binary search for precise crossing
-                let lo = x1,
-                  hi = x2;
-                for (let j = 0; j < 20; j++) {
-                  const mid = (lo + hi) / 2;
-                  const yMid = ((g.a * mid + g.b) * mid + g.c) * mid + g.d;
-                  if ((yMid - yBound) * (y1 - yBound) <= 0) hi = mid;
-                  else lo = mid;
-                }
-                roots.push((lo + hi) / 2);
-              }
+          // Check if cubic ever enters the valid range
+          let hasValidPoints = false;
+          const testPoints = 50;
+          for (let i = 0; i <= testPoints; i++) {
+            const x = xLo + (i / testPoints) * (xHi - xLo);
+            const y = ((g.a * x + g.b) * x + g.c) * x + g.d;
+            if (y >= yLo - 0.1 && y <= yHi + 0.1) {
+              hasValidPoints = true;
+              break;
             }
-            return roots;
-          };
-
-          const crossings = [...findCrossings(yLo), ...findCrossings(yHi)].sort(
-            (a, b) => a - b,
-          );
-
-          // Find the widest continuous segment within bounds
-          if (crossings.length > 0) {
-            let bestLo = xLo,
-              bestHi = xHi;
-            for (let i = 0; i <= crossings.length; i++) {
-              const segLo = i === 0 ? xLo : crossings[i - 1];
-              const segHi = i === crossings.length ? xHi : crossings[i];
-              const midX = (segLo + segHi) / 2;
-              const midY = ((g.a * midX + g.b) * midX + g.c) * midX + g.d;
-
-              if (midY >= yLo && midY <= yHi) {
-                bestLo = segLo;
-                bestHi = segHi;
-                break;
-              }
-            }
-            xLo = bestLo;
-            xHi = bestHi;
           }
+
+          if (!hasValidPoints) continue;
         }
 
         const coeffs = [
@@ -1518,7 +1486,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     lines.push(`% X Ticks`);
     for (const t of xTicks) {
       lines.push(
-        `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${t.value},${-tickH / ySc}) -- (${t.value},${tickH / ySc});`,
+        `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${t.value},${fn(-tickH / ySc)}) -- (${t.value},${fn(tickH / ySc)});`,
       );
       if (t.value !== "0")
         lines.push(
@@ -1531,7 +1499,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     lines.push(`% Y Ticks`);
     for (const t of yTicks) {
       lines.push(
-        `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${-tickH / xSc},${t.value}) -- (${tickH / xSc},${t.value});`,
+        `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${fn(-tickH / xSc)},${t.value}) -- (${fn(tickH / xSc)},${t.value});`,
       );
       if (t.value !== "0")
         lines.push(
@@ -1548,6 +1516,11 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   if (points.length > 0) {
     lines.push(`% Points`);
     for (const p of points) {
+      // Skip points outside the visible area
+      if (p.x < xStart || p.x > xEnd || p.y < yStart || p.y > yEnd) {
+        continue;
+      }
+
       if (p.xLine)
         lines.push(
           `\\draw[dotted, line width=${(1 * styleScale).toFixed(3)}pt] (${p.x},${p.y}) -- (${p.x},0);`,
@@ -1639,7 +1612,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     }
   }
 
-  return `\\begin{document}\n\n\\begin{tikzpicture}[x=${UNIT_CM * tikzScale * xSc}cm,y=${UNIT_CM * tikzScale * ySc}cm]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
+  return `\\begin{document}\n\n\\begin{tikzpicture}[x=${fn(UNIT_CM * tikzScale * xSc)}cm,y=${fn(UNIT_CM * tikzScale * ySc)}cm]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
 }
 export default [
   // DEFAULT = medium now
