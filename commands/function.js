@@ -411,12 +411,14 @@ function parseTrigLine(line) {
 
 function parseGenericLine(line) {
   const baseMatch = line.match(
-    new RegExp(`^graph\\s+generic(\\[smooth\\])?\\s+(.*?)${RANGES_RE.source}$`),
+    new RegExp(
+      `^graph\\s+generic(?:\\s+(smooth))?\\s+(.*?)${RANGES_RE.source}$`,
+    ),
   );
   if (!baseMatch) return null;
   const smooth = !!baseMatch[1];
   const body = baseMatch[2].trim();
-  const ranges = parseRanges(baseMatch, 3);
+  const ranges = parseRanges(baseMatch, 2);
   const points = [];
   const re = /([v^])?\(([^;]+);([^)]+)\)/g;
   let m;
@@ -1059,33 +1061,42 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.generic) {
-        const rawPts = [...g.points].sort((a, b) => a.x - b.x);
-        const pts = rawPts.map((p) => ({
+        // IMPORTANT: preserve listing order (no sorting)
+        const pts = g.points.map((p) => ({
           ...p,
           x: applyXTr(p.x, tr),
           y: applyYTr(p.y, tr),
         }));
+
         const np = pts.length;
         if (np < 2) continue;
+
         const fv = (v) => parseFloat(v.toFixed(4));
+
         if (!g.smooth) {
           lines.push(
-            `\\draw[thick] ${pts.map((p) => `(${fv(p.x)},${fv(p.y)})`).join(" -- ")};`,
+            `\\draw[thick] ${pts
+              .map((p) => `(${fv(p.x)},${fv(p.y)})`)
+              .join(" -- ")};`,
           );
         } else {
           const slopes = pts.map((pt, i) => {
             if (pt.vertex) return 0;
-            if (i === 0) return (pts[1].y - pts[0].y) / (pts[1].x - pts[0].x);
+            if (i === 0)
+              return (pts[1].y - pts[0].y) / (pts[1].x - pts[0].x || 1e-9);
             if (i === np - 1)
               return (
                 (pts[np - 1].y - pts[np - 2].y) /
-                (pts[np - 1].x - pts[np - 2].x)
+                (pts[np - 1].x - pts[np - 2].x || 1e-9)
               );
             return (
-              (pts[i + 1].y - pts[i - 1].y) / (pts[i + 1].x - pts[i - 1].x)
+              (pts[i + 1].y - pts[i - 1].y) /
+              (pts[i + 1].x - pts[i - 1].x || 1e-9)
             );
           });
+
           let path = `(${fv(pts[0].x)},${fv(pts[0].y)})`;
+
           for (let i = 0; i < np - 1; i++) {
             const x0 = pts[i].x,
               y0 = pts[i].y,
@@ -1093,11 +1104,19 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             const x1 = pts[i + 1].x,
               y1 = pts[i + 1].y,
               m1 = slopes[i + 1];
+
             const dx = x1 - x0;
-            path += ` .. controls (${fv(x0 + dx / 3)},${fv(y0 + (dx * m0) / 3)}) and (${fv(x1 - dx / 3)},${fv(y1 - (dx * m1) / 3)}) .. (${fv(x1)},${fv(y1)})`;
+
+            path += ` .. controls (${fv(x0 + dx / 3)},${fv(
+              y0 + (dx * m0) / 3,
+            )}) and (${fv(x1 - dx / 3)},${fv(y1 - (dx * m1) / 3)}) .. (${fv(
+              x1,
+            )},${fv(y1)})`;
           }
+
           lines.push(`\\draw[thick] ${path};`);
         }
+
         continue;
       }
 
