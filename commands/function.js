@@ -35,7 +35,15 @@ function parseAxesSeg(seg, defaultExtent) {
     let min = -defaultExtent,
       max = defaultExtent,
       tickStr = undefined,
-      scale = 1;
+      scale = 1,
+      label = null;
+
+    if (s[i] === "=") {
+      i++;
+      const start = i;
+      while (i < s.length && !/[\s\[{]/.test(s[i])) i++;
+      label = s.slice(start, i) || null;
+    }
 
     while (i < s.length && /\s/.test(s[i])) i++;
 
@@ -63,7 +71,7 @@ function parseAxesSeg(seg, defaultExtent) {
       scale = parseFloat(scaleMatch[1]);
     }
 
-    return { min, max, tickStr, scale };
+    return { min, max, tickStr, scale, label };
   }
 
   const xIdx = seg.search(/\bOx\b/);
@@ -517,6 +525,9 @@ function parseContent(content, defaultExtent = 3) {
     xScale: xParsed.scale ?? 1,
     yScale: yParsed.scale ?? 1,
 
+    xLabel: xParsed.label ?? null,
+    yLabel: yParsed.label ?? null,
+
     xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
 
@@ -586,6 +597,8 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     areas,
     xScale,
     yScale,
+    xLabel,
+    yLabel,
   } = parseContent(content.trim(), defaultExtent);
 
   const xSc = xScale ?? 1;
@@ -1295,7 +1308,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     `\\fill (${xEnd},0) -- (${xEnd - arrowLen / xSc},${arrowWid / ySc}) -- (${xEnd - arrowLen / xSc},${-arrowWid / ySc}) -- cycle;`,
   );
   lines.push(
-    `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid / xSc},0) {$x$};`,
+    `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid / xSc},0) {$${xLabel ?? "x"}$};`,
   );
 
   lines.push(`% Y Axis`);
@@ -1306,7 +1319,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     `\\fill (0,${yEnd}) -- (${-arrowWid / xSc},${yEnd - arrowLen / ySc}) -- (${arrowWid / xSc},${yEnd - arrowLen / ySc}) -- cycle;`,
   );
   lines.push(
-    `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid / ySc}) {$y$};`,
+    `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid / ySc}) {$${yLabel ?? "y"}$};`,
   );
 
   const zeroXTick = xTicks.find((t) => t.value === "0");
