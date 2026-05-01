@@ -1132,29 +1132,9 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
       if (g.cubic) {
         let [xLo, xHi] = domX();
-
-        // HARD clamp to visible area
         xLo = Math.max(xLo, xStart);
         xHi = Math.min(xHi, xEnd);
-        // Clip to y boundaries if no transforms
-        if (!tr.length) {
-          const yLo = g.yFrom ?? yStart;
-          const yHi = g.yTo ?? yEnd;
-
-          // Check if cubic ever enters the valid range
-          let hasValidPoints = false;
-          const testPoints = 50;
-          for (let i = 0; i <= testPoints; i++) {
-            const x = xLo + (i / testPoints) * (xHi - xLo);
-            const y = ((g.a * x + g.b) * x + g.c) * x + g.d;
-            if (y >= yLo - 0.1 && y <= yHi + 0.1) {
-              hasValidPoints = true;
-              break;
-            }
-          }
-
-          if (!hasValidPoints) continue;
-        }
+        if (xLo >= xHi) continue;
 
         const coeffs = [
           { c: g.d, j: 0 },
@@ -1177,9 +1157,18 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
                   return i === 0 ? term : (c >= 0 ? "+" : "") + term;
                 })
                 .join("");
+
+        const yLo = yLoEff ?? yStart;
+        const yHi = yHiEff ?? yEnd;
+        const hasYClip = yLoEff !== null || yHiEff !== null;
+        if (hasYClip) {
+          lines.push(`\\begin{scope}`);
+          lines.push(`\\clip (${f(xLo)},${f(yLo)}) rectangle (${f(xHi)},${f(yHi)});`);
+        }
         lines.push(
           `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base, tr)}});`,
         );
+        if (hasYClip) lines.push(`\\end{scope}`);
         continue;
       }
 
