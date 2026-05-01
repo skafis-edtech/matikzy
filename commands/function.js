@@ -541,13 +541,14 @@ const UNIT_CM = 1.2;
 const EXT = 0.5;
 
 function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
+  const styleScale = 0.7 + 0.3 * tikzScale;
   const { xMin, xMax, xTicks, yMin, yMax, yTicks, points, graphs, areas } =
     parseContent(content.trim(), defaultExtent);
 
   const ext = EXT;
-  const arrowLen = 0.2 / tikzScale;
-  const arrowWid = 0.1 / tikzScale;
-  const tickH = 0.12;
+  const arrowLen = (0.2 * styleScale) / tikzScale;
+  const arrowWid = (0.1 * styleScale) / tikzScale;
+  const tickH = 0.12 * styleScale;
 
   const xStart = xMin - ext;
   const xEnd = xMax + ext;
@@ -605,11 +606,11 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     lines.push(`% Grid`);
     for (let i = Math.ceil(xMin); i <= Math.floor(xMax); i++)
       lines.push(
-        `\\draw[gray, line width=0.5pt] (${i},${yStart}) -- (${i},${yEnd});`,
+        `\\draw[gray, line width=${(0.5 * styleScale).toFixed(3)}pt] (${i},${yStart}) -- (${i},${yEnd});`,
       );
     for (let i = Math.ceil(yMin); i <= Math.floor(yMax); i++)
       lines.push(
-        `\\draw[gray, line width=0.5pt] (${xStart},${i}) -- (${xEnd},${i});`,
+        `\\draw[gray, line width=${(0.5 * styleScale).toFixed(3)}pt] (${xStart},${i}) -- (${xEnd},${i});`,
       );
   }
 
@@ -1221,18 +1222,26 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   }
 
   lines.push(`% X Axis`);
-  lines.push(`\\draw[line width=1pt] (${xStart},0) -- (${xEnd},0);`);
+  lines.push(
+    `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${xStart},0) -- (${xEnd},0);`,
+  );
   lines.push(
     `\\fill (${xEnd},0) -- (${xEnd - arrowLen},${arrowWid}) -- (${xEnd - arrowLen},${-arrowWid}) -- cycle;`,
   );
-  lines.push(`\\node[below, scale=1.5] at (${xEnd - arrowWid},0) {$x$};`);
+  lines.push(
+    `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid},0) {$x$};`,
+  );
 
   lines.push(`% Y Axis`);
-  lines.push(`\\draw[line width=1pt] (0,${yStart}) -- (0,${yEnd});`);
+  lines.push(
+    `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (0,${yStart}) -- (0,${yEnd});`,
+  );
   lines.push(
     `\\fill (0,${yEnd}) -- (${-arrowWid},${yEnd - arrowLen}) -- (${arrowWid},${yEnd - arrowLen}) -- cycle;`,
   );
-  lines.push(`\\node[left, scale=1.5] at (0,${yEnd - arrowWid}) {$y$};`);
+  lines.push(
+    `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid}) {$y$};`,
+  );
 
   const zeroXTick = xTicks.find((t) => t.value === "0");
   const zeroYTick = yTicks.find((t) => t.value === "0");
@@ -1241,40 +1250,48 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   lines.push(`% X Ticks`);
   for (const t of xTicks) {
     lines.push(
-      `\\draw[line width=1pt] (${t.value},${-tickH}) -- (${t.value},${tickH});`,
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${t.value},${-tickH}) -- (${t.value},${tickH});`,
     );
     if (t.value !== "0")
-      lines.push(`\\node[below, scale=1.5] at (${t.value},0) {$${t.label}$};`);
+      lines.push(
+        `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${t.value},0) {$${t.label}$};`,
+      );
   }
 
   lines.push(`% Y Ticks`);
   for (const t of yTicks) {
     lines.push(
-      `\\draw[line width=1pt] (${-tickH},${t.value}) -- (${tickH},${t.value});`,
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${-tickH},${t.value}) -- (${tickH},${t.value});`,
     );
     if (t.value !== "0")
-      lines.push(`\\node[left, scale=1.5] at (0,${t.value}) {$${t.label}$};`);
+      lines.push(
+        `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${t.value}) {$${t.label}$};`,
+      );
   }
 
   if (zeroTick)
-    lines.push(`\\node[below left, scale=1.5] at (0,0) {$${zeroTick.label}$};`);
+    lines.push(
+      `\\node[below left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,0) {$${zeroTick.label}$};`,
+    );
 
   if (points.length > 0) {
     lines.push(`% Points`);
     for (const p of points) {
       if (p.xLine)
         lines.push(
-          `\\draw[dotted, line width=1pt] (${p.x},${p.y}) -- (${p.x},0);`,
+          `\\draw[dotted, line width=${(1 * styleScale).toFixed(3)}pt] (${p.x},${p.y}) -- (${p.x},0);`,
         );
       if (p.yLine)
         lines.push(
-          `\\draw[dotted, line width=1pt] (${p.x},${p.y}) -- (0,${p.y});`,
+          `\\draw[dotted, line width=${(1 * styleScale).toFixed(3)}pt] (${p.x},${p.y}) -- (0,${p.y});`,
         );
       if (p.pointStyle === "filled")
-        lines.push(`\\fill (${p.x},${p.y}) circle (2.5pt);`);
+        lines.push(
+          `\\fill (${p.x},${p.y}) circle (${(2.5 * styleScale).toFixed(3)}pt);`,
+        );
       else if (p.pointStyle === "hollow")
         lines.push(
-          `\\draw[line width=1pt, fill=white] (${p.x},${p.y}) circle (2.5pt);`,
+          `\\draw[line width=${(1 * styleScale).toFixed(3)}pt, fill=white] (${p.x},${p.y}) circle (${(2.5 * styleScale).toFixed(3)}pt);`,
         );
       if (p.label) {
         const pos =
@@ -1282,7 +1299,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             ? "below left"
             : `${p.y < 0 ? "below" : "above"} ${p.x < 0 ? "left" : "right"}`;
         lines.push(
-          `\\node[${pos}, scale=1.5] at (${p.x},${p.y}) {$${p.label}$};`,
+          `\\node[${pos}, scale=${(1.5 * styleScale).toFixed(3)}] at (${p.x},${p.y}) {$${p.label}$};`,
         );
       }
     }
@@ -1294,6 +1311,18 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 export default [
   { prefix: "function:", syntaxCheck, compile: (c) => compile(c) },
   { prefix: "function[grid]:", syntaxCheck, compile: (c) => compile(c, true) },
+
+  {
+    prefix: "function[medium]:",
+    syntaxCheck,
+    compile: (c) => compile(c, false, 3, 2 / 3),
+  },
+  {
+    prefix: "function[medium][grid]:",
+    syntaxCheck,
+    compile: (c) => compile(c, true, 3, 2 / 3),
+  },
+
   {
     prefix: "function[small]:",
     syntaxCheck,
