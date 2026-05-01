@@ -710,7 +710,9 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   if (graphs.length > 0 || areas.length > 0) {
     lines.push(`% Graphs`);
     lines.push(`\\begin{scope}`);
-    lines.push(`\\clip (${xStart},${yStart}) rectangle (${xEnd},${yEnd});`);
+    lines.push(
+      `\\clip (${fn(xStart)},${fn(yStart)}) rectangle (${fn(xEnd)},${fn(yEnd)});`,
+    );
 
     // Area fills: raster flood-fill, rendered before curves so curves sit on top
     if (areas.length > 0) {
@@ -785,6 +787,16 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           mark(m, r);
           mark(GW - 1 - m, r);
         }
+
+      // Axes are visible lines — treat them as walls too
+      if (showXAxis) {
+        const r = yToR(0);
+        for (let c = 0; c < GW; c++) mark(c, r);
+      }
+      if (showYAxis) {
+        const c = xToC(0);
+        for (let r = 0; r < GH; r++) mark(c, r);
+      }
 
       // Rasterize all drawn graphs, sampling within axes range
       const SAMP = GW * 3;
@@ -1035,9 +1047,14 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         const pts = [];
         let lpx = null,
           lpy = null;
+        const safe = (v) => Number.isFinite(v);
+
         const ap = (x, y) => {
+          if (!safe(x) || !safe(y)) return;
           const fx = fA(x),
             fy = fA(y);
+          if (!safe(parseFloat(fx)) || !safe(parseFloat(fy))) return;
+
           if (fx !== lpx || fy !== lpy) {
             pts.push(`(${fx},${fy})`);
             lpx = fx;
@@ -1163,7 +1180,9 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         const hasYClip = yLoEff !== null || yHiEff !== null;
         if (hasYClip) {
           lines.push(`\\begin{scope}`);
-          lines.push(`\\clip (${f(xLo)},${f(yLo)}) rectangle (${f(xHi)},${f(yHi)});`);
+          lines.push(
+            `\\clip (${f(xLo)},${f(yLo)}) rectangle (${f(xHi)},${f(yHi)});`,
+          );
         }
         lines.push(
           `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base, tr)}});`,
@@ -1442,28 +1461,28 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   if (showXAxis) {
     lines.push(`% X Axis`);
     lines.push(
-      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${xStart},0) -- (${xEnd},0);`,
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${fn(xStart)},0) -- (${fn(xEnd)},0);`,
     );
     lines.push(
-      `\\fill (${xEnd},0) -- (${xEnd - arrowLen / xSc},${arrowWid / ySc}) -- (${xEnd - arrowLen / xSc},${-arrowWid / ySc}) -- cycle;`,
+      `\\fill (${fn(xEnd)},0) -- (${fn(xEnd - arrowLen / xSc)},${fn(arrowWid / ySc)}) -- (${fn(xEnd - arrowLen / xSc)},${fn(-arrowWid / ySc)}) -- cycle;`,
     );
     if (xLabel !== "")
       lines.push(
-        `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid / xSc},0) {$${xLabel ?? "x"}$};`,
+        `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${fn(xEnd - arrowWid / xSc)},0) {$${xLabel ?? "x"}$};`,
       );
   }
 
   if (showYAxis) {
     lines.push(`% Y Axis`);
     lines.push(
-      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (0,${yStart}) -- (0,${yEnd});`,
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (0,${fn(yStart)}) -- (0,${fn(yEnd)});`,
     );
     lines.push(
-      `\\fill (0,${yEnd}) -- (${-arrowWid / xSc},${yEnd - arrowLen / ySc}) -- (${arrowWid / xSc},${yEnd - arrowLen / ySc}) -- cycle;`,
+      `\\fill (0,${fn(yEnd)}) -- (${fn(-arrowWid / xSc)},${fn(yEnd - arrowLen / ySc)}) -- (${fn(arrowWid / xSc)},${fn(yEnd - arrowLen / ySc)}) -- cycle;`,
     );
     if (yLabel !== "")
       lines.push(
-        `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid / ySc}) {$${yLabel ?? "y"}$};`,
+        `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${fn(yEnd - arrowWid / ySc)}) {$${yLabel ?? "y"}$};`,
       );
   }
 
@@ -1512,19 +1531,19 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
       if (p.xLine)
         lines.push(
-          `\\draw[dotted, line width=${(1 * styleScale).toFixed(3)}pt] (${p.x},${p.y}) -- (${p.x},0);`,
+          `\\draw[dotted, line width=${(1.5 * styleScale).toFixed(3)}pt] (${p.x},${p.y}) -- (${p.x},0);`,
         );
       if (p.yLine)
         lines.push(
-          `\\draw[dotted, line width=${(1 * styleScale).toFixed(3)}pt] (${p.x},${p.y}) -- (0,${p.y});`,
+          `\\draw[dotted, line width=${(1.5 * styleScale).toFixed(3)}pt] (${p.x},${p.y}) -- (0,${p.y});`,
         );
       if (p.pointStyle === "filled")
         lines.push(
-          `\\fill (${p.x},${p.y}) circle (${(2.5 * styleScale).toFixed(3)}pt);`,
+          `\\fill (${p.x},${p.y}) circle (${(3.2 * styleScale).toFixed(3)}pt);`,
         );
       else if (p.pointStyle === "hollow")
         lines.push(
-          `\\draw[line width=${(1 * styleScale).toFixed(3)}pt, fill=white] (${p.x},${p.y}) circle (${(2.5 * styleScale).toFixed(3)}pt);`,
+          `\\draw[line width=${(1 * styleScale).toFixed(3)}pt, fill=white] (${p.x},${p.y}) circle (${(3.2 * styleScale).toFixed(3)}pt);`,
         );
       if (p.label) {
         const pos =
