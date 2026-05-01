@@ -1,8 +1,48 @@
 # Docs
 
-## Syntax
+## `function`
 
-### `function`
+Examples:
+
+```
+function[large]:
+axes Oy[-1;4]{0;1;3} Ox[-1;5]{0;2;4}
+graph parabola (0;0) (2;3) (4;4)
+graph parabola (-1;4) (2;3) (4;1)
+graph line (0;0) (4;1)
+point (0;2.3) _{y=f(x)}
+point (2.5;2.5) _{y=g(x)}
+point (3.8;1.2) _{y=h(x)}
+point (2;3) []
+point (4;1) []
+area (2;1)
+```
+
+```
+function[large]:
+axes Ox[-1;4]{0;1} Oy[-1;4]{1;2}
+point (0;2) []
+point (0;0) []
+graph sqrt >>f(x)+2
+```
+
+```
+function:
+axes Oy[-0.8;0.8]{-1;0;1} x2 Ox[-0.5;2]{1/3=30^\circ; 1=90^\circ; 5/3=150^\circ; 2=180^\circ} x3
+graph sin
+graph line y=0.5
+point (0.3333;0.5) [] x-line
+point (1.6666;0.5) [] x-line
+```
+
+Explanation:
+
+Starts with `function:`. Can have `function[small]:`, `function[large]:` and can have (combining possible) `function[grid]:`.
+
+Then these keywords (with whitespaces before) separates sections:
+`axes`, `graph`, `point`, `area`, `angle`.
+
+Syntax BNF:
 
 ```
 <content> ::= <segment> { <space> <segment> }
