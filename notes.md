@@ -80,7 +80,7 @@ WIP...
 TODO:
 
 - small graph dots not scale.
-- parabola with 3 points.
+- parabola with 3 points. DONE
 - angles.
 - scale axes.
 - medium scale; make tick labels a bit smaller... for medium and for small.
