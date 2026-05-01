@@ -17,7 +17,6 @@ function parseTicks(tickStr, min, max) {
       return { value: s, label: s };
     });
 }
-
 function parseAxesSeg(seg, defaultExtent) {
   function balancedBrace(s, pos) {
     let depth = 0,
@@ -35,28 +34,51 @@ function parseAxesSeg(seg, defaultExtent) {
   function parseOne(s, i) {
     let min = -defaultExtent,
       max = defaultExtent,
-      tickStr = undefined;
+      tickStr = undefined,
+      scale = 1;
+
     while (i < s.length && /\s/.test(s[i])) i++;
+
     if (s[i] === "[") {
       const end = s.indexOf("]", i);
       if (end !== -1) {
         const [lo, hi] = s.slice(i + 1, end).split(";");
-        if (lo && lo.trim()) min = parseFloat(lo);
-        if (hi && hi.trim()) max = parseFloat(hi);
+        if (lo?.trim()) min = parseFloat(lo);
+        if (hi?.trim()) max = parseFloat(hi);
         i = end + 1;
       }
     }
+
     while (i < s.length && /\s/.test(s[i])) i++;
-    if (s[i] === "{") tickStr = balancedBrace(s, i);
-    return { min, max, tickStr };
+
+    if (s[i] === "{") {
+      tickStr = balancedBrace(s, i);
+      i += tickStr.length + 2;
+    }
+
+    while (i < s.length && /\s/.test(s[i])) i++;
+
+    const scaleMatch = s.slice(i).match(/^x([+-]?\d+(?:\.\d+)?)/);
+    if (scaleMatch) {
+      scale = parseFloat(scaleMatch[1]);
+    }
+
+    return { min, max, tickStr, scale };
   }
 
-  const xIdx = seg.search(/\bx(?=[\s\[{]|$)/);
-  const yIdx = seg.search(/\by(?=[\s\[{]|$)/);
-  const def = { min: -defaultExtent, max: defaultExtent, tickStr: undefined };
+  const xIdx = seg.search(/\bOx\b/);
+  const yIdx = seg.search(/\bOy\b/);
+
+  const def = {
+    min: -defaultExtent,
+    max: defaultExtent,
+    tickStr: undefined,
+    scale: 1,
+  };
+
   return {
-    x: xIdx !== -1 ? parseOne(seg, xIdx + 1) : def,
-    y: yIdx !== -1 ? parseOne(seg, yIdx + 1) : def,
+    x: xIdx !== -1 ? parseOne(seg, xIdx + 2) : def,
+    y: yIdx !== -1 ? parseOne(seg, yIdx + 2) : def,
   };
 }
 
@@ -480,17 +502,24 @@ function parseContent(content, defaultExtent = 3) {
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const axesSeg = segments.find((s) => s.startsWith("axes"));
+
   const { x: xParsed, y: yParsed } = parseAxesSeg(
     axesSeg ?? "axes",
     defaultExtent,
   );
+
   return {
     xMin: xParsed.min,
     xMax: xParsed.max,
-    xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yMin: yParsed.min,
     yMax: yParsed.max,
+
+    xScale: xParsed.scale ?? 1,
+    yScale: yParsed.scale ?? 1,
+
+    xTicks: parseTicks(xParsed.tickStr, xParsed.min, xParsed.max),
     yTicks: parseTicks(yParsed.tickStr, yParsed.min, yParsed.max),
+
     points: segments.map(parsePointLine).filter(Boolean),
     areas: segments.map(parseAreaLine).filter(Boolean),
     graphs: [
@@ -545,8 +574,22 @@ const EXT = 0.5;
 function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   const styleScale = 0.7 + 0.3 * tikzScale;
   const tickLabelScale = 1.5 * Math.pow(styleScale, 2);
-  const { xMin, xMax, xTicks, yMin, yMax, yTicks, points, graphs, areas } =
-    parseContent(content.trim(), defaultExtent);
+  const {
+    xMin,
+    xMax,
+    yMin,
+    yMax,
+    xTicks,
+    yTicks,
+    points,
+    graphs,
+    areas,
+    xScale,
+    yScale,
+  } = parseContent(content.trim(), defaultExtent);
+
+  const xSc = xScale ?? 1;
+  const ySc = yScale ?? 1;
 
   const ext = EXT;
   const arrowLen = (0.2 * styleScale) / tikzScale;
@@ -635,6 +678,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             Math.round(((x - xStart) / (xEnd - xStart)) * (GW - 1)),
           ),
         );
+
       const yToR = (y) =>
         Math.max(
           0,
@@ -643,7 +687,9 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             Math.round(((y - yStart) / (yEnd - yStart)) * (GH - 1)),
           ),
         );
+
       const cToX = (c) => xStart + (c / (GW - 1)) * (xEnd - xStart);
+
       const rToY = (r) => yStart + (r / (GH - 1)) * (yEnd - yStart);
       const cW = (xEnd - xStart) / GW,
         cH = (yEnd - yStart) / GH;
@@ -1246,10 +1292,10 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${xStart},0) -- (${xEnd},0);`,
   );
   lines.push(
-    `\\fill (${xEnd},0) -- (${xEnd - arrowLen},${arrowWid}) -- (${xEnd - arrowLen},${-arrowWid}) -- cycle;`,
+    `\\fill (${xEnd},0) -- (${xEnd - arrowLen / xSc},${arrowWid / ySc}) -- (${xEnd - arrowLen / xSc},${-arrowWid / ySc}) -- cycle;`,
   );
   lines.push(
-    `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid},0) {$x$};`,
+    `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid / xSc},0) {$x$};`,
   );
 
   lines.push(`% Y Axis`);
@@ -1257,10 +1303,10 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (0,${yStart}) -- (0,${yEnd});`,
   );
   lines.push(
-    `\\fill (0,${yEnd}) -- (${-arrowWid},${yEnd - arrowLen}) -- (${arrowWid},${yEnd - arrowLen}) -- cycle;`,
+    `\\fill (0,${yEnd}) -- (${-arrowWid / xSc},${yEnd - arrowLen / ySc}) -- (${arrowWid / xSc},${yEnd - arrowLen / ySc}) -- cycle;`,
   );
   lines.push(
-    `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid}) {$y$};`,
+    `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid / ySc}) {$y$};`,
   );
 
   const zeroXTick = xTicks.find((t) => t.value === "0");
@@ -1270,7 +1316,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   lines.push(`% X Ticks`);
   for (const t of xTicks) {
     lines.push(
-      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${t.value},${-tickH}) -- (${t.value},${tickH});`,
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${t.value},${-tickH / ySc}) -- (${t.value},${tickH / ySc});`,
     );
     if (t.value !== "0")
       lines.push(
@@ -1281,7 +1327,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   lines.push(`% Y Ticks`);
   for (const t of yTicks) {
     lines.push(
-      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${-tickH},${t.value}) -- (${tickH},${t.value});`,
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${-tickH / xSc},${t.value}) -- (${tickH / xSc},${t.value});`,
     );
     if (t.value !== "0")
       lines.push(
@@ -1325,7 +1371,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     }
   }
 
-  return `\\begin{document}\n\n\\begin{tikzpicture}[x=${UNIT_CM * tikzScale}cm,y=${UNIT_CM * tikzScale}cm]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
+  return `\\begin{document}\n\n\\begin{tikzpicture}[x=${UNIT_CM * tikzScale * xSc}cm,y=${UNIT_CM * tikzScale * ySc}cm]\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
 }
 export default [
   // DEFAULT = medium now
