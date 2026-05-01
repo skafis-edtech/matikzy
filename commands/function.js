@@ -542,6 +542,7 @@ const EXT = 0.5;
 
 function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   const styleScale = 0.7 + 0.3 * tikzScale;
+  const tickLabelScale = 1.5 * Math.pow(styleScale, 2);
   const { xMin, xMax, xTicks, yMin, yMax, yTicks, points, graphs, areas } =
     parseContent(content.trim(), defaultExtent);
 
@@ -1254,7 +1255,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     );
     if (t.value !== "0")
       lines.push(
-        `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${t.value},0) {$${t.label}$};`,
+        `\\node[below, scale=${tickLabelScale.toFixed(3)}] at (${t.value},0) {$${t.label}$};`,
       );
   }
 
@@ -1265,13 +1266,13 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     );
     if (t.value !== "0")
       lines.push(
-        `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${t.value}) {$${t.label}$};`,
+        `\\node[left, scale=${tickLabelScale.toFixed(3)}] at (0,${t.value}) {$${t.label}$};`,
       );
   }
 
   if (zeroTick)
     lines.push(
-      `\\node[below left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,0) {$${zeroTick.label}$};`,
+      `\\node[below left, scale=${tickLabelScale.toFixed(3)}] at (0,0) {$${zeroTick.label}$};`,
     );
 
   if (points.length > 0) {
