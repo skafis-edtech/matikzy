@@ -42,7 +42,7 @@ function parseAxesSeg(seg, defaultExtent) {
       i++;
       const start = i;
       while (i < s.length && !/[\s\[{]/.test(s[i])) i++;
-      label = s.slice(start, i) || null;
+      label = s.slice(start, i);
     }
 
     while (i < s.length && /\s/.test(s[i])) i++;
@@ -613,6 +613,9 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
   const xEnd = xMax + ext;
   const yStart = yMin - ext;
   const yEnd = yMax + ext;
+
+  const showXAxis = yMin <= 0 && 0 <= yMax;
+  const showYAxis = xMin <= 0 && 0 <= xMax;
 
   const lines = [];
 
@@ -1300,55 +1303,65 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
     lines.push(`\\end{scope}`);
   }
 
-  lines.push(`% X Axis`);
-  lines.push(
-    `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${xStart},0) -- (${xEnd},0);`,
-  );
-  lines.push(
-    `\\fill (${xEnd},0) -- (${xEnd - arrowLen / xSc},${arrowWid / ySc}) -- (${xEnd - arrowLen / xSc},${-arrowWid / ySc}) -- cycle;`,
-  );
-  lines.push(
-    `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid / xSc},0) {$${xLabel ?? "x"}$};`,
-  );
+  if (showXAxis) {
+    lines.push(`% X Axis`);
+    lines.push(
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${xStart},0) -- (${xEnd},0);`,
+    );
+    lines.push(
+      `\\fill (${xEnd},0) -- (${xEnd - arrowLen / xSc},${arrowWid / ySc}) -- (${xEnd - arrowLen / xSc},${-arrowWid / ySc}) -- cycle;`,
+    );
+    if (xLabel !== "")
+      lines.push(
+        `\\node[below, scale=${(1.5 * styleScale).toFixed(3)}] at (${xEnd - arrowWid / xSc},0) {$${xLabel ?? "x"}$};`,
+      );
+  }
 
-  lines.push(`% Y Axis`);
-  lines.push(
-    `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (0,${yStart}) -- (0,${yEnd});`,
-  );
-  lines.push(
-    `\\fill (0,${yEnd}) -- (${-arrowWid / xSc},${yEnd - arrowLen / ySc}) -- (${arrowWid / xSc},${yEnd - arrowLen / ySc}) -- cycle;`,
-  );
-  lines.push(
-    `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid / ySc}) {$${yLabel ?? "y"}$};`,
-  );
+  if (showYAxis) {
+    lines.push(`% Y Axis`);
+    lines.push(
+      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (0,${yStart}) -- (0,${yEnd});`,
+    );
+    lines.push(
+      `\\fill (0,${yEnd}) -- (${-arrowWid / xSc},${yEnd - arrowLen / ySc}) -- (${arrowWid / xSc},${yEnd - arrowLen / ySc}) -- cycle;`,
+    );
+    if (yLabel !== "")
+      lines.push(
+        `\\node[left, scale=${(1.5 * styleScale).toFixed(3)}] at (0,${yEnd - arrowWid / ySc}) {$${yLabel ?? "y"}$};`,
+      );
+  }
 
   const zeroXTick = xTicks.find((t) => t.value === "0");
   const zeroYTick = yTicks.find((t) => t.value === "0");
   const zeroTick = zeroXTick ?? zeroYTick;
 
-  lines.push(`% X Ticks`);
-  for (const t of xTicks) {
-    lines.push(
-      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${t.value},${-tickH / ySc}) -- (${t.value},${tickH / ySc});`,
-    );
-    if (t.value !== "0")
+  if (showXAxis) {
+    lines.push(`% X Ticks`);
+    for (const t of xTicks) {
       lines.push(
-        `\\node[below, scale=${tickLabelScale.toFixed(3)}] at (${t.value},0) {$${t.label}$};`,
+        `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${t.value},${-tickH / ySc}) -- (${t.value},${tickH / ySc});`,
       );
+      if (t.value !== "0")
+        lines.push(
+          `\\node[below, scale=${tickLabelScale.toFixed(3)}] at (${t.value},0) {$${t.label}$};`,
+        );
+    }
   }
 
-  lines.push(`% Y Ticks`);
-  for (const t of yTicks) {
-    lines.push(
-      `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${-tickH / xSc},${t.value}) -- (${tickH / xSc},${t.value});`,
-    );
-    if (t.value !== "0")
+  if (showYAxis) {
+    lines.push(`% Y Ticks`);
+    for (const t of yTicks) {
       lines.push(
-        `\\node[left, scale=${tickLabelScale.toFixed(3)}] at (0,${t.value}) {$${t.label}$};`,
+        `\\draw[line width=${(1 * styleScale).toFixed(3)}pt] (${-tickH / xSc},${t.value}) -- (${tickH / xSc},${t.value});`,
       );
+      if (t.value !== "0")
+        lines.push(
+          `\\node[left, scale=${tickLabelScale.toFixed(3)}] at (0,${t.value}) {$${t.label}$};`,
+        );
+    }
   }
 
-  if (zeroTick)
+  if (zeroTick && showXAxis && showYAxis)
     lines.push(
       `\\node[below left, scale=${tickLabelScale.toFixed(3)}] at (0,0) {$${zeroTick.label}$};`,
     );
