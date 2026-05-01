@@ -1127,7 +1127,67 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       }
 
       if (g.cubic) {
-        const [xLo, xHi] = domX();
+        let [xLo, xHi] = domX();
+
+        // Clip to y boundaries if no transforms
+        if (!tr.length && (g.yFrom != null || g.yTo != null)) {
+          const yLo = g.yFrom ?? yStart;
+          const yHi = g.yTo ?? yEnd;
+
+          // Find all x values where cubic crosses yLo and yHi
+          const findCrossings = (yBound) => {
+            // Solve: a*x^3 + b*x^2 + c*x + d = yBound
+            // => a*x^3 + b*x^2 + c*x + (d - yBound) = 0
+            const roots = [];
+            const samples = 500;
+            for (let i = 0; i < samples; i++) {
+              const x1 = xLo + (i / samples) * (xHi - xLo);
+              const x2 = xLo + ((i + 1) / samples) * (xHi - xLo);
+              const y1 = ((g.a * x1 + g.b) * x1 + g.c) * x1 + g.d;
+              const y2 = ((g.a * x2 + g.b) * x2 + g.c) * x2 + g.d;
+
+              // Check if crossing occurs between x1 and x2
+              if ((y1 - yBound) * (y2 - yBound) <= 0) {
+                // Binary search for precise crossing
+                let lo = x1,
+                  hi = x2;
+                for (let j = 0; j < 20; j++) {
+                  const mid = (lo + hi) / 2;
+                  const yMid = ((g.a * mid + g.b) * mid + g.c) * mid + g.d;
+                  if ((yMid - yBound) * (y1 - yBound) <= 0) hi = mid;
+                  else lo = mid;
+                }
+                roots.push((lo + hi) / 2);
+              }
+            }
+            return roots;
+          };
+
+          const crossings = [...findCrossings(yLo), ...findCrossings(yHi)].sort(
+            (a, b) => a - b,
+          );
+
+          // Find the widest continuous segment within bounds
+          if (crossings.length > 0) {
+            let bestLo = xLo,
+              bestHi = xHi;
+            for (let i = 0; i <= crossings.length; i++) {
+              const segLo = i === 0 ? xLo : crossings[i - 1];
+              const segHi = i === crossings.length ? xHi : crossings[i];
+              const midX = (segLo + segHi) / 2;
+              const midY = ((g.a * midX + g.b) * midX + g.c) * midX + g.d;
+
+              if (midY >= yLo && midY <= yHi) {
+                bestLo = segLo;
+                bestHi = segHi;
+                break;
+              }
+            }
+            xLo = bestLo;
+            xHi = bestHi;
+          }
+        }
+
         const coeffs = [
           { c: g.d, j: 0 },
           { c: g.c, j: 1 },
