@@ -90,3 +90,9 @@ TODO:
 - naming axes DONE
 - make medium scale the default - rn it's too big. DONE
 - generic line can go not like function DONE
+
+TODO:
+
+- fix area render fails
+- allow to label point from any dir.
+- `function: graph cubic (-0.5;0) (0;1) (2;0) (5;0)`
