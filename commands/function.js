@@ -849,52 +849,52 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         let evalY = null;
         if (g.parabola)
           evalY = (sx) => {
-            const u = inv(sx);
+            const u = apX(sx);
             return apY(g.a * u * u + g.b * u + g.c);
           };
         else if (g.cubic)
           evalY = (sx) => {
-            const u = inv(sx);
+            const u = apX(sx);
             return apY(((g.a * u + g.b) * u + g.c) * u + g.d);
           };
         else if (g.trig === "sin")
-          evalY = (sx) => apY(Math.sin((inv(sx) * Math.PI) / 2));
+          evalY = (sx) => apY(Math.sin((apX(sx) * Math.PI) / 2));
         else if (g.trig === "cos")
-          evalY = (sx) => apY(Math.cos((inv(sx) * Math.PI) / 2));
+          evalY = (sx) => apY(Math.cos((apX(sx) * Math.PI) / 2));
         else if (g.trig === "tan")
           evalY = (sx) => {
-            const v = Math.tan((inv(sx) * Math.PI) / 2);
+            const v = Math.tan((apX(sx) * Math.PI) / 2);
             return Math.abs(v) > 50 ? null : apY(v);
           };
         else if (g.trig === "cot")
           evalY = (sx) => {
-            const s = Math.sin((inv(sx) * Math.PI) / 2);
+            const s = Math.sin((apX(sx) * Math.PI) / 2);
             return Math.abs(s) < 0.01
               ? null
-              : apY(Math.cos((inv(sx) * Math.PI) / 2) / s);
+              : apY(Math.cos((apX(sx) * Math.PI) / 2) / s);
           };
         else if (g.sqrt)
           evalY = (sx) => {
-            const u = inv(sx);
+            const u = apX(sx);
             return u < 0 ? null : apY(Math.sqrt(u));
           };
-        else if (g.cbrt) evalY = (sx) => apY(Math.cbrt(inv(sx)));
+        else if (g.cbrt) evalY = (sx) => apY(Math.cbrt(apX(sx)));
         else if (g.log)
           evalY = (sx) => {
-            const u = inv(sx);
+            const u = apX(sx);
             return u <= 0 ? null : apY(Math.log(u) / Math.log(g.a));
           };
-        else if (g.exp) evalY = (sx) => apY(Math.pow(g.a, inv(sx)));
+        else if (g.exp) evalY = (sx) => apY(Math.pow(g.a, apX(sx)));
         else if (g.hyperbola)
           evalY = (sx) => {
-            const u = inv(sx);
+            const u = apX(sx);
             return Math.abs(u) < 0.01 ? null : apY(g.k / u);
           };
         else if (g.generic) {
           if (g.expr) {
             evalY = (sx) => {
               try {
-                const x = inv(sx);
+                const x = apX(sx);
                 const jsExpr = g.expr.replace(/\^/g, "**");
                 const y = Function("x", `return ${jsExpr}`)(x);
                 return isFinite(y) ? apY(y) : null;
@@ -977,7 +977,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             }
           }
         } else {
-          evalY = (sx) => apY(g.m * inv(sx) + g.b);
+          evalY = (sx) => apY(g.m * apX(sx) + g.b);
         }
         if (!evalY) continue;
 
