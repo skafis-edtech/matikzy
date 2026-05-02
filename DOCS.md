@@ -104,7 +104,7 @@ graph parabola x[-1;1]
 point (-1;1) [A]
 point (1;1) (B)
 point (0;0) ()
-point (2;1) C x-line y-line
+point (2;1) C top left x-line y-line
 ```
 
 - `[label]` means filled
@@ -112,6 +112,7 @@ point (2;1) C x-line y-line
 - `label` means just a label
 - `x-line` - to the x axis
 - `y-line` - to the y axis
+- `top left` or `bottom` or `right` - position of the label relative to the point. Default - I:top right, II:top left, III: bottom left, IV:bottom right.
 
 ### Area
 

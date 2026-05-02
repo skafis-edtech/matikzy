@@ -120,10 +120,30 @@ function parsePointLine(line) {
     }
   }
 
+  const POSITIONS = [
+    ["top left", "above left"],
+    ["top right", "above right"],
+    ["bottom left", "below left"],
+    ["bottom right", "below right"],
+    ["top", "above"],
+    ["bottom", "below"],
+    ["left", "left"],
+    ["right", "right"],
+  ];
+  let labelPos = null;
+  for (const [key, tikz] of POSITIONS) {
+    if (rest.includes(key)) {
+      labelPos = tikz;
+      rest = rest.replace(key, "").trim();
+      break;
+    }
+  }
+
   return {
     x,
     y,
     label,
+    labelPos,
     pointStyle,
     xLine: rest.includes("x-line"),
     yLine: rest.includes("y-line"),
@@ -746,7 +766,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       const rToY = (r) => yStart + (r / (GH - 1)) * (yEnd - yStart);
       const cW = (xEnd - xStart) / GW,
         cH = (yEnd - yStart) / GH;
-      const fA = (v) => parseFloat(v.toFixed(4)).toString();
+      const fA = (v) => parseFloat(v.toFixed(3)).toString();
 
       const wallGrid = new Uint8Array(GW * GH);
       const mark = (c, r) => {
@@ -1043,44 +1063,58 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           }
         }
         if (mxR < mnR) continue;
-        // Build staircase polygon: right side ascending, left side descending
+        // Build polygon by merging consecutive same-x rows into single vertical
+        // segments, eliminating zero-width steps and near-duplicate points.
         const pts = [];
-        let lpx = null,
-          lpy = null;
-        const safe = (v) => Number.isFinite(v);
-
-        const ap = (x, y) => {
-          if (!safe(x) || !safe(y)) return;
-          const fx = fA(x),
-            fy = fA(y);
-          if (!safe(parseFloat(fx)) || !safe(parseFloat(fy))) return;
-
-          if (fx !== lpx || fy !== lpy) {
-            pts.push(`(${fx},${fy})`);
-            lpx = fx;
-            lpy = fy;
-          }
+        let lastPt = null;
+        const ep = (xStr, yStr) => {
+          const s = `(${xStr},${yStr})`;
+          if (s !== lastPt) { pts.push(s); lastPt = s; }
         };
         const step = Math.max(1, Math.round((mxR - mnR) / 40));
-        for (let r = mnR; r <= mxR; r += step)
-          if (rB[r] !== -1) {
-            ap(cToX(rB[r]) + cW / 2, rToY(r) - cH / 2);
-            ap(cToX(rB[r]) + cW / 2, rToY(r) + cH / 2);
+
+        const rightRows = [];
+        for (let r = mnR; r <= mxR; r += step) rightRows.push(r);
+        if (rightRows[rightRows.length - 1] !== mxR) rightRows.push(mxR);
+
+        const leftRows = [];
+        for (let r = mxR; r >= mnR; r -= step) leftRows.push(r);
+        if (leftRows[leftRows.length - 1] !== mnR) leftRows.push(mnR);
+
+        // Right boundary: ascending y — each run of same-x rows becomes one
+        // vertical segment (bottom of first row → top of last row in run).
+        {
+          let curX = null, curYHi = null;
+          for (const r of rightRows) {
+            if (rB[r] === -1) continue;
+            const x = fA(cToX(rB[r]) + cW / 2);
+            const yHi = fA(rToY(r) + cH / 2);
+            if (x !== curX) {
+              if (curX !== null) ep(curX, curYHi);
+              ep(x, fA(rToY(r) - cH / 2));
+              curX = x;
+            }
+            curYHi = yHi;
           }
-        if (rB[mxR] !== -1) {
-          ap(cToX(rB[mxR]) + cW / 2, rToY(mxR) - cH / 2);
-          ap(cToX(rB[mxR]) + cW / 2, rToY(mxR) + cH / 2);
+          if (curX !== null) ep(curX, curYHi);
         }
-        for (let r = mxR; r >= mnR; r -= step)
-          if (lB[r] !== -1) {
-            ap(cToX(lB[r]) - cW / 2, rToY(r) + cH / 2);
-            ap(cToX(lB[r]) - cW / 2, rToY(r) - cH / 2);
+        // Left boundary: descending y — same merging, top of first → bottom of last.
+        {
+          let curX = null, curYLo = null;
+          for (const r of leftRows) {
+            if (lB[r] === -1) continue;
+            const x = fA(cToX(lB[r]) - cW / 2);
+            const yLo = fA(rToY(r) - cH / 2);
+            if (x !== curX) {
+              if (curX !== null) ep(curX, curYLo);
+              ep(x, fA(rToY(r) + cH / 2));
+              curX = x;
+            }
+            curYLo = yLo;
           }
-        if (lB[mnR] !== -1) {
-          ap(cToX(lB[mnR]) - cW / 2, rToY(mnR) + cH / 2);
-          ap(cToX(lB[mnR]) - cW / 2, rToY(mnR) - cH / 2);
+          if (curX !== null) ep(curX, curYLo);
         }
-        lines.push(`\\fill[lightgray] ${pts.join(" -- ")} -- cycle;`);
+        lines.push(`\\fill[lightgray, even odd rule] ${pts.join(" -- ")} -- cycle;`);
         if (ag.label && cnt > 0)
           lines.push(
             `\\node[scale=1.2] at (${fA(cToX(Math.round(sumC / cnt)))},${fA(rToY(Math.round(sumR / cnt)))}) {$${ag.label}$};`,
@@ -1547,9 +1581,10 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         );
       if (p.label) {
         const pos =
-          p.x === 0 && p.y === 0
+          p.labelPos ??
+          (p.x === 0 && p.y === 0
             ? "below left"
-            : `${p.y < 0 ? "below" : "above"} ${p.x < 0 ? "left" : "right"}`;
+            : `${p.y < 0 ? "below" : "above"} ${p.x < 0 ? "left" : "right"}`);
         lines.push(
           `\\node[${pos}, scale=${(1.5 * styleScale).toFixed(3)}] at (${p.x},${p.y}) {$${p.label}$};`,
         );
@@ -1559,7 +1594,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
   if (angles.length > 0) {
     lines.push(`% Angles`);
-    const R = 0.3;
+    const R = 0.6;
     const rx = R / xSc,
       ry = R / ySc;
     for (const ang of angles) {
@@ -1610,11 +1645,11 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         if (bisMag < 1e-9) continue;
         const buX = bisX / bisMag,
           buY = bisY / bisMag;
-        const labelR = right ? R * Math.SQRT2 * 1.4 : R * 1.7;
+        const labelR = right ? R * Math.SQRT2 * 1.5 : R * 1.9;
         const lx = x2 + (buX * labelR) / xSc;
         const ly = y2 + (buY * labelR) / ySc;
         lines.push(
-          `\\node[scale=${(1.2 * styleScale).toFixed(3)}] at (${fn(lx)},${fn(ly)}) {$${label}$};`,
+          `\\node[scale=${(1.5 * styleScale).toFixed(3)}] at (${fn(lx)},${fn(ly)}) {$${label}$};`,
         );
       }
     }
