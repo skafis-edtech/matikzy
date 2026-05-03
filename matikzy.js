@@ -2,6 +2,7 @@ import intervalArcsCommands from "./commands/interval-arcs.js";
 import functionCommands from "./commands/function.js";
 import unitCircleCommands from "./commands/unit-circle.js";
 import cuboidCommands from "./commands/cuboid.js";
+import geometryCommands from "./commands/geometry.js";
 
 // ─── Command registry ─────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ const allCommands = [
   ...functionCommands,
   ...unitCircleCommands,
   ...cuboidCommands,
+  ...geometryCommands,
 ];
 
 allCommands.forEach(({ prefix, syntaxCheck, compile }) =>

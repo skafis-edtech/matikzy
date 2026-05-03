@@ -97,3 +97,52 @@ TODO:
 - fix area render fails
 - allow to label point from any dir.
 - `function: graph cubic (-0.5;0) (0;1) (2;0) (5;0)`
+- labels - axis label with `\text{}`, point label with `\sin x` with space! --- introduce `""`?
+
+## Geometry - triangles
+
+```
+geometry:
+triangle ABC
+```
+
+```
+triangle scalene right [A]BC
+triangle scalene obtuse [A]BC
+triangle scalene acute ABC
+triangle isosceles right [A]BC
+triangle isosceles obtuse [A]BC
+triangle isosceles acute A[B]C
+~triangle equilateral right [A]BC~
+~triangle equilateral obtuse [A]BC~
+triangle equilateral acute ABC
+```
+
+With shortest versions being:
+
+```
+triangle right
+triangle obtuse
+triangle
+triangle isosceles right
+triangle isosceles obtuse
+triangle isosceles
+NOT POSSIBLE
+NOT POSSIBLE
+triangle equilateral
+```
+
+Default is [A]BC, starting bottom left, then up, then bottom right.
+
+- `<sides>` equilateral, isosceles, [scalene]
+- `<angles>` right, obtuse, [acute]
+
+```
+AB - BA - c
+BC - CB - a
+AC - CA - b
+```
+
+the default `triangle`:
+
+![alt text](image-5.png)
