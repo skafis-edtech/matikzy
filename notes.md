@@ -137,12 +137,99 @@ Default is [A]BC, starting bottom left, then up, then bottom right.
 - `<sides>` equilateral, isosceles, [scalene]
 - `<angles>` right, obtuse, [acute]
 
+the default `triangle`:
+
+![alt text](image-5.png)
+
+```
+geometry:
+triangle ABC
+label AB k
+label b l
+label CB m
+```
+
 ```
 AB - BA - c
 BC - CB - a
 AC - CA - b
 ```
 
-the default `triangle`:
+label in center of segment. on which side? idk, for triangle outside, otherwise random... After that we'll see. maybe just default is left. But can specify with
 
-![alt text](image-5.png)
+`label AB k right` WIP!
+
+the label itself is optional, defaults to the vertex in front, lowercase.
+
+Let's do the same with verteces.
+
+```
+label A label B label C
+```
+
+And with angles:
+
+```
+label ABC \beta label BAC bigger \alpha label angle A 1
+```
+
+default for angle: 1, 2, 3..
+
+mark:
+
+```
+geometry:
+triangle ABC
+mark A
+mark AB III
+mark ABC II
+```
+
+```
+mark ABC II
+mark ABC bigger II
+mark angle B II
+mark angle C right
+```
+
+WIP:
+
+triangle lines:
+
+- perpendicular bisector
+- angle bisector
+- median
+- altitude
+- midsegment
+
+general lines:
+
+- line
+- segment
+- ray
+
+```
+geometry:
+triangle KLM
+line KL
+line segment KL
+line ray KL
+```
+
+```
+geometry:
+triangle KLM
+line perpendicular bisector KLM KL
+line angle bisector KLM K
+line median KLM K
+line altitude KLM K
+line midsegment KLM KL LM
+```
+
+TODO:
+
+```
+geometry:
+triangle ABC
+point ...? -- introducing new point... dividing line in a few parts??? or for what else?
+```

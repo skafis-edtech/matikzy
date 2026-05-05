@@ -13,11 +13,6 @@ function parseLabels(str) {
       if (close === -1) return null;
       verts.push({ label: str.slice(i + 1, close), mod: "mark" });
       i = close + 1;
-    } else if (str[i] === "(") {
-      const close = str.indexOf(")", i + 1);
-      if (close === -1) return null;
-      verts.push({ label: str.slice(i + 1, close), mod: "hide" });
-      i = close + 1;
     } else {
       verts.push({ label: str[i], mod: "none" });
       i++;
@@ -199,11 +194,114 @@ function rightAngleMark(vx, vy, p1x, p1y, p2x, p2y, s = 0.25) {
   return `\\draw[line width=1pt] (${ax},${ay}) -- (${bx},${by}) -- (${cx},${cy});`;
 }
 
+// Returns [i1, i2] indices into the labels array for the given side spec, or null.
+// Vertex-pair notation: "AB" → indices of A and B.
+// Traditional notation: "a" → indices of the two vertices opposite to "A".
+function resolveSide(spec, labels) {
+  if (spec.length === 2) {
+    const i1 = labels.findIndex((v) => v.label === spec[0]);
+    const i2 = labels.findIndex((v) => v.label === spec[1]);
+    return i1 !== -1 && i2 !== -1 && i1 !== i2 ? [i1, i2] : null;
+  }
+  if (spec.length === 1 && /^[a-z]$/.test(spec)) {
+    const opp = spec.toUpperCase();
+    const idxs = labels.map((_, i) => i).filter((i) => labels[i].label !== opp);
+    return idxs.length === 2 ? idxs : null;
+  }
+  return null;
+}
+
+function isAngleSpec(spec, vertexNames) {
+  if (spec.startsWith("angle ")) return vertexNames.includes(spec.slice(6));
+  return spec.length === 3 && spec.split("").every((c) => vertexNames.includes(c));
+}
+
+// Returns {vertIdx, adj1Idx, adj2Idx} or null.
+// For "ABC": vertex=B, adjacent=A,C. For "angle B": vertex=B, adjacent=other two.
+function resolveAngle(spec, labels) {
+  let vertLabel, adj1Label, adj2Label;
+  if (spec.startsWith("angle ")) {
+    vertLabel = spec.slice(6);
+    const others = labels.filter((v) => v.label !== vertLabel);
+    if (others.length < 2) return null;
+    [adj1Label, adj2Label] = [others[0].label, others[1].label];
+  } else {
+    [adj1Label, vertLabel, adj2Label] = [spec[0], spec[1], spec[2]];
+  }
+  const vertIdx  = labels.findIndex((v) => v.label === vertLabel);
+  const adj1Idx  = labels.findIndex((v) => v.label === adj1Label);
+  const adj2Idx  = labels.findIndex((v) => v.label === adj2Label);
+  return vertIdx !== -1 && adj1Idx !== -1 && adj2Idx !== -1 ? { vertIdx, adj1Idx, adj2Idx } : null;
+}
+
+function isValidSideSpec(spec, vertexLabels) {
+  if (spec.length === 2) {
+    return vertexLabels.includes(spec[0]) && vertexLabels.includes(spec[1]) && spec[0] !== spec[1];
+  }
+  if (spec.length === 1 && /^[a-z]$/.test(spec)) {
+    return vertexLabels.includes(spec.toUpperCase());
+  }
+  return false;
+}
+
+// Splits content (any whitespace layout) into command chunks by keyword boundaries.
+function parseContent(content) {
+  const keywordRe = /(?=\b(?:triangle|label)\b)/;
+  const lines = content.trim().split(keywordRe).map((s) => s.trim()).filter((s) => s.length > 0);
+  const triangleResult = parseTriangle(lines[0] || "");
+
+  const vertexNames = (parseLabels(triangleResult.labelStr) ?? [
+    { label: "A" }, { label: "B" }, { label: "C" },
+  ]).map((v) => v.label);
+
+  const vertexLabelCmds = [];
+  const angleLabelCmds  = [];
+  const sideLabelCmds   = [];
+  const extraErrors = [];
+
+  for (const line of lines.slice(1)) {
+    const words = line.split(/\s+/);
+    if (words[0] === "label") {
+      if (words.length < 2) {
+        extraErrors.push(`"label" requires at least a specification: "${line}"`);
+      } else {
+        let i = 1;
+        let spec;
+        if (words[i] === "angle" && i + 1 < words.length) {
+          spec = "angle " + words[i + 1];
+          i += 2;
+        } else {
+          spec = words[i];
+          i++;
+        }
+        let bigger = false;
+        if (isAngleSpec(spec, vertexNames) && words[i] === "bigger") {
+          bigger = true;
+          i++;
+        }
+        const text = i < words.length ? words.slice(i).join(" ") : null;
+
+        if (vertexNames.includes(spec)) {
+          vertexLabelCmds.push({ spec, text });
+        } else if (isAngleSpec(spec, vertexNames)) {
+          angleLabelCmds.push({ spec, bigger, text });
+        } else {
+          sideLabelCmds.push({ sideSpec: spec, labelText: text });
+        }
+      }
+    } else {
+      extraErrors.push(`Unknown command: "${line}"`);
+    }
+  }
+
+  return { ...triangleResult, vertexLabelCmds, angleLabelCmds, sideLabelCmds, extraErrors };
+}
+
 function syntaxCheck(content) {
   const errors = [];
-  const { angle, side, unknown, labelStr } = parseTriangle(content);
+  const { angle, side, unknown, labelStr, angleLabelCmds, sideLabelCmds, extraErrors } = parseContent(content);
 
-  if (content.trim().split(/\s+/)[0] !== "triangle") {
+  if ((content.trim().split(/\n/)[0] || "").trim().split(/\s+/)[0] !== "triangle") {
     return { valid: false, errors: [`Unknown shape. Only "triangle" is supported.`] };
   }
 
@@ -223,11 +321,29 @@ function syntaxCheck(content) {
     }
   }
 
+  errors.push(...extraErrors);
+
+  const vertexNames = (parseLabels(labelStr) ?? [
+    { label: "A" }, { label: "B" }, { label: "C" },
+  ]).map((v) => v.label);
+
+  for (const { spec } of angleLabelCmds) {
+    if (!isAngleSpec(spec, vertexNames)) {
+      errors.push(`Invalid angle specification: "${spec}"`);
+    }
+  }
+
+  for (const { sideSpec } of sideLabelCmds) {
+    if (!isValidSideSpec(sideSpec, vertexNames)) {
+      errors.push(`Invalid side specification: "${sideSpec}"`);
+    }
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
 function compile(content, size) {
-  const { angle: rawAngle, side: rawSide, labelStr } = parseTriangle(content);
+  const { angle: rawAngle, side: rawSide, labelStr, vertexLabelCmds, angleLabelCmds, sideLabelCmds } = parseContent(content);
   const angle = rawAngle ?? "acute";
   const side  = rawSide  ?? "scalene";
 
@@ -266,11 +382,63 @@ function compile(content, size) {
     ));
   }
 
-  for (let i = 0; i < 3; i++) {
-    const { label, mod } = labels[i];
-    const { x, y, pos } = positions[i];
-    if (mod !== "hide") {
-      lines.push(`\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${label}$};`);
+  for (const { spec, text } of vertexLabelCmds) {
+    const idx = labels.findIndex((v) => v.label === spec);
+    if (idx === -1) continue;
+    const { x, y, pos } = positions[idx];
+    lines.push(`\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`);
+  }
+
+  // Angle labels: placed at vertex, offset along the angle bisector.
+  const angleOffsetBySize = { small: 0.31, medium: 0.50, large: 0.77 };
+  const angleOffset = angleOffsetBySize[size];
+  let angleDefaultCounter = 0;
+  for (const { spec, bigger, text } of angleLabelCmds) {
+    const resolved = resolveAngle(spec, labels);
+    if (!resolved) continue;
+    const { vertIdx, adj1Idx, adj2Idx } = resolved;
+    const vx = positions[vertIdx].x,  vy = positions[vertIdx].y;
+    const a1x = positions[adj1Idx].x, a1y = positions[adj1Idx].y;
+    const a2x = positions[adj2Idx].x, a2y = positions[adj2Idx].y;
+    const d1 = Math.hypot(a1x - vx, a1y - vy);
+    const d2 = Math.hypot(a2x - vx, a2y - vy);
+    const u1x = (a1x - vx) / d1, u1y = (a1y - vy) / d1;
+    const u2x = (a2x - vx) / d2, u2y = (a2y - vy) / d2;
+    let bisX = u1x + u2x, bisY = u1y + u2y;
+    const bisLen = Math.hypot(bisX, bisY);
+    if (bisLen === 0) continue;
+    bisX /= bisLen; bisY /= bisLen;
+    if (bigger) { bisX = -bisX; bisY = -bisY; }
+    const lx = vx + angleOffset * bisX;
+    const ly = vy + angleOffset * bisY;
+    const displayText = text ?? String(++angleDefaultCounter);
+    lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${displayText}$};`);
+  }
+
+  // Side labels: placed at midpoint offset outward from centroid.
+  if (sideLabelCmds.length > 0) {
+    const offsetBySize = { small: 0.22, medium: 0.35, large: 0.54 };
+    const offset = offsetBySize[size];
+    lines.push("");
+    for (const { sideSpec, labelText } of sideLabelCmds) {
+      const idxPair = resolveSide(sideSpec, labels);
+      if (!idxPair) continue;
+      const [i1, i2] = idxPair;
+      const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
+      // Default label: lowercase of the opposite vertex (traditional side name).
+      const text = labelText ?? (sideSpec.length === 1 ? sideSpec : labels[i3].label.toLowerCase());
+      const mx = (positions[i1].x + positions[i2].x) / 2;
+      const my = (positions[i1].y + positions[i2].y) / 2;
+      // Perpendicular to the side, pointing away from the opposite vertex.
+      const sdx = positions[i2].x - positions[i1].x;
+      const sdy = positions[i2].y - positions[i1].y;
+      const slen = Math.hypot(sdx, sdy);
+      const px = -sdy / slen, py = sdx / slen;
+      const awayX = mx - positions[i3].x, awayY = my - positions[i3].y;
+      const sign = (px * awayX + py * awayY) >= 0 ? 1 : -1;
+      const lx = mx + offset * sign * px;
+      const ly = my + offset * sign * py;
+      lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${text}$};`);
     }
   }
 
