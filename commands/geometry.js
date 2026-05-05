@@ -1,5 +1,5 @@
 const ANGLE_TYPES = new Set(["acute", "right", "obtuse"]);
-const SIDE_TYPES  = new Set(["equilateral", "isosceles", "scalene"]);
+const SIDE_TYPES = new Set(["equilateral", "isosceles", "scalene"]);
 
 // Parse "ABC", "[A]BC", "A(B)C", "[A](B)C", "DEF" etc. into 3 vertex descriptors.
 // mod: "none" | "mark" ([] = special angle) | "hide" (() = no label rendered)
@@ -23,16 +23,24 @@ function parseLabels(str) {
 
 function parseTriangle(content) {
   const words = content.trim().split(/\s+/);
-  if (words[0] !== "triangle") return { angle: null, side: null, unknown: words, labelStr: null };
+  if (words[0] !== "triangle")
+    return { angle: null, side: null, unknown: words, labelStr: null };
 
-  let angle = null, side = null, labelStr = null;
+  let angle = null,
+    side = null,
+    labelStr = null;
   const unknown = [];
 
   for (const word of words.slice(1)) {
-    if (ANGLE_TYPES.has(word))                       { angle === null    ? (angle    = word) : unknown.push(word); }
-    else if (SIDE_TYPES.has(word))                   { side  === null    ? (side     = word) : unknown.push(word); }
-    else if (labelStr === null && parseLabels(word)) { labelStr = word; }
-    else                                             { unknown.push(word); }
+    if (ANGLE_TYPES.has(word)) {
+      angle === null ? (angle = word) : unknown.push(word);
+    } else if (SIDE_TYPES.has(word)) {
+      side === null ? (side = word) : unknown.push(word);
+    } else if (labelStr === null && parseLabels(word)) {
+      labelStr = word;
+    } else {
+      unknown.push(word);
+    }
   }
 
   return { angle, side, unknown, labelStr };
@@ -46,49 +54,49 @@ const COORDS = {
   scalene: {
     // medium: (0,0)--(0.943,2.759)--(6.152,0)
     acute: {
-      small:  { bx: 0.58,   by: 1.698, cx: 3.786, bPos: "above"      },
-      medium: { bx: 0.943,  by: 2.759, cx: 6.152, bPos: "above"      },
-      large:  { bx: 1.45,   by: 4.245, cx: 9.465, bPos: "above"      },
+      small: { bx: 0.58, by: 1.698, cx: 3.786, bPos: "above" },
+      medium: { bx: 0.943, by: 2.759, cx: 6.152, bPos: "above" },
+      large: { bx: 1.45, by: 4.245, cx: 9.465, bPos: "above" },
     },
     // medium: (0,0)--(0,3)--(5,0)  [A]BC: right angle at bottom-left
     right: {
-      small:  { bx: 0, by: 1.846, cx: 3.077, bPos: "above left" },
-      medium: { bx: 0, by: 3,     cx: 5,     bPos: "above left" },
-      large:  { bx: 0, by: 4.615, cx: 7.692, bPos: "above left" },
+      small: { bx: 0, by: 1.846, cx: 3.077, bPos: "above left" },
+      medium: { bx: 0, by: 3, cx: 5, bPos: "above left" },
+      large: { bx: 0, by: 4.615, cx: 7.692, bPos: "above left" },
     },
     // medium: (0,0)--(-1.5,3)--(5,0)  [A]BC: obtuse angle at bottom-left
     obtuse: {
-      small:  { bx: -0.923, by: 1.846, cx: 3.077, bPos: "above left" },
-      medium: { bx: -1.5,   by: 3,     cx: 5,     bPos: "above left" },
-      large:  { bx: -2.308, by: 4.615, cx: 7.692, bPos: "above left" },
+      small: { bx: -0.923, by: 1.846, cx: 3.077, bPos: "above left" },
+      medium: { bx: -1.5, by: 3, cx: 5, bPos: "above left" },
+      large: { bx: -2.308, by: 4.615, cx: 7.692, bPos: "above left" },
     },
   },
   isosceles: {
     // medium: (0,0)--(2,5)--(4,0)  default A[B]C: special angle at top
     acute: {
-      small:  { bx: 1.231, by: 3.077, cx: 2.462, bPos: "above" },
-      medium: { bx: 2,     by: 5,     cx: 4,     bPos: "above" },
-      large:  { bx: 3.077, by: 7.692, cx: 6.154, bPos: "above" },
+      small: { bx: 1.231, by: 3.077, cx: 2.462, bPos: "above" },
+      medium: { bx: 2, by: 5, cx: 4, bPos: "above" },
+      large: { bx: 3.077, by: 7.692, cx: 6.154, bPos: "above" },
     },
     // medium: (0,0)--(0,4)--(4,0)  [equal legs]
     right: {
-      small:  { bx: 0, by: 2.462, cx: 2.462, bPos: "above left" },
-      medium: { bx: 0, by: 4,     cx: 4,     bPos: "above left" },
-      large:  { bx: 0, by: 6.154, cx: 6.154, bPos: "above left" },
+      small: { bx: 0, by: 2.462, cx: 2.462, bPos: "above left" },
+      medium: { bx: 0, by: 4, cx: 4, bPos: "above left" },
+      large: { bx: 0, by: 6.154, cx: 6.154, bPos: "above left" },
     },
     // medium: (0,0)--(-3,4)--(5,0)  [obtuse angle at A; |AB|=|AC|=5]
     obtuse: {
-      small:  { bx: -1.846, by: 2.462, cx: 3.077, bPos: "above left" },
-      medium: { bx: -3,     by: 4,     cx: 5,     bPos: "above left" },
-      large:  { bx: -4.615, by: 6.154, cx: 7.692, bPos: "above left" },
+      small: { bx: -1.846, by: 2.462, cx: 3.077, bPos: "above left" },
+      medium: { bx: -3, by: 4, cx: 5, bPos: "above left" },
+      large: { bx: -4.615, by: 6.154, cx: 7.692, bPos: "above left" },
     },
   },
   equilateral: {
     // medium: (0,0)--(2.5,4.330)--(5,0)  [side = 5]
     acute: {
-      small:  { bx: 1.538, by: 2.665, cx: 3.077, bPos: "above" },
-      medium: { bx: 2.5,   by: 4.330, cx: 5,     bPos: "above" },
-      large:  { bx: 3.846, by: 6.662, cx: 7.692, bPos: "above" },
+      small: { bx: 1.538, by: 2.665, cx: 3.077, bPos: "above" },
+      medium: { bx: 2.5, by: 4.33, cx: 5, bPos: "above" },
+      large: { bx: 3.846, by: 6.662, cx: 7.692, bPos: "above" },
     },
   },
 };
@@ -100,43 +108,43 @@ const COORDS_ALT = {
     acute: {
       // medium: (0,0)--(3.90,3.71)--(5.39,0)  [A]BC: special angle at bottom-left
       0: {
-        small:  { bx: 2.400, by: 2.284, cx: 3.318, bPos: "above" },
-        medium: { bx: 3.90,  by: 3.71,  cx: 5.39,  bPos: "above" },
-        large:  { bx: 6.0,   by: 5.708, cx: 8.292, bPos: "above" },
+        small: { bx: 2.4, by: 2.284, cx: 3.318, bPos: "above" },
+        medium: { bx: 3.9, by: 3.71, cx: 5.39, bPos: "above" },
+        large: { bx: 6.0, by: 5.708, cx: 8.292, bPos: "above" },
       },
       // medium: (0,0)--(1.49,3.71)--(5.39,0)  AB[C]: special angle at bottom-right
       2: {
-        small:  { bx: 0.917, by: 2.284, cx: 3.318, bPos: "above" },
-        medium: { bx: 1.49,  by: 3.71,  cx: 5.39,  bPos: "above" },
-        large:  { bx: 2.292, by: 5.708, cx: 8.292, bPos: "above" },
+        small: { bx: 0.917, by: 2.284, cx: 3.318, bPos: "above" },
+        medium: { bx: 1.49, by: 3.71, cx: 5.39, bPos: "above" },
+        large: { bx: 2.292, by: 5.708, cx: 8.292, bPos: "above" },
       },
     },
     right: {
       // medium: (0,0)--(2.83,2.83)--(5.66,0)  A[B]C: right angle at top
       1: {
-        small:  { bx: 1.742, by: 1.742, cx: 3.483, bPos: "above"       },
-        medium: { bx: 2.83,  by: 2.83,  cx: 5.66,  bPos: "above"       },
-        large:  { bx: 4.354, by: 4.354, cx: 8.708, bPos: "above"       },
+        small: { bx: 1.742, by: 1.742, cx: 3.483, bPos: "above" },
+        medium: { bx: 2.83, by: 2.83, cx: 5.66, bPos: "above" },
+        large: { bx: 4.354, by: 4.354, cx: 8.708, bPos: "above" },
       },
       // medium: (0,0)--(4,4)--(4,0)  AB[C]: right angle at bottom-right
       2: {
-        small:  { bx: 2.462, by: 2.462, cx: 2.462, bPos: "above right" },
-        medium: { bx: 4,     by: 4,     cx: 4,     bPos: "above right" },
-        large:  { bx: 6.154, by: 6.154, cx: 6.154, bPos: "above right" },
+        small: { bx: 2.462, by: 2.462, cx: 2.462, bPos: "above right" },
+        medium: { bx: 4, by: 4, cx: 4, bPos: "above right" },
+        large: { bx: 6.154, by: 6.154, cx: 6.154, bPos: "above right" },
       },
     },
     obtuse: {
       // medium: (0,0)--(4.472,2.236)--(8.944,0)  A[B]C: obtuse angle at top
       1: {
-        small:  { bx: 2.752, by: 1.376, cx: 5.503,  bPos: "above"       },
-        medium: { bx: 4.472, by: 2.236, cx: 8.944,  bPos: "above"       },
-        large:  { bx: 6.880, by: 3.439, cx: 13.760, bPos: "above"       },
+        small: { bx: 2.752, by: 1.376, cx: 5.503, bPos: "above" },
+        medium: { bx: 4.472, by: 2.236, cx: 8.944, bPos: "above" },
+        large: { bx: 6.88, by: 3.439, cx: 13.76, bPos: "above" },
       },
       // medium: (0,0)--(8,4)--(5,0)  AB[C]: obtuse angle at bottom-right
       2: {
-        small:  { bx: 4.923, by: 2.462, cx: 3.077, bPos: "above right" },
-        medium: { bx: 8,     by: 4,     cx: 5,     bPos: "above right" },
-        large:  { bx: 12.308,by: 6.154, cx: 7.692, bPos: "above right" },
+        small: { bx: 4.923, by: 2.462, cx: 3.077, bPos: "above right" },
+        medium: { bx: 8, by: 4, cx: 5, bPos: "above right" },
+        large: { bx: 12.308, by: 6.154, cx: 7.692, bPos: "above right" },
       },
     },
   },
@@ -144,29 +152,29 @@ const COORDS_ALT = {
     // medium: (0,0)--(1.54,2.57)--(5.83,0)  A[B]C: right angle at top
     right: {
       1: {
-        small:  { bx: 0.948, by: 1.581, cx: 3.588, bPos: "above" },
-        medium: { bx: 1.54,  by: 2.57,  cx: 5.83,  bPos: "above" },
-        large:  { bx: 2.369, by: 3.954, cx: 8.97,  bPos: "above" },
+        small: { bx: 0.948, by: 1.581, cx: 3.588, bPos: "above" },
+        medium: { bx: 1.54, by: 2.57, cx: 5.83, bPos: "above" },
+        large: { bx: 2.369, by: 3.954, cx: 8.97, bPos: "above" },
       },
       // medium: (0,0)--(5,3)--(5,0)  AB[C]: right angle at bottom-right
       2: {
-        small:  { bx: 3.077, by: 1.846, cx: 3.077, bPos: "above right" },
-        medium: { bx: 5,     by: 3,     cx: 5,     bPos: "above right" },
-        large:  { bx: 7.692, by: 4.615, cx: 7.692, bPos: "above right" },
+        small: { bx: 3.077, by: 1.846, cx: 3.077, bPos: "above right" },
+        medium: { bx: 5, by: 3, cx: 5, bPos: "above right" },
+        large: { bx: 7.692, by: 4.615, cx: 7.692, bPos: "above right" },
       },
     },
     // medium: (0,0)--(2.62,2.09)--(7.16,0)  A[B]C: obtuse angle at top
     obtuse: {
       1: {
-        small:  { bx: 1.612, by: 1.286, cx: 4.407,  bPos: "above" },
-        medium: { bx: 2.62,  by: 2.09,  cx: 7.16,   bPos: "above" },
-        large:  { bx: 4.031, by: 3.215, cx: 11.015, bPos: "above" },
+        small: { bx: 1.612, by: 1.286, cx: 4.407, bPos: "above" },
+        medium: { bx: 2.62, by: 2.09, cx: 7.16, bPos: "above" },
+        large: { bx: 4.031, by: 3.215, cx: 11.015, bPos: "above" },
       },
       // medium: (0,0)--(6.5,3)--(5,0)  AB[C]: obtuse angle at bottom-right
       2: {
-        small:  { bx: 4.0,   by: 1.846, cx: 3.077, bPos: "above right" },
-        medium: { bx: 6.5,   by: 3,     cx: 5,     bPos: "above right" },
-        large:  { bx: 10.0,  by: 4.615, cx: 7.692, bPos: "above right" },
+        small: { bx: 4.0, by: 1.846, cx: 3.077, bPos: "above right" },
+        medium: { bx: 6.5, by: 3, cx: 5, bPos: "above right" },
+        large: { bx: 10.0, by: 4.615, cx: 7.692, bPos: "above right" },
       },
     },
   },
@@ -186,11 +194,16 @@ function f(n) {
 function rightAngleMark(vx, vy, p1x, p1y, p2x, p2y, s = 0.25) {
   const d1 = Math.hypot(p1x - vx, p1y - vy);
   const d2 = Math.hypot(p2x - vx, p2y - vy);
-  const u1x = (p1x - vx) / d1, u1y = (p1y - vy) / d1;
-  const u2x = (p2x - vx) / d2, u2y = (p2y - vy) / d2;
-  const ax = f(vx + s * u1x),             ay = f(vy + s * u1y);
-  const bx = f(vx + s * u1x + s * u2x),  by = f(vy + s * u1y + s * u2y);
-  const cx = f(vx + s * u2x),             cy = f(vy + s * u2y);
+  const u1x = (p1x - vx) / d1,
+    u1y = (p1y - vy) / d1;
+  const u2x = (p2x - vx) / d2,
+    u2y = (p2y - vy) / d2;
+  const ax = f(vx + s * u1x),
+    ay = f(vy + s * u1y);
+  const bx = f(vx + s * u1x + s * u2x),
+    by = f(vy + s * u1y + s * u2y);
+  const cx = f(vx + s * u2x),
+    cy = f(vy + s * u2y);
   return `\\draw[line width=1pt] (${ax},${ay}) -- (${bx},${by}) -- (${cx},${cy});`;
 }
 
@@ -213,7 +226,9 @@ function resolveSide(spec, labels) {
 
 function isAngleSpec(spec, vertexNames) {
   if (spec.startsWith("angle ")) return vertexNames.includes(spec.slice(6));
-  return spec.length === 3 && spec.split("").every((c) => vertexNames.includes(c));
+  return (
+    spec.length === 3 && spec.split("").every((c) => vertexNames.includes(c))
+  );
 }
 
 // Returns {vertIdx, adj1Idx, adj2Idx} or null.
@@ -228,15 +243,21 @@ function resolveAngle(spec, labels) {
   } else {
     [adj1Label, vertLabel, adj2Label] = [spec[0], spec[1], spec[2]];
   }
-  const vertIdx  = labels.findIndex((v) => v.label === vertLabel);
-  const adj1Idx  = labels.findIndex((v) => v.label === adj1Label);
-  const adj2Idx  = labels.findIndex((v) => v.label === adj2Label);
-  return vertIdx !== -1 && adj1Idx !== -1 && adj2Idx !== -1 ? { vertIdx, adj1Idx, adj2Idx } : null;
+  const vertIdx = labels.findIndex((v) => v.label === vertLabel);
+  const adj1Idx = labels.findIndex((v) => v.label === adj1Label);
+  const adj2Idx = labels.findIndex((v) => v.label === adj2Label);
+  return vertIdx !== -1 && adj1Idx !== -1 && adj2Idx !== -1
+    ? { vertIdx, adj1Idx, adj2Idx }
+    : null;
 }
 
 function isValidSideSpec(spec, vertexLabels) {
   if (spec.length === 2) {
-    return vertexLabels.includes(spec[0]) && vertexLabels.includes(spec[1]) && spec[0] !== spec[1];
+    return (
+      vertexLabels.includes(spec[0]) &&
+      vertexLabels.includes(spec[1]) &&
+      spec[0] !== spec[1]
+    );
   }
   if (spec.length === 1 && /^[a-z]$/.test(spec)) {
     return vertexLabels.includes(spec.toUpperCase());
@@ -246,24 +267,35 @@ function isValidSideSpec(spec, vertexLabels) {
 
 // Splits content (any whitespace layout) into command chunks by keyword boundaries.
 function parseContent(content) {
-  const keywordRe = /(?=\b(?:triangle|label)\b)/;
-  const lines = content.trim().split(keywordRe).map((s) => s.trim()).filter((s) => s.length > 0);
+  const keywordRe = /(?=\b(?:triangle|label|mark)\b)/;
+  const lines = content
+    .trim()
+    .split(keywordRe)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   const triangleResult = parseTriangle(lines[0] || "");
 
-  const vertexNames = (parseLabels(triangleResult.labelStr) ?? [
-    { label: "A" }, { label: "B" }, { label: "C" },
-  ]).map((v) => v.label);
+  const vertexNames = (
+    parseLabels(triangleResult.labelStr) ?? [
+      { label: "A" },
+      { label: "B" },
+      { label: "C" },
+    ]
+  ).map((v) => v.label);
 
   const vertexLabelCmds = [];
-  const angleLabelCmds  = [];
-  const sideLabelCmds   = [];
+  const angleLabelCmds = [];
+  const sideLabelCmds = [];
+  const markCmds = [];
   const extraErrors = [];
 
   for (const line of lines.slice(1)) {
     const words = line.split(/\s+/);
     if (words[0] === "label") {
       if (words.length < 2) {
-        extraErrors.push(`"label" requires at least a specification: "${line}"`);
+        extraErrors.push(
+          `"label" requires at least a specification: "${line}"`,
+        );
       } else {
         let i = 1;
         let spec;
@@ -289,28 +321,87 @@ function parseContent(content) {
           sideLabelCmds.push({ sideSpec: spec, labelText: text });
         }
       }
+    } else if (words[0] === "mark") {
+      if (words.length < 2) {
+        extraErrors.push(`"mark" requires at least a specification: "${line}"`);
+      } else {
+        let i = 1;
+        let spec;
+        if (words[i] === "angle" && i + 1 < words.length) {
+          spec = "angle " + words[i + 1];
+          i += 2;
+        } else {
+          spec = words[i];
+          i++;
+        }
+        if (vertexNames.includes(spec)) {
+          markCmds.push({ type: "vertex", spec });
+        } else if (isAngleSpec(spec, vertexNames)) {
+          let arcs = null,
+            isRight = false;
+          if (i < words.length && words[i] === "right") {
+            isRight = true;
+            i++;
+          } else if (i < words.length && /^I+$/.test(words[i])) {
+            arcs = words[i].length;
+            i++;
+          }
+          markCmds.push({ type: "angle", spec, arcs, isRight });
+        } else {
+          let ticks = null;
+          if (i < words.length && /^I+$/.test(words[i])) {
+            ticks = words[i].length;
+            i++;
+          }
+          markCmds.push({ type: "side", spec, ticks });
+        }
+      }
     } else {
       extraErrors.push(`Unknown command: "${line}"`);
     }
   }
 
-  return { ...triangleResult, vertexLabelCmds, angleLabelCmds, sideLabelCmds, extraErrors };
+  return {
+    ...triangleResult,
+    vertexLabelCmds,
+    angleLabelCmds,
+    sideLabelCmds,
+    markCmds,
+    extraErrors,
+  };
 }
 
 function syntaxCheck(content) {
   const errors = [];
-  const { angle, side, unknown, labelStr, angleLabelCmds, sideLabelCmds, extraErrors } = parseContent(content);
+  const {
+    angle,
+    side,
+    unknown,
+    labelStr,
+    angleLabelCmds,
+    sideLabelCmds,
+    extraErrors,
+  } = parseContent(content);
 
-  if ((content.trim().split(/\n/)[0] || "").trim().split(/\s+/)[0] !== "triangle") {
-    return { valid: false, errors: [`Unknown shape. Only "triangle" is supported.`] };
+  if (
+    (content.trim().split(/\n/)[0] || "").trim().split(/\s+/)[0] !== "triangle"
+  ) {
+    return {
+      valid: false,
+      errors: [`Unknown shape. Only "triangle" is supported.`],
+    };
   }
 
   if (unknown.length > 0) {
-    errors.push(`Unknown modifier(s): ${unknown.map((w) => `"${w}"`).join(", ")}`);
+    errors.push(
+      `Unknown modifier(s): ${unknown.map((w) => `"${w}"`).join(", ")}`,
+    );
   }
 
-  if (side === "equilateral" && angle === "right")  errors.push("Equilateral triangles cannot be right-angled.");
-  if (side === "equilateral" && angle === "obtuse") errors.push("Equilateral triangles cannot be obtuse.");
+  if (side === "equilateral" && angle === "right")
+    errors.push("Equilateral triangles cannot be right-angled.");
+  if (side === "equilateral" && angle === "obtuse")
+    errors.push("Equilateral triangles cannot be obtuse.");
 
   if (labelStr !== null) {
     const parsed = parseLabels(labelStr);
@@ -323,9 +414,9 @@ function syntaxCheck(content) {
 
   errors.push(...extraErrors);
 
-  const vertexNames = (parseLabels(labelStr) ?? [
-    { label: "A" }, { label: "B" }, { label: "C" },
-  ]).map((v) => v.label);
+  const vertexNames = (
+    parseLabels(labelStr) ?? [{ label: "A" }, { label: "B" }, { label: "C" }]
+  ).map((v) => v.label);
 
   for (const { spec } of angleLabelCmds) {
     if (!isAngleSpec(spec, vertexNames)) {
@@ -343,9 +434,17 @@ function syntaxCheck(content) {
 }
 
 function compile(content, size) {
-  const { angle: rawAngle, side: rawSide, labelStr, vertexLabelCmds, angleLabelCmds, sideLabelCmds } = parseContent(content);
+  const {
+    angle: rawAngle,
+    side: rawSide,
+    labelStr,
+    vertexLabelCmds,
+    angleLabelCmds,
+    sideLabelCmds,
+    markCmds,
+  } = parseContent(content);
   const angle = rawAngle ?? "acute";
-  const side  = rawSide  ?? "scalene";
+  const side = rawSide ?? "scalene";
 
   // Labels map directly by position order. No mark = use DEFAULT_SPECIAL_POS.
   const labels = parseLabels(labelStr) ?? [
@@ -355,43 +454,64 @@ function compile(content, size) {
   ];
 
   const markedIdx = labels.findIndex((v) => v.mod === "mark");
-  const specialPos = markedIdx !== -1
-    ? markedIdx
-    : (DEFAULT_SPECIAL_POS[side]?.[angle] ?? 0);
+  const specialPos =
+    markedIdx !== -1 ? markedIdx : (DEFAULT_SPECIAL_POS[side]?.[angle] ?? 0);
   const altSizeMap = COORDS_ALT[side]?.[angle]?.[specialPos];
   const { bx, by, cx, bPos } = (altSizeMap ?? COORDS[side][angle])[size];
 
   // Positions are always fixed: [0]=bottom-left, [1]=top, [2]=bottom-right.
   const positions = [
-    { x: 0,  y: 0,  pos: "below left"  },
-    { x: bx, y: by, pos: bPos           },
-    { x: cx, y: 0,  pos: "below right" },
+    { x: 0, y: 0, pos: "below left" },
+    { x: bx, y: by, pos: bPos },
+    { x: cx, y: 0, pos: "below right" },
   ];
 
+  // Shared size-scaled mark/arc constants (used by both angle labels and mark rendering).
+  const arcBase = { small: 0.215, medium: 0.350, large: 0.539 }[size];
+  const arcGap  = { small: 0.092, medium: 0.150, large: 0.231 }[size];
+
+  // Pre-resolve mark auto-counts so angle labels can look up the final arc count.
+  let _segCtr = 0, _arcCtr = 0;
+  const resolvedMarks = markCmds.map((cmd) => {
+    if (cmd.type === "side"  && cmd.ticks === null)                return { ...cmd, ticks: ++_segCtr };
+    if (cmd.type === "angle" && !cmd.isRight && cmd.arcs === null) return { ...cmd, arcs:  ++_arcCtr };
+    return cmd;
+  });
+
   const lines = [];
-  lines.push(`\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`);
+  lines.push(
+    `\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`,
+  );
   lines.push("");
 
   // Right angle square at the special-angle vertex.
   if (angle === "right") {
     const [j, k] = [0, 1, 2].filter((i) => i !== specialPos);
-    lines.push(rightAngleMark(
-      positions[specialPos].x, positions[specialPos].y,
-      positions[j].x,          positions[j].y,
-      positions[k].x,          positions[k].y,
-    ));
+    lines.push(
+      rightAngleMark(
+        positions[specialPos].x,
+        positions[specialPos].y,
+        positions[j].x,
+        positions[j].y,
+        positions[k].x,
+        positions[k].y,
+      ),
+    );
   }
 
   for (const { spec, text } of vertexLabelCmds) {
     const idx = labels.findIndex((v) => v.label === spec);
     if (idx === -1) continue;
     const { x, y, pos } = positions[idx];
-    lines.push(`\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`);
+    lines.push(
+      `\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`,
+    );
   }
 
   // Angle labels: placed at vertex, offset along the angle bisector.
-  const angleOffsetBySize = { small: 0.31, medium: 0.50, large: 0.77 };
-  const angleOffset = angleOffsetBySize[size];
+  // The offset grows for small angles (≤60°) and pushes past any arc mark.
+  const normalAngleOffset = { small: 0.44, medium: 0.50, large: 0.77 }[size];
+  const arcPadding        = { small: 0.12, medium: 0.20, large: 0.31 }[size];
   let angleDefaultCounter = 0;
   for (const { spec, bigger, text } of angleLabelCmds) {
     const resolved = resolveAngle(spec, labels);
@@ -409,15 +529,32 @@ function compile(content, size) {
     if (bisLen === 0) continue;
     bisX /= bisLen; bisY /= bisLen;
     if (bigger) { bisX = -bisX; bisY = -bisY; }
-    const lx = vx + angleOffset * bisX;
-    const ly = vy + angleOffset * bisY;
+
+    // sin(θ/2) drives the offset: at θ=60° it equals normalOffset; smaller → further.
+    const sinHalf = Math.max(Math.sin(Math.acos(Math.max(-1, Math.min(1, u1x * u2x + u1y * u2y))) / 2), 0.05);
+    let offset = normalAngleOffset * Math.max(1, 0.5 / sinHalf);
+
+    // If there is an arc mark at this vertex, push the label past the outermost arc.
+    const vertLabel = spec.startsWith("angle ") ? spec.slice(6) : spec[1];
+    const matchMark = resolvedMarks.find(
+      (m) => m.type === "angle" && !m.isRight &&
+             (m.spec.startsWith("angle ") ? m.spec.slice(6) : m.spec[1]) === vertLabel,
+    );
+    if (matchMark) {
+      const SIN_45_HALF = Math.sin(22.5 * Math.PI / 180);
+      const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalf);
+      offset = Math.max(offset, adaptedArcBase + (matchMark.arcs - 1) * arcGap + arcPadding);
+    }
+
+    const lx = vx + offset * bisX;
+    const ly = vy + offset * bisY;
     const displayText = text ?? String(++angleDefaultCounter);
     lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${displayText}$};`);
   }
 
   // Side labels: placed at midpoint offset outward from centroid.
   if (sideLabelCmds.length > 0) {
-    const offsetBySize = { small: 0.22, medium: 0.35, large: 0.54 };
+    const offsetBySize = { small: 0.28, medium: 0.35, large: 0.54 };
     const offset = offsetBySize[size];
     lines.push("");
     for (const { sideSpec, labelText } of sideLabelCmds) {
@@ -426,19 +563,99 @@ function compile(content, size) {
       const [i1, i2] = idxPair;
       const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
       // Default label: lowercase of the opposite vertex (traditional side name).
-      const text = labelText ?? (sideSpec.length === 1 ? sideSpec : labels[i3].label.toLowerCase());
+      const text =
+        labelText ??
+        (sideSpec.length === 1 ? sideSpec : labels[i3].label.toLowerCase());
       const mx = (positions[i1].x + positions[i2].x) / 2;
       const my = (positions[i1].y + positions[i2].y) / 2;
       // Perpendicular to the side, pointing away from the opposite vertex.
       const sdx = positions[i2].x - positions[i1].x;
       const sdy = positions[i2].y - positions[i1].y;
       const slen = Math.hypot(sdx, sdy);
-      const px = -sdy / slen, py = sdx / slen;
-      const awayX = mx - positions[i3].x, awayY = my - positions[i3].y;
-      const sign = (px * awayX + py * awayY) >= 0 ? 1 : -1;
+      const px = -sdy / slen,
+        py = sdx / slen;
+      const awayX = mx - positions[i3].x,
+        awayY = my - positions[i3].y;
+      const sign = px * awayX + py * awayY >= 0 ? 1 : -1;
       const lx = mx + offset * sign * px;
       const ly = my + offset * sign * py;
       lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${text}$};`);
+    }
+  }
+
+  // Mark commands.
+  if (resolvedMarks.length > 0) {
+    const dotR     = { small: 0.055, medium: 0.090, large: 0.138 }[size];
+    const tickHalf = { small: 0.092, medium: 0.150, large: 0.231 }[size];
+    const tickGap  = { small: 0.074, medium: 0.120, large: 0.185 }[size];
+    // arcBase / arcGap defined above.
+    lines.push("");
+    for (const cmd of resolvedMarks) {
+      if (cmd.type === "vertex") {
+        const idx = labels.findIndex((v) => v.label === cmd.spec);
+        if (idx === -1) continue;
+        const { x, y } = positions[idx];
+        lines.push(`\\fill (${f(x)},${f(y)}) circle (${dotR});`);
+      } else if (cmd.type === "side") {
+        const idxPair = resolveSide(cmd.spec, labels);
+        if (!idxPair) continue;
+        const [i1, i2] = idxPair;
+        const n = cmd.ticks;
+        const mx = (positions[i1].x + positions[i2].x) / 2;
+        const my = (positions[i1].y + positions[i2].y) / 2;
+        const sdx = positions[i2].x - positions[i1].x;
+        const sdy = positions[i2].y - positions[i1].y;
+        const slen = Math.hypot(sdx, sdy);
+        const tx = sdx / slen,
+          ty = sdy / slen; // along segment
+        const px = -ty,
+          py = tx; // perpendicular
+        for (let t = 0; t < n; t++) {
+          const off = (t - (n - 1) / 2) * tickGap;
+          const tcx = mx + off * tx,
+            tcy = my + off * ty;
+          lines.push(
+            `\\draw[line width=1pt] (${f(tcx - tickHalf * px)},${f(tcy - tickHalf * py)}) -- (${f(tcx + tickHalf * px)},${f(tcy + tickHalf * py)});`,
+          );
+        }
+      } else if (cmd.type === "angle") {
+        const resolved = resolveAngle(cmd.spec, labels);
+        if (!resolved) continue;
+        const { vertIdx, adj1Idx, adj2Idx } = resolved;
+        const vx = positions[vertIdx].x,
+          vy = positions[vertIdx].y;
+        const a1x = positions[adj1Idx].x,
+          a1y = positions[adj1Idx].y;
+        const a2x = positions[adj2Idx].x,
+          a2y = positions[adj2Idx].y;
+        if (cmd.isRight) {
+          lines.push(rightAngleMark(vx, vy, a1x, a1y, a2x, a2y));
+        } else {
+          const n = cmd.arcs;
+          const d1m = Math.hypot(a1x - vx, a1y - vy), d2m = Math.hypot(a2x - vx, a2y - vy);
+          const dot45 = ((a1x-vx)/d1m)*((a2x-vx)/d2m) + ((a1y-vy)/d1m)*((a2y-vy)/d2m);
+          const sinHalfM = Math.max(Math.sin(Math.acos(Math.max(-1, Math.min(1, dot45))) / 2), 0.05);
+          // For θ < 45°: push arcs further from the vertex.
+          const SIN_45_HALF = Math.sin(22.5 * Math.PI / 180); // ≈ 0.383
+          const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalfM);
+          let sa = (Math.atan2(a1y - vy, a1x - vx) * 180) / Math.PI;
+          let ea = (Math.atan2(a2y - vy, a2x - vx) * 180) / Math.PI;
+          const cross = (a1x - vx) * (a2y - vy) - (a1y - vy) * (a2x - vx);
+          if (cross < 0) {
+            const tmp = sa;
+            sa = ea;
+            ea = tmp;
+          }
+          while (ea <= sa) ea += 360;
+          for (let arc = 0; arc < n; arc++) {
+            const r = adaptedArcBase + arc * arcGap;
+            const saRad = (sa * Math.PI) / 180;
+            lines.push(
+              `\\draw[line width=1pt] (${f(vx + r * Math.cos(saRad))},${f(vy + r * Math.sin(saRad))}) arc (${f(sa)}:${f(ea)}:${f(r)});`,
+            );
+          }
+        }
+      }
     }
   }
 
@@ -450,8 +667,8 @@ function makeCompile(size) {
 }
 
 export default [
-  { prefix: "geometry:",         syntaxCheck, compile: makeCompile("medium") }, // default
-  { prefix: "geometry[small]:",  syntaxCheck, compile: makeCompile("small") },
+  { prefix: "geometry:", syntaxCheck, compile: makeCompile("medium") }, // default
+  { prefix: "geometry[small]:", syntaxCheck, compile: makeCompile("small") },
   { prefix: "geometry[medium]:", syntaxCheck, compile: makeCompile("medium") },
-  { prefix: "geometry[large]:",  syntaxCheck, compile: makeCompile("large") },
+  { prefix: "geometry[large]:", syntaxCheck, compile: makeCompile("large") },
 ];
