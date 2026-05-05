@@ -207,6 +207,17 @@ function rightAngleMark(vx, vy, p1x, p1y, p2x, p2y, s = 0.25) {
   return `\\draw[line width=1pt] (${ax},${ay}) -- (${bx},${by}) -- (${cx},${cy});`;
 }
 
+// Ray from (px,py) in direction (dx,dy) vs segment (ax,ay)→(bx2,by2). Returns {t,s} or null.
+function raySegIntersect(px, py, dx, dy, ax, ay, bx2, by2) {
+  const ex = bx2 - ax, ey = by2 - ay;
+  const det = dx * (-ey) - dy * (-ex);
+  if (Math.abs(det) < 1e-10) return null;
+  const fx = ax - px, fy = ay - py;
+  const t = (fx * (-ey) - fy * (-ex)) / det;
+  const s = (dx * fy - dy * fx) / det;
+  return { t, s };
+}
+
 // Returns [i1, i2] indices into the labels array for the given side spec, or null.
 // Vertex-pair notation: "AB" → indices of A and B.
 // Traditional notation: "a" → indices of the two vertices opposite to "A".
@@ -267,7 +278,7 @@ function isValidSideSpec(spec, vertexLabels) {
 
 // Splits content (any whitespace layout) into command chunks by keyword boundaries.
 function parseContent(content) {
-  const keywordRe = /(?=\b(?:triangle|label|mark)\b)/;
+  const keywordRe = /(?=\b(?:triangle|label|mark|line)\b)/;
   const lines = content
     .trim()
     .split(keywordRe)
@@ -287,6 +298,7 @@ function parseContent(content) {
   const angleLabelCmds = [];
   const sideLabelCmds = [];
   const markCmds = [];
+  const lineCmds = [];
   const extraErrors = [];
 
   for (const line of lines.slice(1)) {
@@ -356,6 +368,22 @@ function parseContent(content) {
           markCmds.push({ type: "side", spec, ticks });
         }
       }
+    } else if (words[0] === "line") {
+      let i = 1;
+      let lineType = null;
+      if (words[i] === "perpendicular" && words[i + 1] === "bisector")  { lineType = "perpendicular bisector"; i += 2; }
+      else if (words[i] === "angle" && words[i + 1] === "bisector")     { lineType = "angle bisector";         i += 2; }
+      else if (words[i] === "median")                                    { lineType = "median";                  i++;    }
+      else if (words[i] === "altitude")                                  { lineType = "altitude";                i++;    }
+      else if (words[i] === "midsegment")                                { lineType = "midsegment";              i++;    }
+      if (!lineType) { extraErrors.push(`Unknown line type in: "${line}"`); }
+      else {
+        const triangleSpec = words[i++] ?? "";
+        const specWords = [];
+        while (i < words.length && words[i] !== "new") specWords.push(words[i++]);
+        if (words[i] !== "new") { extraErrors.push(`"line ${lineType}": missing "new" keyword`); }
+        else { lineCmds.push({ lineType, triangleSpec, specWords, newNames: words.slice(i + 1) }); }
+      }
     } else {
       extraErrors.push(`Unknown command: "${line}"`);
     }
@@ -367,6 +395,7 @@ function parseContent(content) {
     angleLabelCmds,
     sideLabelCmds,
     markCmds,
+    lineCmds,
     extraErrors,
   };
 }
@@ -380,6 +409,7 @@ function syntaxCheck(content) {
     labelStr,
     angleLabelCmds,
     sideLabelCmds,
+    lineCmds,
     extraErrors,
   } = parseContent(content);
 
@@ -430,6 +460,29 @@ function syntaxCheck(content) {
     }
   }
 
+  for (const { lineType, triangleSpec, specWords, newNames } of lineCmds) {
+    const tvChars = (triangleSpec ?? "").split("");
+    if (tvChars.length !== 3 || !tvChars.every((c) => vertexNames.includes(c))) {
+      errors.push(`"line ${lineType}": invalid triangle spec "${triangleSpec}"`);
+      continue;
+    }
+    const isVertexCh = (c) => tvChars.includes(c);
+    const isSideCh   = (s) => s.length === 2 && isVertexCh(s[0]) && isVertexCh(s[1]);
+    if (lineType === "perpendicular bisector") {
+      if (specWords.length !== 1 || !isSideCh(specWords[0])) errors.push(`"line perpendicular bisector": expects a side (e.g., "KL") before "new"`);
+      if (newNames.length !== 2) errors.push(`"line perpendicular bisector": expects 2 new point names`);
+    } else if (lineType === "angle bisector") {
+      if (specWords.length !== 0) errors.push(`"line angle bisector": expects nothing before "new"`);
+      if (newNames.length !== 2 || !isVertexCh(newNames[0])) errors.push(`"line angle bisector": expects "new <vertex> <point>"`);
+    } else if (lineType === "median" || lineType === "altitude") {
+      if (specWords.length !== 1 || !isVertexCh(specWords[0])) errors.push(`"line ${lineType}": expects a vertex before "new"`);
+      if (newNames.length !== 1) errors.push(`"line ${lineType}": expects 1 new point name`);
+    } else if (lineType === "midsegment") {
+      if (specWords.length !== 2 || !isSideCh(specWords[0]) || !isSideCh(specWords[1])) errors.push(`"line midsegment": expects two sides before "new"`);
+      if (newNames.length !== 2) errors.push(`"line midsegment": expects 2 new point names`);
+    }
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -442,6 +495,7 @@ function compile(content, size) {
     angleLabelCmds,
     sideLabelCmds,
     markCmds,
+    lineCmds,
   } = parseContent(content);
   const angle = rawAngle ?? "acute";
   const side = rawSide ?? "scalene";
@@ -467,14 +521,17 @@ function compile(content, size) {
   ];
 
   // Shared size-scaled mark/arc constants (used by both angle labels and mark rendering).
-  const arcBase = { small: 0.215, medium: 0.350, large: 0.539 }[size];
-  const arcGap  = { small: 0.092, medium: 0.150, large: 0.231 }[size];
+  const arcBase = { small: 0.215, medium: 0.35, large: 0.539 }[size];
+  const arcGap = { small: 0.092, medium: 0.15, large: 0.231 }[size];
 
   // Pre-resolve mark auto-counts so angle labels can look up the final arc count.
-  let _segCtr = 0, _arcCtr = 0;
+  let _segCtr = 0,
+    _arcCtr = 0;
   const resolvedMarks = markCmds.map((cmd) => {
-    if (cmd.type === "side"  && cmd.ticks === null)                return { ...cmd, ticks: ++_segCtr };
-    if (cmd.type === "angle" && !cmd.isRight && cmd.arcs === null) return { ...cmd, arcs:  ++_arcCtr };
+    if (cmd.type === "side" && cmd.ticks === null)
+      return { ...cmd, ticks: ++_segCtr };
+    if (cmd.type === "angle" && !cmd.isRight && cmd.arcs === null)
+      return { ...cmd, arcs: ++_arcCtr };
     return cmd;
   });
 
@@ -483,21 +540,6 @@ function compile(content, size) {
     `\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`,
   );
   lines.push("");
-
-  // Right angle square at the special-angle vertex.
-  if (angle === "right") {
-    const [j, k] = [0, 1, 2].filter((i) => i !== specialPos);
-    lines.push(
-      rightAngleMark(
-        positions[specialPos].x,
-        positions[specialPos].y,
-        positions[j].x,
-        positions[j].y,
-        positions[k].x,
-        positions[k].y,
-      ),
-    );
-  }
 
   for (const { spec, text } of vertexLabelCmds) {
     const idx = labels.findIndex((v) => v.label === spec);
@@ -510,40 +552,59 @@ function compile(content, size) {
 
   // Angle labels: placed at vertex, offset along the angle bisector.
   // The offset grows for small angles (≤60°) and pushes past any arc mark.
-  const normalAngleOffset = { small: 0.44, medium: 0.50, large: 0.77 }[size];
-  const arcPadding        = { small: 0.12, medium: 0.20, large: 0.31 }[size];
+  const normalAngleOffset = { small: 0.44, medium: 0.5, large: 0.77 }[size];
+  const arcPadding = { small: 0.12, medium: 0.2, large: 0.31 }[size];
   let angleDefaultCounter = 0;
   for (const { spec, bigger, text } of angleLabelCmds) {
     const resolved = resolveAngle(spec, labels);
     if (!resolved) continue;
     const { vertIdx, adj1Idx, adj2Idx } = resolved;
-    const vx = positions[vertIdx].x,  vy = positions[vertIdx].y;
-    const a1x = positions[adj1Idx].x, a1y = positions[adj1Idx].y;
-    const a2x = positions[adj2Idx].x, a2y = positions[adj2Idx].y;
+    const vx = positions[vertIdx].x,
+      vy = positions[vertIdx].y;
+    const a1x = positions[adj1Idx].x,
+      a1y = positions[adj1Idx].y;
+    const a2x = positions[adj2Idx].x,
+      a2y = positions[adj2Idx].y;
     const d1 = Math.hypot(a1x - vx, a1y - vy);
     const d2 = Math.hypot(a2x - vx, a2y - vy);
-    const u1x = (a1x - vx) / d1, u1y = (a1y - vy) / d1;
-    const u2x = (a2x - vx) / d2, u2y = (a2y - vy) / d2;
-    let bisX = u1x + u2x, bisY = u1y + u2y;
+    const u1x = (a1x - vx) / d1,
+      u1y = (a1y - vy) / d1;
+    const u2x = (a2x - vx) / d2,
+      u2y = (a2y - vy) / d2;
+    let bisX = u1x + u2x,
+      bisY = u1y + u2y;
     const bisLen = Math.hypot(bisX, bisY);
     if (bisLen === 0) continue;
-    bisX /= bisLen; bisY /= bisLen;
-    if (bigger) { bisX = -bisX; bisY = -bisY; }
+    bisX /= bisLen;
+    bisY /= bisLen;
+    if (bigger) {
+      bisX = -bisX;
+      bisY = -bisY;
+    }
 
     // sin(θ/2) drives the offset: at θ=60° it equals normalOffset; smaller → further.
-    const sinHalf = Math.max(Math.sin(Math.acos(Math.max(-1, Math.min(1, u1x * u2x + u1y * u2y))) / 2), 0.05);
+    const sinHalf = Math.max(
+      Math.sin(Math.acos(Math.max(-1, Math.min(1, u1x * u2x + u1y * u2y))) / 2),
+      0.05,
+    );
     let offset = normalAngleOffset * Math.max(1, 0.5 / sinHalf);
 
     // If there is an arc mark at this vertex, push the label past the outermost arc.
     const vertLabel = spec.startsWith("angle ") ? spec.slice(6) : spec[1];
     const matchMark = resolvedMarks.find(
-      (m) => m.type === "angle" && !m.isRight &&
-             (m.spec.startsWith("angle ") ? m.spec.slice(6) : m.spec[1]) === vertLabel,
+      (m) =>
+        m.type === "angle" &&
+        !m.isRight &&
+        (m.spec.startsWith("angle ") ? m.spec.slice(6) : m.spec[1]) ===
+          vertLabel,
     );
     if (matchMark) {
-      const SIN_45_HALF = Math.sin(22.5 * Math.PI / 180);
+      const SIN_45_HALF = Math.sin((22.5 * Math.PI) / 180);
       const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalf);
-      offset = Math.max(offset, adaptedArcBase + (matchMark.arcs - 1) * arcGap + arcPadding);
+      offset = Math.max(
+        offset,
+        adaptedArcBase + (matchMark.arcs - 1) * arcGap + arcPadding,
+      );
     }
 
     const lx = vx + offset * bisX;
@@ -585,9 +646,9 @@ function compile(content, size) {
 
   // Mark commands.
   if (resolvedMarks.length > 0) {
-    const dotR     = { small: 0.055, medium: 0.090, large: 0.138 }[size];
-    const tickHalf = { small: 0.092, medium: 0.150, large: 0.231 }[size];
-    const tickGap  = { small: 0.074, medium: 0.120, large: 0.185 }[size];
+    const dotR = { small: 0.055, medium: 0.09, large: 0.138 }[size];
+    const tickHalf = { small: 0.092, medium: 0.15, large: 0.231 }[size];
+    const tickGap = { small: 0.074, medium: 0.12, large: 0.185 }[size];
     // arcBase / arcGap defined above.
     lines.push("");
     for (const cmd of resolvedMarks) {
@@ -632,11 +693,17 @@ function compile(content, size) {
           lines.push(rightAngleMark(vx, vy, a1x, a1y, a2x, a2y));
         } else {
           const n = cmd.arcs;
-          const d1m = Math.hypot(a1x - vx, a1y - vy), d2m = Math.hypot(a2x - vx, a2y - vy);
-          const dot45 = ((a1x-vx)/d1m)*((a2x-vx)/d2m) + ((a1y-vy)/d1m)*((a2y-vy)/d2m);
-          const sinHalfM = Math.max(Math.sin(Math.acos(Math.max(-1, Math.min(1, dot45))) / 2), 0.05);
+          const d1m = Math.hypot(a1x - vx, a1y - vy),
+            d2m = Math.hypot(a2x - vx, a2y - vy);
+          const dot45 =
+            ((a1x - vx) / d1m) * ((a2x - vx) / d2m) +
+            ((a1y - vy) / d1m) * ((a2y - vy) / d2m);
+          const sinHalfM = Math.max(
+            Math.sin(Math.acos(Math.max(-1, Math.min(1, dot45))) / 2),
+            0.05,
+          );
           // For θ < 45°: push arcs further from the vertex.
-          const SIN_45_HALF = Math.sin(22.5 * Math.PI / 180); // ≈ 0.383
+          const SIN_45_HALF = Math.sin((22.5 * Math.PI) / 180); // ≈ 0.383
           const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalfM);
           let sa = (Math.atan2(a1y - vy, a1x - vx) * 180) / Math.PI;
           let ea = (Math.atan2(a2y - vy, a2x - vx) * 180) / Math.PI;
@@ -654,6 +721,102 @@ function compile(content, size) {
               `\\draw[line width=1pt] (${f(vx + r * Math.cos(saRad))},${f(vy + r * Math.sin(saRad))}) arc (${f(sa)}:${f(ea)}:${f(r)});`,
             );
           }
+        }
+      }
+    }
+  }
+
+  // Line constructions: bisectors, medians, altitudes, midsegments.
+  if (lineCmds.length > 0) {
+    const centX = (positions[0].x + positions[1].x + positions[2].x) / 3;
+    const centY = (positions[0].y + positions[1].y + positions[2].y) / 3;
+    const ptLblOff = { small: 0.20, medium: 0.28, large: 0.43 }[size];
+    lines.push("");
+
+    for (const { lineType, triangleSpec, specWords, newNames } of lineCmds) {
+      // Letter → position map for this triangle spec.
+      const vp = {};
+      for (const ch of triangleSpec) {
+        const idx = labels.findIndex((l) => l.label === ch);
+        if (idx !== -1) vp[ch] = positions[idx];
+      }
+
+      let p1 = null, p2 = null;
+      const newPts = {}; // name → {x, y}
+
+      if (lineType === "perpendicular bisector") {
+        const side = specWords[0];
+        const A = vp[side[0]], B = vp[side[1]];
+        const C = vp[triangleSpec.split("").find((c) => c !== side[0] && c !== side[1])];
+        const G = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+        // Perpendicular to AB, oriented toward C.
+        let dx = -(B.y - A.y), dy = B.x - A.x;
+        if (dx * (C.x - G.x) + dy * (C.y - G.y) < 0) { dx = -dx; dy = -dy; }
+        let H = null;
+        for (const [Sa, Sb] of [[A, C], [B, C]]) {
+          const r = raySegIntersect(G.x, G.y, dx, dy, Sa.x, Sa.y, Sb.x, Sb.y);
+          if (r && r.t > 1e-6 && r.s >= -1e-6 && r.s <= 1 + 1e-6) {
+            H = { x: G.x + r.t * dx, y: G.y + r.t * dy }; break;
+          }
+        }
+        p1 = G; p2 = H;
+        if (newNames[0]) newPts[newNames[0]] = G;
+        if (newNames[1] && H) newPts[newNames[1]] = H;
+
+      } else if (lineType === "angle bisector") {
+        const startCh = newNames[0];
+        const V = vp[startCh];
+        const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== startCh);
+        const L = vp[oCh1], M = vp[oCh2];
+        const dVL = Math.hypot(L.x - V.x, L.y - V.y);
+        const dVM = Math.hypot(M.x - V.x, M.y - V.y);
+        const G = { x: L.x + (dVL / (dVL + dVM)) * (M.x - L.x), y: L.y + (dVL / (dVL + dVM)) * (M.y - L.y) };
+        p1 = V; p2 = G;
+        if (newNames[0]) newPts[newNames[0]] = V;
+        if (newNames[1]) newPts[newNames[1]] = G;
+
+      } else if (lineType === "median") {
+        const V = vp[specWords[0]];
+        const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
+        const L = vp[oCh1], M = vp[oCh2];
+        const G = { x: (L.x + M.x) / 2, y: (L.y + M.y) / 2 };
+        p1 = V; p2 = G;
+        if (newNames[0]) newPts[newNames[0]] = G;
+
+      } else if (lineType === "altitude") {
+        const V = vp[specWords[0]];
+        const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
+        const L = vp[oCh1], M = vp[oCh2];
+        const ex = M.x - L.x, ey = M.y - L.y;
+        const t = ((V.x - L.x) * ex + (V.y - L.y) * ey) / (ex * ex + ey * ey);
+        const G = { x: L.x + t * ex, y: L.y + t * ey };
+        p1 = V; p2 = G;
+        if (newNames[0]) newPts[newNames[0]] = G;
+
+      } else if (lineType === "midsegment") {
+        const s1 = specWords[0], s2 = specWords[1];
+        const G = { x: (vp[s1[0]].x + vp[s1[1]].x) / 2, y: (vp[s1[0]].y + vp[s1[1]].y) / 2 };
+        const H = { x: (vp[s2[0]].x + vp[s2[1]].x) / 2, y: (vp[s2[0]].y + vp[s2[1]].y) / 2 };
+        p1 = G; p2 = H;
+        if (newNames[0]) newPts[newNames[0]] = G;
+        if (newNames[1]) newPts[newNames[1]] = H;
+      }
+
+      if (p1 && p2) {
+        lines.push(`\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`);
+      }
+
+      for (const [name, pt] of Object.entries(newPts)) {
+        const existingIdx = labels.findIndex((l) => l.label === name);
+        if (existingIdx !== -1) {
+          const { x, y, pos } = positions[existingIdx];
+          lines.push(`\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${name}$};`);
+        } else {
+          const dx = pt.x - centX, dy = pt.y - centY;
+          const len = Math.hypot(dx, dy);
+          const lx = pt.x + (len > 0 ? ptLblOff * dx / len : 0);
+          const ly = pt.y + (len > 0 ? ptLblOff * dy / len : ptLblOff);
+          lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${name}$};`);
         }
       }
     }

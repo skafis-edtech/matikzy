@@ -202,6 +202,16 @@ triangle lines:
 - altitude
 - midsegment
 
+```
+geometry:
+triangle KLM
+line perpendicular bisector KLM KL new G H
+line angle bisector KLM new K G
+line median KLM K new G
+line altitude KLM K new G
+line midsegment KLM KL LM new G H
+```
+
 general lines:
 
 - line
@@ -214,16 +224,6 @@ triangle KLM
 line KL
 line segment KL
 line ray KL
-```
-
-```
-geometry:
-triangle KLM
-line perpendicular bisector KLM KL
-line angle bisector KLM K
-line median KLM K
-line altitude KLM K
-line midsegment KLM KL LM
 ```
 
 TODO:
