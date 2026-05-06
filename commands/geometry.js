@@ -879,6 +879,31 @@ function compile(content, size) {
     };
   }
 
+  // Bounding box of all content, used to clip full-line draw commands.
+  const bbMargin = { small: 0.5, medium: 0.8, large: 1.2 }[size];
+  const bbPts = [
+    ...(hasTriangle ? positions : []),
+    ...Object.values(newPtsMap),
+  ];
+  for (const { center: cName } of circleCmds) {
+    const cp = newPtsMap[cName];
+    if (cp) {
+      bbPts.push({ x: cp.x - circleR, y: cp.y });
+      bbPts.push({ x: cp.x + circleR, y: cp.y });
+      bbPts.push({ x: cp.x, y: cp.y - circleR });
+      bbPts.push({ x: cp.x, y: cp.y + circleR });
+    }
+  }
+  let bbMinX = Infinity, bbMaxX = -Infinity, bbMinY = Infinity, bbMaxY = -Infinity;
+  for (const { x, y } of bbPts) {
+    if (x < bbMinX) bbMinX = x;
+    if (x > bbMaxX) bbMaxX = x;
+    if (y < bbMinY) bbMinY = y;
+    if (y > bbMaxY) bbMaxY = y;
+  }
+  const bbX0 = bbMinX - bbMargin, bbX1 = bbMaxX + bbMargin;
+  const bbY0 = bbMinY - bbMargin, bbY1 = bbMaxY + bbMargin;
+
   const lines = [];
   if (hasTriangle) {
     lines.push(
@@ -913,12 +938,21 @@ function compile(content, size) {
           `\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(ex)},${f(ey)});`,
         );
       } else {
-        const sx = p1.x - extAmt * ux,
-          sy = p1.y - extAmt * uy;
-        const ex = p2.x + extAmt * ux,
-          ey = p2.y + extAmt * uy;
+        // Clip the infinite line to the padded image bounding box (slab method).
+        let tMin = -Infinity, tMax = Infinity;
+        if (Math.abs(ux) > 1e-10) {
+          const ta = (bbX0 - p1.x) / ux, tb = (bbX1 - p1.x) / ux;
+          tMin = Math.max(tMin, Math.min(ta, tb));
+          tMax = Math.min(tMax, Math.max(ta, tb));
+        }
+        if (Math.abs(uy) > 1e-10) {
+          const ta = (bbY0 - p1.y) / uy, tb = (bbY1 - p1.y) / uy;
+          tMin = Math.max(tMin, Math.min(ta, tb));
+          tMax = Math.min(tMax, Math.max(ta, tb));
+        }
+        if (tMin >= tMax) continue;
         lines.push(
-          `\\draw[line width=1pt] (${f(sx)},${f(sy)}) -- (${f(ex)},${f(ey)});`,
+          `\\draw[line width=1pt] (${f(p1.x + tMin * ux)},${f(p1.y + tMin * uy)}) -- (${f(p1.x + tMax * ux)},${f(p1.y + tMax * uy)});`,
         );
       }
     }
