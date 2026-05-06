@@ -1,6 +1,6 @@
 # Docs
 
-Updated: 2026-05-01
+Updated: 2026-05-06
 
 > **Tip**: if lazy to read, analyze, learn - just drop the pure command javascript file to some LLM and ask what you want, it will format for you.
 
@@ -9,14 +9,15 @@ Commands:
 - [function](./commands/function.js) - DONE, has issues,
 - [interval-arcs](./commands/interval-arcs.js) - almost done,
 - [unit-circle](./commands/unit-circle.js) - started,
-- cuboid - not started,
-- circle - not started,
-- cone - not started,
-- cylinder - not started,
-- parallelogram - not started,
-- quadritelateral-pyramid - not started,
-- triangle - not started,
-- triangle-pyramid - not started.
+- [geometry](./commands/geometry.js)
+  - triangle - in progress,
+  - circle - in progress,
+  - cuboid - not started,
+  - cone - not started,
+  - cylinder - not started,
+  - parallelogram - not started,
+  - quadritelateral-pyramid - not started,
+  - triangle-pyramid - not started.
 
 ## `function`
 
@@ -72,7 +73,7 @@ Types:
 - hyperbola: `k=a`
 - sqrt, cbrt.
 - exp, log: `a=2` or `a=1/2` or `a=0.5` and no other. Default - `a=2`.
-- sin, cos, tg, ctg. OX axis scaled by pi/2. That means that 1 means pi/2, 2 means pi etc.
+- sin, cos, tg, ctg. OX axis scaled by pi/2. That means that 1 means pi/2, 2 means pi etc. And actual graph is not trig(x), but trig(pi/2 x).
 - circle: `(x; y) r=a`
 - generic smooth: through what points going, `v(x;y)` means "bottom" vertex, `^(x;y)` means "top" vertex, `(x;y)` means not a vertex.
 - generic: `(x;y) (x;y) ...` or `y=abs(sin(x^5))...` (free form).
@@ -96,8 +97,6 @@ Transformations:
 
 ### Point
 
-Has issues - sometimes overlaping with other elements.
-
 ```
 function:
 graph parabola x[-1;1]
@@ -116,8 +115,6 @@ point (2;1) C top left x-line y-line
 
 ### Area
 
-Many issues!
-
 ```
 function:
 axes Ox[-3;6] Oy[-3;4]
@@ -132,8 +129,6 @@ area (2;1) S_1
 Bucket fill for area, optional label in the center.
 
 ### Angle
-
-Has issues - small and overlaping with other elements.
 
 ```
 function[large]:
@@ -182,6 +177,165 @@ point (1.6666;0.5) [] x-line
 
 ![alt text](image-2.png)
 
+### Issues
+
+- graph: domain/range issue. Even points outside the viewport are sometimes calculated that leads to calculation errors, e.g. function exp. (u19750).
+- `function: graph cubic (-0.5;0) (0;1) (2;0) (5;0)`
+- labels - axis label with `\text{}`, point label with `\sin x` with space! --- introduce `""`?
+
+## `geometry`
+
+In progress...
+
+Start with `geometry` and then add components.
+
+### Size
+
+`geometry[small]: ...`
+
+`geometry[medium]: ...` or just `geometry: ...`
+
+`geometry[large]: ...`
+
+### Triangle OR Circle as basis
+
+```
+geometry:
+circle A-AB
+```
+
+`circle + <name(center, ray to right)>`
+
+(if name not mentioned - defaults to `A-AB`)
+
+OR
+
+```
+geometry:
+triangle right isosceles A[B]C
+```
+
+`triangle + <angular type> + <sides type> + <name + special vertex>`
+
+angular types:
+
+- acute (default, if not mentioned)
+- obtuse (special vertex - obtuse angle, default A)
+- right (special vertex - right angle, default A)
+
+side types:
+
+- scalene (default, if not mentioned)
+- isosceles (special vertex - different one, default B, if acute)
+- equilateral (only acute)
+
+### Naming
+
+_To be extended, more accurate for lines, rays, segments; triangle angle_
+
+Points, line segments, angles, triangles, circles - have their own notation for naming, but by default they are not labeled on the image. They can have different labels than names (tho it would be a bit consufing).
+
+**Point**: single uppercase english alphabet letter, e.g. A
+
+**Line segment**:
+
+- two uppercase letters, e.g. AB
+- single lowercase letter **only** for triangle sides, e.g. a, that means BC in triangle ABC, meaning the lowercase letter of that vertex is opposite.
+
+**Angle**:
+
+- tree uppercase letters, e.g. ABC
+- `angle` + one uppercase letter, e.g. angle A, that means XAY or YAX for some points X and Y.
+- can have amended word `bigger` that means taking the >180 degree angle, not the smaller <180 angle, e.g. angle A bigger.
+
+**Triangle**:
+
+- used for now only in triangle segments drawing section.
+- tree uppercase letters, e.g. ABC.
+
+**Circle**:
+
+- 3 uppercase letters, dash between first and two others. one of those two others should be the same as the single one, e.g. A-AB, or K-MK. the single letter marks center, the two letters marks a ray to the right, B is a point on circle to the right from the center (0 degrees).
+- TODO: differentiate between new and existing.
+
+### Triangle segments
+
+```
+geometry:
+triangle KLM
+line perpendicular bisector KLM KL new A B
+line angle bisector KLM new C D
+line median KLM K new E
+line altitude KLM K new F
+line midsegment KLM KL LM new G H
+```
+
+`line + <triangle segment name> + <triangle name> + <indicative sides or verteces> + new + <names of new verteces>`
+
+### Point (dividing segment)
+
+```
+geometry:
+triangle ABC
+point AB 1:4 new K
+```
+
+Creates new point (not labeled, not marked yet) on segment AB, dividing into parts with proportion 1:4, naming new point K.
+
+### Line
+
+```
+geometry:
+triangle ABC
+point AB 1:4 new K
+line segment CK
+line AB
+line ray BC
+```
+
+Draws new (or extends existing segment):
+
+- line
+- line segment
+- line ray
+
+### Label
+
+```
+geometry:
+triangle ABC
+label A A
+label a a
+label angle A 1
+```
+
+Labels point, segment, angle. Default - point the same as name, segment - lowercase letter default name (**only** if on triangle side), angle - enumerating 1, 2, 3 etc.
+
+For segment label - if more than 3 symbols, aligns with the line.
+
+TODO: choose right/left with default right if not in triangle and default outside if on triangle.
+
+### Mark
+
+```
+geometry:
+triangle ABC
+mark A
+mark a III
+mark angle A bigger II
+mark BCA right
+```
+
+Marks point as point, segment with ticks in the center, angle with arcs or right angle. point has no variation in marking, segment and angle Is indicates number of ticks/arcs. Default is enuerating I, II, III.... For angles can be "right" instead of Is.
+
+### Issues
+
+- not able to make arbitraty basis triangle (by side lengths, by angle sizes)
+- need language support for LT.
+- should be clear separation between new or old namings for elements. Clear separation between "basis" figure, like triangle or circle, and additional "in-drawn" figures.
+- in circle A-AB connecting A with B with `line segment AB`. Does extending segment with `line AB` works?
+- make shortcuts for circle, the same way as is for triangle.
+
 ## `interval-arcs`
 
 In progress...
@@ -189,13 +343,25 @@ In progress...
 ### Examples
 
 ```
+
 interval-arcs: _-_ (0) =+= (4) _-_ >x
+
 ```
 
 ![alt text](image-3.png)
 
 ```
-interval-arcs[closed-only]: ^{S'(a)}_{S(a)} __ (0) _+_up |1\frac13| _-_down (4) __ >a
+
+interval-arcs[closed-only]: ^{S'(a)}_{S(a)} \_\_ (0) _+_up |1\frac13| _-\_down (4) \_\_ >a
+
 ```
 
 ![alt text](image-4.png)
+
+```
+
+```
+
+```
+
+```

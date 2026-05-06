@@ -280,21 +280,26 @@ function isValidSideSpec(spec, vertexLabels) {
 
 // Splits content (any whitespace layout) into command chunks by keyword boundaries.
 function parseContent(content) {
-  const keywordRe = /(?=\b(?:triangle|label|mark|line|point)\b)/;
   const lines = content
     .trim()
-    .split(keywordRe)
+    .split(/(?<=\s)(?=(?:triangle|label|mark|line|point|circle)\b)/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  const triangleResult = parseTriangle(lines[0] || "");
+  const hasTriangle = (lines[0] || "").split(/\s+/)[0] === "triangle";
+  const triangleResult = hasTriangle
+    ? parseTriangle(lines[0] || "")
+    : { angle: null, side: null, unknown: [], labelStr: null };
+  const commandLines = lines.slice(hasTriangle ? 1 : 0);
 
-  const vertexNames = (
-    parseLabels(triangleResult.labelStr) ?? [
-      { label: "A" },
-      { label: "B" },
-      { label: "C" },
-    ]
-  ).map((v) => v.label);
+  const vertexNames = hasTriangle
+    ? (
+        parseLabels(triangleResult.labelStr) ?? [
+          { label: "A" },
+          { label: "B" },
+          { label: "C" },
+        ]
+      ).map((v) => v.label)
+    : [];
 
   const vertexLabelCmds = [];
   const angleLabelCmds = [];
@@ -302,28 +307,42 @@ function parseContent(content) {
   const markCmds = [];
   const lineCmds = [];
   const pointCmds = [];
+  const circlePointCmds = [];
   const drawCmds = [];
+  const circleCmds = [];
   const extraErrors = [];
 
-  // Pre-scan new point names from line/point chunks so "label"/"mark" can reference them.
+  // Pre-scan new point names so "label"/"mark" can reference them.
   const lineNewNames = new Set();
   const pointNewNames = new Set();
-  for (const chunk of lines.slice(1)) {
+  const circleNewNames = new Set();
+  for (const chunk of commandLines) {
     const ws = chunk.trim().split(/\s+/);
     if (ws[0] === "line") {
       const ni = ws.indexOf("new");
       if (ni !== -1) ws.slice(ni + 1).forEach((n) => lineNewNames.add(n));
     } else if (ws[0] === "point" && ws.length >= 5 && ws[3] === "new") {
       pointNewNames.add(ws[4]);
+    } else if (ws[0] === "circle") {
+      const nm = ws[1] || "A-AB";
+      const d = nm.indexOf("-");
+      if (d > 0) {
+        const ctr = nm.slice(0, d);
+        const rs = nm.slice(d + 1);
+        const np = rs.startsWith(ctr) ? rs.slice(ctr.length) : rs;
+        circleNewNames.add(ctr);
+        if (np) circleNewNames.add(np);
+      }
     }
   }
   const allPointNames = new Set([
     ...vertexNames,
     ...lineNewNames,
     ...pointNewNames,
+    ...circleNewNames,
   ]);
 
-  for (const line of lines.slice(1)) {
+  for (const line of commandLines) {
     const words = line.split(/\s+/);
     if (words[0] === "label") {
       if (words.length < 2) {
@@ -368,7 +387,11 @@ function parseContent(content) {
           spec = words[i];
           i++;
         }
-        if (vertexNames.includes(spec) || pointNewNames.has(spec)) {
+        if (
+          vertexNames.includes(spec) ||
+          pointNewNames.has(spec) ||
+          circleNewNames.has(spec)
+        ) {
           markCmds.push({ type: "vertex", spec });
         } else if (isAngleSpec(spec, vertexNames)) {
           let arcs = null,
@@ -393,13 +416,17 @@ function parseContent(content) {
     } else if (words[0] === "point") {
       if (words.length < 5 || words[3] !== "new") {
         extraErrors.push(
-          `"point" requires: side ratio new name (e.g. "point KL 1:4 new H")`,
+          `"point" requires: side ratio new name (e.g. "point KL 1:4 new H") or circle angle new name (e.g. "point A-AB -120 new G")`,
         );
       } else {
-        const sideSpec = words[1];
-        const ratioStr = words[2];
+        const spec = words[1];
+        const value = words[2];
         const name = words[4];
-        pointCmds.push({ sideSpec, ratioStr, name });
+        if (spec.includes("-")) {
+          circlePointCmds.push({ circleName: spec, angleStr: value, name });
+        } else {
+          pointCmds.push({ sideSpec: spec, ratioStr: value, name });
+        }
       }
     } else if (words[0] === "line") {
       if (words[1] === "segment" || words[1] === "ray") {
@@ -444,6 +471,21 @@ function parseContent(content) {
           }
         }
       }
+    } else if (words[0] === "circle") {
+      const name = words[1] || "A-AB";
+      const dash = name.indexOf("-");
+      if (dash <= 0 || dash === name.length - 1) {
+        extraErrors.push(
+          `"circle": invalid format "${name}" — expected "center-radiusSide" (e.g. "A-AB")`,
+        );
+      } else {
+        const center = name.slice(0, dash);
+        const radiusSide = name.slice(dash + 1);
+        const northPt = radiusSide.startsWith(center)
+          ? radiusSide.slice(center.length)
+          : radiusSide;
+        circleCmds.push({ name, center, radiusSide, northPt });
+      }
     } else {
       extraErrors.push(`Unknown command: "${line}"`);
     }
@@ -457,7 +499,10 @@ function parseContent(content) {
     markCmds,
     lineCmds,
     pointCmds,
+    circlePointCmds,
     drawCmds,
+    circleCmds,
+    hasTriangle,
     extraErrors,
   };
 }
@@ -473,16 +518,18 @@ function syntaxCheck(content) {
     sideLabelCmds,
     lineCmds,
     pointCmds,
+    circlePointCmds,
     drawCmds,
+    circleCmds,
+    hasTriangle,
     extraErrors,
   } = parseContent(content);
 
-  if (
-    (content.trim().split(/\n/)[0] || "").trim().split(/\s+/)[0] !== "triangle"
-  ) {
+  const firstCmd = (content.trim().split(/\s+/)[0] || "");
+  if (firstCmd !== "triangle" && firstCmd !== "circle") {
     return {
       valid: false,
-      errors: [`Unknown shape. Only "triangle" is supported.`],
+      errors: [`Unknown shape. Only "triangle" and "circle" are supported.`],
     };
   }
 
@@ -512,6 +559,18 @@ function syntaxCheck(content) {
     parseLabels(labelStr) ?? [{ label: "A" }, { label: "B" }, { label: "C" }]
   ).map((v) => v.label);
 
+  const circleKnownNames = [];
+  for (const { center, northPt } of circleCmds) {
+    circleKnownNames.push(center);
+    if (northPt) circleKnownNames.push(northPt);
+  }
+  const allKnownNames = new Set([
+    ...vertexNames,
+    ...pointCmds.map((c) => c.name),
+    ...circlePointCmds.map((c) => c.name),
+    ...circleKnownNames,
+  ]);
+
   for (const { spec } of angleLabelCmds) {
     if (!isAngleSpec(spec, vertexNames)) {
       errors.push(`Invalid angle specification: "${spec}"`);
@@ -519,15 +578,16 @@ function syntaxCheck(content) {
   }
 
   for (const { sideSpec } of sideLabelCmds) {
-    if (!isValidSideSpec(sideSpec, vertexNames)) {
+    const validTriangle = isValidSideSpec(sideSpec, vertexNames);
+    const validSegment =
+      sideSpec.length === 2 &&
+      allKnownNames.has(sideSpec[0]) &&
+      allKnownNames.has(sideSpec[1]) &&
+      sideSpec[0] !== sideSpec[1];
+    if (!validTriangle && !validSegment) {
       errors.push(`Invalid side specification: "${sideSpec}"`);
     }
   }
-
-  const allKnownNames = new Set([
-    ...vertexNames,
-    ...pointCmds.map((c) => c.name),
-  ]);
   for (const { drawType, pts } of drawCmds) {
     if (!pts || pts.length < 2) {
       errors.push(`"line ${drawType}": expects two point names (e.g. "KL")`);
@@ -547,6 +607,18 @@ function syntaxCheck(content) {
       errors.push(
         `"point": invalid ratio "${ratioStr}" (expected positive numbers, e.g. "1:4")`,
       );
+    }
+    if (!name || !/^\S+$/.test(name)) {
+      errors.push(`"point": invalid name "${name}"`);
+    }
+  }
+
+  for (const { circleName, angleStr, name } of circlePointCmds) {
+    if (!circleCmds.some((c) => c.name === circleName)) {
+      errors.push(`"point": unknown circle "${circleName}"`);
+    }
+    if (isNaN(parseFloat(angleStr))) {
+      errors.push(`"point": invalid angle "${angleStr}" — expected a number (e.g. -120)`);
     }
     if (!name || !/^\S+$/.test(name)) {
       errors.push(`"point": invalid name "${name}"`);
@@ -610,17 +682,22 @@ function compile(content, size) {
     markCmds,
     lineCmds,
     pointCmds,
+    circlePointCmds,
     drawCmds,
+    circleCmds,
+    hasTriangle,
   } = parseContent(content);
   const angle = rawAngle ?? "acute";
   const side = rawSide ?? "scalene";
 
   // Labels map directly by position order. No mark = use DEFAULT_SPECIAL_POS.
-  const labels = parseLabels(labelStr) ?? [
-    { label: "A", mod: "none" },
-    { label: "B", mod: "none" },
-    { label: "C", mod: "none" },
-  ];
+  const labels = hasTriangle
+    ? (parseLabels(labelStr) ?? [
+        { label: "A", mod: "none" },
+        { label: "B", mod: "none" },
+        { label: "C", mod: "none" },
+      ])
+    : [];
 
   const markedIdx = labels.findIndex((v) => v.mod === "mark");
   const specialPos =
@@ -656,6 +733,10 @@ function compile(content, size) {
   const ptLblOff = { small: 0.2, medium: 0.28, large: 0.43 }[size];
   const ptCmdLblOff = { small: 0.32, medium: 0.45, large: 0.69 }[size];
   const pointCmdByName = Object.fromEntries(pointCmds.map((c) => [c.name, c]));
+  const lookupPt = (name) => {
+    const idx = labels.findIndex((v) => v.label === name);
+    return idx !== -1 ? positions[idx] : (newPtsMap[name] ?? null);
+  };
 
   // Pre-compute geometry for all line commands (positions of new points + segment endpoints).
   const newPtsMap = {};
@@ -778,10 +859,32 @@ function compile(content, size) {
     }
   }
 
+  // Circle point positions must be in newPtsMap before draw commands run.
+  const circleR = { small: 1.5, medium: 2.5, large: 3.8 }[size];
+  for (const { center, northPt } of circleCmds) {
+    newPtsMap[center] = { x: 0, y: 0, pos: "below" };
+    if (northPt) newPtsMap[northPt] = { x: circleR, y: 0, pos: "right" };
+  }
+
+  // Compute positions for explicit points on circles.
+  for (const { circleName, angleStr, name } of circlePointCmds) {
+    const circleCmd = circleCmds.find((c) => c.name === circleName);
+    if (!circleCmd) continue;
+    const center = newPtsMap[circleCmd.center];
+    if (!center) continue;
+    const rad = (parseFloat(angleStr) * Math.PI) / 180;
+    newPtsMap[name] = {
+      x: center.x + circleR * Math.cos(rad),
+      y: center.y + circleR * Math.sin(rad),
+    };
+  }
+
   const lines = [];
-  lines.push(
-    `\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`,
-  );
+  if (hasTriangle) {
+    lines.push(
+      `\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`,
+    );
+  }
 
   // Direct line / segment / ray draw commands.
   if (drawCmds.length > 0) {
@@ -820,6 +923,21 @@ function compile(content, size) {
       }
     }
   }
+
+  // Circles: draw the circle; register center + north point as named points.
+  if (circleCmds.length > 0) {
+    const circleR = { small: 1.5, medium: 2.5, large: 3.8 }[size];
+    lines.push("");
+    for (const { center, northPt } of circleCmds) {
+      const ccx = 0,
+        ccy = 0;
+      newPtsMap[center] = { x: ccx, y: ccy, pos: "below" };
+      if (northPt) newPtsMap[northPt] = { x: ccx + circleR, y: ccy, pos: "right" };
+      lines.push(
+        `\\draw[line width=1.5pt] (${f(ccx)},${f(ccy)}) circle (${f(circleR)});`,
+      );
+    }
+  }
   lines.push("");
 
   for (const { spec, text } of vertexLabelCmds) {
@@ -831,6 +949,12 @@ function compile(content, size) {
       );
     } else if (newPtsMap[spec]) {
       const pt = newPtsMap[spec];
+      if (pt.pos) {
+        lines.push(
+          `\\node[${pt.pos}, scale=1.5] at (${f(pt.x)},${f(pt.y)}) {$${text ?? spec}$};`,
+        );
+        continue;
+      }
       let lx, ly;
       const ptCmd = pointCmdByName[spec];
       if (ptCmd) {
@@ -863,8 +987,9 @@ function compile(content, size) {
 
   // Angle labels: placed at vertex, offset along the angle bisector.
   // The offset grows for small angles (≤60°) and pushes past any arc mark.
-  const normalAngleOffset = { small: 0.44, medium: 0.5, large: 0.77 }[size];
-  const arcPadding = { small: 0.12, medium: 0.2, large: 0.31 }[size];
+  const normalAngleOffset = { small: 0.46, medium: 0.55, large: 0.85 }[size];
+  const arcPadding = { small: 0.07, medium: 0.11, large: 0.17 }[size];
+  const angleLblTextOff = { small: 0.03, medium: 0.04, large: 0.06 }[size];
   let angleDefaultCounter = 0;
   for (const { spec, bigger, text } of angleLabelCmds) {
     const resolved = resolveAngle(spec, labels);
@@ -912,16 +1037,23 @@ function compile(content, size) {
     if (matchMark) {
       const SIN_45_HALF = Math.sin((22.5 * Math.PI) / 180);
       const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalf);
-      offset = Math.max(
-        offset,
-        adaptedArcBase + (matchMark.arcs - 1) * arcGap + arcPadding,
-      );
+      const na = matchMark.arcs;
+      const outerR =
+        na === 1
+          ? adaptedArcBase * 1.3
+          : na <= 3
+            ? adaptedArcBase * 0.9 + (na - 1) * arcGap * 0.7
+            : adaptedArcBase * 1.1 + (na - 1) * arcGap;
+      offset = Math.max(offset, outerR + arcPadding);
     }
 
-    const lx = vx + offset * bisX;
-    const ly = vy + offset * bisY;
     const displayText = text ?? String(++angleDefaultCounter);
-    lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${displayText}$};`);
+    const textLen = displayText.length;
+    const finalOffset = offset + (textLen - 1) * angleLblTextOff;
+    const fontScale = Math.max(1.2, 1.5 - (textLen - 1) * 0.07);
+    const lx = vx + finalOffset * bisX;
+    const ly = vy + finalOffset * bisY;
+    lines.push(`\\node[scale=${f(fontScale)}] at (${f(lx)},${f(ly)}) {$${displayText}$};`);
   }
 
   // Side labels: placed at midpoint offset outward from centroid.
@@ -930,28 +1062,53 @@ function compile(content, size) {
     const offset = offsetBySize[size];
     lines.push("");
     for (const { sideSpec, labelText } of sideLabelCmds) {
-      const idxPair = resolveSide(sideSpec, labels);
-      if (!idxPair) continue;
-      const [i1, i2] = idxPair;
-      const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
-      // Default label: lowercase of the opposite vertex (traditional side name).
-      const text =
-        labelText ??
-        (sideSpec.length === 1 ? sideSpec : labels[i3].label.toLowerCase());
-      const mx = (positions[i1].x + positions[i2].x) / 2;
-      const my = (positions[i1].y + positions[i2].y) / 2;
-      // Perpendicular to the side, pointing away from the opposite vertex.
-      const sdx = positions[i2].x - positions[i1].x;
-      const sdy = positions[i2].y - positions[i1].y;
+      let p1, p2, defaultLabel, refPt;
+      if (sideSpec.length === 1 && /^[a-z]$/.test(sideSpec)) {
+        const idxPair = resolveSide(sideSpec, labels);
+        if (!idxPair) continue;
+        const [i1, i2] = idxPair;
+        const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
+        p1 = positions[i1]; p2 = positions[i2];
+        defaultLabel = sideSpec;
+        refPt = positions[i3];
+      } else if (sideSpec.length === 2) {
+        p1 = lookupPt(sideSpec[0]); p2 = lookupPt(sideSpec[1]);
+        if (!p1 || !p2) continue;
+        const i1 = labels.findIndex((v) => v.label === sideSpec[0]);
+        const i2 = labels.findIndex((v) => v.label === sideSpec[1]);
+        if (i1 !== -1 && i2 !== -1) {
+          const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
+          defaultLabel = labels[i3].label.toLowerCase();
+          refPt = positions[i3];
+        }
+      } else {
+        continue;
+      }
+      const text = labelText ?? defaultLabel;
+      if (!text) continue;
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      // Perpendicular to the side; offset away from refPt if available, else always left.
+      const sdx = p2.x - p1.x;
+      const sdy = p2.y - p1.y;
       const slen = Math.hypot(sdx, sdy);
       const px = -sdy / slen,
         py = sdx / slen;
-      const awayX = mx - positions[i3].x,
-        awayY = my - positions[i3].y;
-      const sign = px * awayX + py * awayY >= 0 ? 1 : -1;
+      const sign = refPt
+        ? (px * (mx - refPt.x) + py * (my - refPt.y) >= 0 ? 1 : -1)
+        : 1;
       const lx = mx + offset * sign * px;
       const ly = my + offset * sign * py;
-      lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${text}$};`);
+      let rotateDeg = 0;
+      if (text.length > 3) {
+        rotateDeg = (Math.atan2(sdy, sdx) * 180) / Math.PI;
+        if (rotateDeg > 90) rotateDeg -= 180;
+        else if (rotateDeg < -90) rotateDeg += 180;
+      }
+      const rotateAttr = rotateDeg !== 0 ? `, rotate=${f(rotateDeg)}` : "";
+      lines.push(
+        `\\node[scale=1.5${rotateAttr}] at (${f(lx)},${f(ly)}) {$${text}$};`,
+      );
     }
   }
 
@@ -971,14 +1128,22 @@ function compile(content, size) {
         const { x, y } = ptCoord;
         lines.push(`\\fill (${f(x)},${f(y)}) circle (${dotR});`);
       } else if (cmd.type === "side") {
-        const idxPair = resolveSide(cmd.spec, labels);
-        if (!idxPair) continue;
-        const [i1, i2] = idxPair;
+        let p1, p2;
+        if (cmd.spec.length === 1 && /^[a-z]$/.test(cmd.spec)) {
+          const idxPair = resolveSide(cmd.spec, labels);
+          if (!idxPair) continue;
+          p1 = positions[idxPair[0]]; p2 = positions[idxPair[1]];
+        } else if (cmd.spec.length === 2) {
+          p1 = lookupPt(cmd.spec[0]); p2 = lookupPt(cmd.spec[1]);
+        } else {
+          continue;
+        }
+        if (!p1 || !p2) continue;
         const n = cmd.ticks;
-        const mx = (positions[i1].x + positions[i2].x) / 2;
-        const my = (positions[i1].y + positions[i2].y) / 2;
-        const sdx = positions[i2].x - positions[i1].x;
-        const sdy = positions[i2].y - positions[i1].y;
+        const mx = (p1.x + p2.x) / 2;
+        const my = (p1.y + p2.y) / 2;
+        const sdx = p2.x - p1.x;
+        const sdy = p2.y - p1.y;
         const slen = Math.hypot(sdx, sdy);
         const tx = sdx / slen,
           ty = sdy / slen; // along segment
@@ -1028,7 +1193,12 @@ function compile(content, size) {
           }
           while (ea <= sa) ea += 360;
           for (let arc = 0; arc < n; arc++) {
-            const r = adaptedArcBase + arc * arcGap;
+            const r =
+              n === 1
+                ? adaptedArcBase * 1.3
+                : n <= 3
+                  ? adaptedArcBase * 0.9 + arc * arcGap * 0.7
+                  : adaptedArcBase * 1.1 + arc * arcGap;
             const saRad = (sa * Math.PI) / 180;
             lines.push(
               `\\draw[line width=1pt] (${f(vx + r * Math.cos(saRad))},${f(vy + r * Math.sin(saRad))}) arc (${f(sa)}:${f(ea)}:${f(r)});`,

@@ -78,8 +78,6 @@ transform:
 
 `angle right (x1;y1) (x2;y2) (x3;y3) label`
 
-WIP...
-
 TODO:
 
 - small graph dots not scale. DONE
@@ -91,18 +89,6 @@ TODO:
 - naming axes DONE
 - make medium scale the default - rn it's too big. DONE
 - generic line can go not like function DONE
-
-TODO:
-
-- fix area render fails
-- allow to label point from any dir.
-- `function: graph cubic (-0.5;0) (0;1) (2;0) (5;0)`
-- labels - axis label with `\text{}`, point label with `\sin x` with space! --- introduce `""`?
-- fix exp when big numbers calculating when 19750, even tho not needed to compute:
-
-AI EXAMPLE (fixed):
-
-u19736
 
 ## Geometry - triangles
 
@@ -215,8 +201,6 @@ line altitude KLM K new G
 line midsegment KLM KL LM new G H
 ```
 
-WIP:
-
 point in segment:
 
 ```
@@ -243,14 +227,6 @@ line segment LG
 line ray MH
 ```
 
-TODO:
-
-```
-geometry:
-triangle ABC
-point ...? -- introducing new point... dividing line in a few parts??? or for what else?
-```
-
 TO FIX:
 
 - angle labels with degrees not nice.
@@ -261,7 +237,23 @@ TO FIX:
 
 ## geometry circle
 
+make new, as basis, like triangle. triangle should not exist here.
+
 ```
 geometry:
-circle ...
+circle A-AB
 ```
+
+B is to the right, at 0 degrees.
+
+```
+point A-AB 120 new G
+```
+
+TODO:
+
+- just `circle` also should work. A-AB is default.
+
+GENERAL GEOMETRY NOTES:
+
+can draw either triangle or circle as BASIS. after that drawing either is only based on existing points and segments.
