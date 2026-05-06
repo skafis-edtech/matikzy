@@ -237,31 +237,18 @@ function resolveSide(spec, labels) {
   return null;
 }
 
-function isAngleSpec(spec, vertexNames) {
-  if (spec.startsWith("angle ")) return vertexNames.includes(spec.slice(6));
-  return (
-    spec.length === 3 && spec.split("").every((c) => vertexNames.includes(c))
-  );
+// allPointNames (optional Set) broadens matching beyond triangle vertices.
+function isAngleSpec(spec, vertexNames, allPointNames) {
+  if (spec.startsWith("angle ")) {
+    const name = spec.slice(6);
+    return vertexNames.includes(name) || !!(allPointNames?.has(name));
+  }
+  const pts = allPointNames ?? new Set(vertexNames);
+  return spec.length === 3 && spec.split("").every((c) => pts.has(c));
 }
 
-// Returns {vertIdx, adj1Idx, adj2Idx} or null.
-// For "ABC": vertex=B, adjacent=A,C. For "angle B": vertex=B, adjacent=other two.
-function resolveAngle(spec, labels) {
-  let vertLabel, adj1Label, adj2Label;
-  if (spec.startsWith("angle ")) {
-    vertLabel = spec.slice(6);
-    const others = labels.filter((v) => v.label !== vertLabel);
-    if (others.length < 2) return null;
-    [adj1Label, adj2Label] = [others[0].label, others[1].label];
-  } else {
-    [adj1Label, vertLabel, adj2Label] = [spec[0], spec[1], spec[2]];
-  }
-  const vertIdx = labels.findIndex((v) => v.label === vertLabel);
-  const adj1Idx = labels.findIndex((v) => v.label === adj1Label);
-  const adj2Idx = labels.findIndex((v) => v.label === adj2Label);
-  return vertIdx !== -1 && adj1Idx !== -1 && adj2Idx !== -1
-    ? { vertIdx, adj1Idx, adj2Idx }
-    : null;
+function normPos(p) {
+  return p.replace("top", "above").replace("bottom", "below");
 }
 
 function isValidSideSpec(spec, vertexLabels) {
@@ -308,6 +295,7 @@ function parseContent(content) {
   const lineCmds = [];
   const pointCmds = [];
   const circlePointCmds = [];
+  const intersectPointCmds = [];
   const drawCmds = [];
   const circleCmds = [];
   const extraErrors = [];
@@ -321,10 +309,14 @@ function parseContent(content) {
     if (ws[0] === "line") {
       const ni = ws.indexOf("new");
       if (ni !== -1) ws.slice(ni + 1).forEach((n) => lineNewNames.add(n));
-    } else if (ws[0] === "point" && ws.length >= 5 && ws[3] === "new") {
-      pointNewNames.add(ws[4]);
+    } else if (ws[0] === "point") {
+      if (ws[2] === "intersect" && ws.length >= 6) {
+        pointNewNames.add(ws[5]);
+      } else if (ws.length >= 5 && ws[3] === "new") {
+        pointNewNames.add(ws[4]);
+      }
     } else if (ws[0] === "circle") {
-      const nm = ws[1] || "A-AB";
+      const nm = ws[1] || "O-OX";
       const d = nm.indexOf("-");
       if (d > 0) {
         const ctr = nm.slice(0, d);
@@ -360,18 +352,29 @@ function parseContent(content) {
           i++;
         }
         let bigger = false;
-        if (isAngleSpec(spec, vertexNames) && words[i] === "bigger") {
+        if (isAngleSpec(spec, vertexNames, allPointNames) && words[i] === "bigger") {
           bigger = true;
           i++;
         }
-        const text = i < words.length ? words.slice(i).join(" ") : null;
+        const remainingWords = words.slice(i);
+        const dashIdx = remainingWords.indexOf("--");
+        const textWords =
+          dashIdx !== -1 ? remainingWords.slice(0, dashIdx) : remainingWords;
+        const posWords =
+          dashIdx !== -1 ? remainingWords.slice(dashIdx + 1) : [];
 
         if (allPointNames.has(spec)) {
-          vertexLabelCmds.push({ spec, text });
-        } else if (isAngleSpec(spec, vertexNames)) {
+          const labelPos =
+            posWords.length > 0 ? normPos(posWords.join(" ")) : null;
+          const text = textWords.length > 0 ? textWords.join(" ") : null;
+          vertexLabelCmds.push({ spec, text, labelPos });
+        } else if (isAngleSpec(spec, vertexNames, allPointNames)) {
+          const text = textWords.length > 0 ? textWords.join(" ") : null;
           angleLabelCmds.push({ spec, bigger, text });
         } else {
-          sideLabelCmds.push({ sideSpec: spec, labelText: text });
+          const labelSide = posWords.length > 0 ? posWords[0] : null;
+          const labelText = textWords.length > 0 ? textWords.join(" ") : null;
+          sideLabelCmds.push({ sideSpec: spec, labelText, labelSide });
         }
       }
     } else if (words[0] === "mark") {
@@ -393,7 +396,7 @@ function parseContent(content) {
           circleNewNames.has(spec)
         ) {
           markCmds.push({ type: "vertex", spec });
-        } else if (isAngleSpec(spec, vertexNames)) {
+        } else if (isAngleSpec(spec, vertexNames, allPointNames)) {
           let arcs = null,
             isRight = false;
           if (i < words.length && words[i] === "right") {
@@ -414,9 +417,17 @@ function parseContent(content) {
         }
       }
     } else if (words[0] === "point") {
-      if (words.length < 5 || words[3] !== "new") {
+      if (words.length >= 5 && words[2] === "intersect") {
+        if (words.length < 6 || words[4] !== "new") {
+          extraErrors.push(
+            `"point": intersect format requires "point AB intersect CD new K"`,
+          );
+        } else {
+          intersectPointCmds.push({ spec1: words[1], spec2: words[3], name: words[5] });
+        }
+      } else if (words.length < 5 || words[3] !== "new") {
         extraErrors.push(
-          `"point" requires: side ratio new name (e.g. "point KL 1:4 new H") or circle angle new name (e.g. "point A-AB -120 new G")`,
+          `"point" requires: side ratio new name (e.g. "point KL 1:4 new H"), circle angle new name (e.g. "point O-OX -120 new G"), or side intersect side new name (e.g. "point AB intersect CD new K")`,
         );
       } else {
         const spec = words[1];
@@ -472,11 +483,11 @@ function parseContent(content) {
         }
       }
     } else if (words[0] === "circle") {
-      const name = words[1] || "A-AB";
+      const name = words[1] || "O-OX";
       const dash = name.indexOf("-");
       if (dash <= 0 || dash === name.length - 1) {
         extraErrors.push(
-          `"circle": invalid format "${name}" — expected "center-radiusSide" (e.g. "A-AB")`,
+          `"circle": invalid format "${name}" — expected "center-radiusSide" (e.g. "O-OX")`,
         );
       } else {
         const center = name.slice(0, dash);
@@ -500,6 +511,7 @@ function parseContent(content) {
     lineCmds,
     pointCmds,
     circlePointCmds,
+    intersectPointCmds,
     drawCmds,
     circleCmds,
     hasTriangle,
@@ -519,13 +531,14 @@ function syntaxCheck(content) {
     lineCmds,
     pointCmds,
     circlePointCmds,
+    intersectPointCmds,
     drawCmds,
     circleCmds,
     hasTriangle,
     extraErrors,
   } = parseContent(content);
 
-  const firstCmd = (content.trim().split(/\s+/)[0] || "");
+  const firstCmd = content.trim().split(/\s+/)[0] || "";
   if (firstCmd !== "triangle" && firstCmd !== "circle") {
     return {
       valid: false,
@@ -568,11 +581,13 @@ function syntaxCheck(content) {
     ...vertexNames,
     ...pointCmds.map((c) => c.name),
     ...circlePointCmds.map((c) => c.name),
+    ...intersectPointCmds.map((c) => c.name),
     ...circleKnownNames,
+    ...lineCmds.flatMap((c) => c.newNames ?? []),
   ]);
 
   for (const { spec } of angleLabelCmds) {
-    if (!isAngleSpec(spec, vertexNames)) {
+    if (!isAngleSpec(spec, vertexNames, allKnownNames)) {
       errors.push(`Invalid angle specification: "${spec}"`);
     }
   }
@@ -618,10 +633,28 @@ function syntaxCheck(content) {
       errors.push(`"point": unknown circle "${circleName}"`);
     }
     if (isNaN(parseFloat(angleStr))) {
-      errors.push(`"point": invalid angle "${angleStr}" — expected a number (e.g. -120)`);
+      errors.push(
+        `"point": invalid angle "${angleStr}" — expected a number (e.g. -120)`,
+      );
     }
     if (!name || !/^\S+$/.test(name)) {
       errors.push(`"point": invalid name "${name}"`);
+    }
+  }
+
+  for (const { spec1, spec2, name } of intersectPointCmds) {
+    for (const seg of [spec1, spec2]) {
+      if (
+        seg.length !== 2 ||
+        !allKnownNames.has(seg[0]) ||
+        !allKnownNames.has(seg[1]) ||
+        seg[0] === seg[1]
+      ) {
+        errors.push(`"point intersect": invalid segment "${seg}" — expected two known point names`);
+      }
+    }
+    if (!name || !/^\S+$/.test(name)) {
+      errors.push(`"point intersect": invalid name "${name}"`);
     }
   }
 
@@ -683,6 +716,7 @@ function compile(content, size) {
     lineCmds,
     pointCmds,
     circlePointCmds,
+    intersectPointCmds,
     drawCmds,
     circleCmds,
     hasTriangle,
@@ -730,12 +764,39 @@ function compile(content, size) {
   // Triangle centroid + label offset for new points (shared by vertex labels & line rendering).
   const centX = (positions[0].x + positions[1].x + positions[2].x) / 3;
   const centY = (positions[0].y + positions[1].y + positions[2].y) / 3;
-  const ptLblOff = { small: 0.2, medium: 0.28, large: 0.43 }[size];
-  const ptCmdLblOff = { small: 0.32, medium: 0.45, large: 0.69 }[size];
+  const ptLblOff = { small: 0.26, medium: 0.36, large: 0.55 }[size];
+  const ptCmdLblOff = { small: 0.38, medium: 0.53, large: 0.82 }[size];
   const pointCmdByName = Object.fromEntries(pointCmds.map((c) => [c.name, c]));
   const lookupPt = (name) => {
     const idx = labels.findIndex((v) => v.label === name);
     return idx !== -1 ? positions[idx] : (newPtsMap[name] ?? null);
+  };
+  const resolveAngleCoords = (spec) => {
+    let vertLabel, adj1Label, adj2Label;
+    if (spec.startsWith("angle ")) {
+      vertLabel = spec.slice(6);
+      const vertIdx = labels.findIndex((v) => v.label === vertLabel);
+      if (vertIdx !== -1) {
+        const others = labels.filter((v) => v.label !== vertLabel);
+        if (others.length < 2) return null;
+        [adj1Label, adj2Label] = [others[0].label, others[1].label];
+      } else {
+        // Non-triangle vertex: find two explicit draw segments through it.
+        const segs = drawCmds.filter(
+          (d) => d.pts[0] === vertLabel || d.pts[1] === vertLabel,
+        );
+        if (segs.length < 2) return null;
+        adj1Label = segs[0].pts[0] === vertLabel ? segs[0].pts[1] : segs[0].pts[0];
+        adj2Label = segs[1].pts[0] === vertLabel ? segs[1].pts[1] : segs[1].pts[0];
+      }
+    } else {
+      [adj1Label, vertLabel, adj2Label] = [spec[0], spec[1], spec[2]];
+    }
+    const vpt = lookupPt(vertLabel);
+    const a1pt = lookupPt(adj1Label);
+    const a2pt = lookupPt(adj2Label);
+    if (!vpt || !a1pt || !a2pt) return null;
+    return { vx: vpt.x, vy: vpt.y, a1x: a1pt.x, a1y: a1pt.y, a2x: a2pt.x, a2y: a2pt.y };
   };
 
   // Pre-compute geometry for all line commands (positions of new points + segment endpoints).
@@ -860,7 +921,7 @@ function compile(content, size) {
   }
 
   // Circle point positions must be in newPtsMap before draw commands run.
-  const circleR = { small: 1.5, medium: 2.5, large: 3.8 }[size];
+  const circleR = { small: 1.5, medium: 2.0, large: 3.8 }[size];
   for (const { center, northPt } of circleCmds) {
     newPtsMap[center] = { x: 0, y: 0, pos: "below" };
     if (northPt) newPtsMap[northPt] = { x: circleR, y: 0, pos: "right" };
@@ -876,7 +937,23 @@ function compile(content, size) {
     newPtsMap[name] = {
       x: center.x + circleR * Math.cos(rad),
       y: center.y + circleR * Math.sin(rad),
+      originX: center.x,
+      originY: center.y,
     };
+  }
+
+  // Compute positions for line-line intersection points (after all other points are placed).
+  for (const { spec1, spec2, name } of intersectPointCmds) {
+    const p1 = lookupPt(spec1[0]), p2 = lookupPt(spec1[1]);
+    const p3 = lookupPt(spec2[0]), p4 = lookupPt(spec2[1]);
+    if (!p1 || !p2 || !p3 || !p4) continue;
+    const ex = p2.x - p1.x, ey = p2.y - p1.y;
+    const fx = p4.x - p3.x, fy = p4.y - p3.y;
+    const det = ey * fx - ex * fy;
+    if (Math.abs(det) < 1e-10) continue; // parallel
+    const gx = p3.x - p1.x, gy = p3.y - p1.y;
+    const t = (gy * fx - gx * fy) / det;
+    newPtsMap[name] = { x: p1.x + t * ex, y: p1.y + t * ey };
   }
 
   // Bounding box of all content, used to clip full-line draw commands.
@@ -894,15 +971,20 @@ function compile(content, size) {
       bbPts.push({ x: cp.x, y: cp.y + circleR });
     }
   }
-  let bbMinX = Infinity, bbMaxX = -Infinity, bbMinY = Infinity, bbMaxY = -Infinity;
+  let bbMinX = Infinity,
+    bbMaxX = -Infinity,
+    bbMinY = Infinity,
+    bbMaxY = -Infinity;
   for (const { x, y } of bbPts) {
     if (x < bbMinX) bbMinX = x;
     if (x > bbMaxX) bbMaxX = x;
     if (y < bbMinY) bbMinY = y;
     if (y > bbMaxY) bbMaxY = y;
   }
-  const bbX0 = bbMinX - bbMargin, bbX1 = bbMaxX + bbMargin;
-  const bbY0 = bbMinY - bbMargin, bbY1 = bbMaxY + bbMargin;
+  const bbX0 = bbMinX - bbMargin,
+    bbX1 = bbMaxX + bbMargin;
+  const bbY0 = bbMinY - bbMargin,
+    bbY1 = bbMaxY + bbMargin;
 
   const lines = [];
   if (hasTriangle) {
@@ -939,14 +1021,17 @@ function compile(content, size) {
         );
       } else {
         // Clip the infinite line to the padded image bounding box (slab method).
-        let tMin = -Infinity, tMax = Infinity;
+        let tMin = -Infinity,
+          tMax = Infinity;
         if (Math.abs(ux) > 1e-10) {
-          const ta = (bbX0 - p1.x) / ux, tb = (bbX1 - p1.x) / ux;
+          const ta = (bbX0 - p1.x) / ux,
+            tb = (bbX1 - p1.x) / ux;
           tMin = Math.max(tMin, Math.min(ta, tb));
           tMax = Math.min(tMax, Math.max(ta, tb));
         }
         if (Math.abs(uy) > 1e-10) {
-          const ta = (bbY0 - p1.y) / uy, tb = (bbY1 - p1.y) / uy;
+          const ta = (bbY0 - p1.y) / uy,
+            tb = (bbY1 - p1.y) / uy;
           tMin = Math.max(tMin, Math.min(ta, tb));
           tMax = Math.min(tMax, Math.max(ta, tb));
         }
@@ -960,13 +1045,14 @@ function compile(content, size) {
 
   // Circles: draw the circle; register center + north point as named points.
   if (circleCmds.length > 0) {
-    const circleR = { small: 1.5, medium: 2.5, large: 3.8 }[size];
+    const circleR = { small: 1.5, medium: 2.0, large: 3.8 }[size];
     lines.push("");
     for (const { center, northPt } of circleCmds) {
       const ccx = 0,
         ccy = 0;
       newPtsMap[center] = { x: ccx, y: ccy, pos: "below" };
-      if (northPt) newPtsMap[northPt] = { x: ccx + circleR, y: ccy, pos: "right" };
+      if (northPt)
+        newPtsMap[northPt] = { x: ccx + circleR, y: ccy, pos: "right" };
       lines.push(
         `\\draw[line width=1.5pt] (${f(ccx)},${f(ccy)}) circle (${f(circleR)});`,
       );
@@ -974,15 +1060,21 @@ function compile(content, size) {
   }
   lines.push("");
 
-  for (const { spec, text } of vertexLabelCmds) {
+  for (const { spec, text, labelPos } of vertexLabelCmds) {
     const idx = labels.findIndex((v) => v.label === spec);
     if (idx !== -1) {
       const { x, y, pos } = positions[idx];
       lines.push(
-        `\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`,
+        `\\node[${labelPos ?? pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`,
       );
     } else if (newPtsMap[spec]) {
       const pt = newPtsMap[spec];
+      if (labelPos) {
+        lines.push(
+          `\\node[${labelPos}, scale=1.5] at (${f(pt.x)},${f(pt.y)}) {$${text ?? spec}$};`,
+        );
+        continue;
+      }
       if (pt.pos) {
         lines.push(
           `\\node[${pt.pos}, scale=1.5] at (${f(pt.x)},${f(pt.y)}) {$${text ?? spec}$};`,
@@ -1007,8 +1099,10 @@ function compile(content, size) {
         lx = pt.x + ptCmdLblOff * sign * px;
         ly = pt.y + ptCmdLblOff * sign * py;
       } else {
-        const dx = pt.x - centX,
-          dy = pt.y - centY;
+        const ox = pt.originX ?? centX;
+        const oy = pt.originY ?? centY;
+        const dx = pt.x - ox,
+          dy = pt.y - oy;
         const len = Math.hypot(dx, dy);
         lx = pt.x + (len > 0 ? (ptLblOff * dx) / len : 0);
         ly = pt.y + (len > 0 ? (ptLblOff * dy) / len : ptLblOff);
@@ -1026,15 +1120,9 @@ function compile(content, size) {
   const angleLblTextOff = { small: 0.03, medium: 0.04, large: 0.06 }[size];
   let angleDefaultCounter = 0;
   for (const { spec, bigger, text } of angleLabelCmds) {
-    const resolved = resolveAngle(spec, labels);
+    const resolved = resolveAngleCoords(spec);
     if (!resolved) continue;
-    const { vertIdx, adj1Idx, adj2Idx } = resolved;
-    const vx = positions[vertIdx].x,
-      vy = positions[vertIdx].y;
-    const a1x = positions[adj1Idx].x,
-      a1y = positions[adj1Idx].y;
-    const a2x = positions[adj2Idx].x,
-      a2y = positions[adj2Idx].y;
+    const { vx, vy, a1x, a1y, a2x, a2y } = resolved;
     const d1 = Math.hypot(a1x - vx, a1y - vy);
     const d2 = Math.hypot(a2x - vx, a2y - vy);
     const u1x = (a1x - vx) / d1,
@@ -1087,7 +1175,9 @@ function compile(content, size) {
     const fontScale = Math.max(1.2, 1.5 - (textLen - 1) * 0.07);
     const lx = vx + finalOffset * bisX;
     const ly = vy + finalOffset * bisY;
-    lines.push(`\\node[scale=${f(fontScale)}] at (${f(lx)},${f(ly)}) {$${displayText}$};`);
+    lines.push(
+      `\\node[scale=${f(fontScale)}] at (${f(lx)},${f(ly)}) {$${displayText}$};`,
+    );
   }
 
   // Side labels: placed at midpoint offset outward from centroid.
@@ -1095,18 +1185,20 @@ function compile(content, size) {
     const offsetBySize = { small: 0.28, medium: 0.35, large: 0.54 };
     const offset = offsetBySize[size];
     lines.push("");
-    for (const { sideSpec, labelText } of sideLabelCmds) {
+    for (const { sideSpec, labelText, labelSide } of sideLabelCmds) {
       let p1, p2, defaultLabel, refPt;
       if (sideSpec.length === 1 && /^[a-z]$/.test(sideSpec)) {
         const idxPair = resolveSide(sideSpec, labels);
         if (!idxPair) continue;
         const [i1, i2] = idxPair;
         const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
-        p1 = positions[i1]; p2 = positions[i2];
+        p1 = positions[i1];
+        p2 = positions[i2];
         defaultLabel = sideSpec;
         refPt = positions[i3];
       } else if (sideSpec.length === 2) {
-        p1 = lookupPt(sideSpec[0]); p2 = lookupPt(sideSpec[1]);
+        p1 = lookupPt(sideSpec[0]);
+        p2 = lookupPt(sideSpec[1]);
         if (!p1 || !p2) continue;
         const i1 = labels.findIndex((v) => v.label === sideSpec[0]);
         const i2 = labels.findIndex((v) => v.label === sideSpec[1]);
@@ -1128,9 +1220,15 @@ function compile(content, size) {
       const slen = Math.hypot(sdx, sdy);
       const px = -sdy / slen,
         py = sdx / slen;
-      const sign = refPt
-        ? (px * (mx - refPt.x) + py * (my - refPt.y) >= 0 ? 1 : -1)
-        : 1;
+      const sign = labelSide
+        ? labelSide === "right"
+          ? -1
+          : 1
+        : refPt
+          ? px * (mx - refPt.x) + py * (my - refPt.y) >= 0
+            ? 1
+            : -1
+          : 1;
       const lx = mx + offset * sign * px;
       const ly = my + offset * sign * py;
       let rotateDeg = 0;
@@ -1166,9 +1264,11 @@ function compile(content, size) {
         if (cmd.spec.length === 1 && /^[a-z]$/.test(cmd.spec)) {
           const idxPair = resolveSide(cmd.spec, labels);
           if (!idxPair) continue;
-          p1 = positions[idxPair[0]]; p2 = positions[idxPair[1]];
+          p1 = positions[idxPair[0]];
+          p2 = positions[idxPair[1]];
         } else if (cmd.spec.length === 2) {
-          p1 = lookupPt(cmd.spec[0]); p2 = lookupPt(cmd.spec[1]);
+          p1 = lookupPt(cmd.spec[0]);
+          p2 = lookupPt(cmd.spec[1]);
         } else {
           continue;
         }
@@ -1192,15 +1292,9 @@ function compile(content, size) {
           );
         }
       } else if (cmd.type === "angle") {
-        const resolved = resolveAngle(cmd.spec, labels);
+        const resolved = resolveAngleCoords(cmd.spec);
         if (!resolved) continue;
-        const { vertIdx, adj1Idx, adj2Idx } = resolved;
-        const vx = positions[vertIdx].x,
-          vy = positions[vertIdx].y;
-        const a1x = positions[adj1Idx].x,
-          a1y = positions[adj1Idx].y;
-        const a2x = positions[adj2Idx].x,
-          a2y = positions[adj2Idx].y;
+        const { vx, vy, a1x, a1y, a2x, a2y } = resolved;
         if (cmd.isRight) {
           lines.push(rightAngleMark(vx, vy, a1x, a1y, a2x, a2y));
         } else {

@@ -229,10 +229,6 @@ line ray MH
 
 TO FIX:
 
-- angle labels with degrees not nice.
-- angle arcs should start further and then go back.
-- \text{} fails when in side label
-- label for side should go along side.
 - SYNTAX CHECK - make sure element namings are not repeating.
 
 ## geometry circle
@@ -250,10 +246,25 @@ B is to the right, at 0 degrees.
 point A-AB 120 new G
 ```
 
-TODO:
-
-- just `circle` also should work. A-AB is default.
+TODO: find shortcut to not mention circle A-AB, so that it defaults to O-OX.
 
 GENERAL GEOMETRY NOTES:
 
 can draw either triangle or circle as BASIS. after that drawing either is only based on existing points and segments.
+
+### label position
+
+for point choose "top bottom left right", for segment choose "left right".
+
+```
+label A B -- top right
+label AB a -- left
+```
+
+TODO: FIX THIS SYNTAX WITH DASHES
+
+### intersection point
+
+```
+point AB intersect BC new K
+```

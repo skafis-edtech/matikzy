@@ -206,7 +206,7 @@ circle A-AB
 
 `circle + <name(center, ray to right)>`
 
-(if name not mentioned - defaults to `A-AB`)
+(if name not mentioned - defaults to `O-OX`)
 
 OR
 
@@ -272,7 +272,7 @@ line midsegment KLM KL LM new G H
 
 `line + <triangle segment name> + <triangle name> + <indicative sides or verteces> + new + <names of new verteces>`
 
-### Point (dividing segment)
+### Point (dividing segment, on circle)
 
 ```
 geometry:
@@ -281,6 +281,12 @@ point AB 1:4 new K
 ```
 
 Creates new point (not labeled, not marked yet) on segment AB, dividing into parts with proportion 1:4, naming new point K.
+
+For circle it's just indicating rotation angle:
+
+```
+point A-AB 120 new G
+```
 
 ### Line
 
@@ -315,6 +321,13 @@ For segment label - if more than 3 symbols, aligns with the line.
 
 TODO: choose right/left with default right if not in triangle and default outside if on triangle.
 
+Labels have default positions, but can be explicitly stated. For point choose "top bottom left right", for segment choose "left right".
+
+```
+label A B -- top right
+label AB a -- left
+```
+
 ### Mark
 
 ```
@@ -328,12 +341,35 @@ mark BCA right
 
 Marks point as point, segment with ticks in the center, angle with arcs or right angle. point has no variation in marking, segment and angle Is indicates number of ticks/arcs. Default is enuerating I, II, III.... For angles can be "right" instead of Is.
 
+### Examples
+
+```
+geometry:
+circle O-OX
+point O-OX 85 new C
+point O-OX -30 new B
+point O-OX -135 new A
+line segment OB line segment OA line segment AC line segment CB
+mark O mark A mark B mark C
+label O label A label B label C
+```
+
+![alt text](image-6.png)
+
+```
+geometry:
+triangle right BA[C]
+label a label b label c label angle B \beta
+mark angle B I mark angle C right
+```
+
+![alt text](image-7.png)
+
 ### Issues
 
 - not able to make arbitraty basis triangle (by side lengths, by angle sizes)
 - need language support for LT.
 - should be clear separation between new or old namings for elements. Clear separation between "basis" figure, like triangle or circle, and additional "in-drawn" figures.
-- in circle A-AB connecting A with B with `line segment AB`. Does extending segment with `line AB` works?
 - make shortcuts for circle, the same way as is for triangle.
 
 ## `interval-arcs`
