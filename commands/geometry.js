@@ -209,11 +209,13 @@ function rightAngleMark(vx, vy, p1x, p1y, p2x, p2y, s = 0.25) {
 
 // Ray from (px,py) in direction (dx,dy) vs segment (ax,ay)→(bx2,by2). Returns {t,s} or null.
 function raySegIntersect(px, py, dx, dy, ax, ay, bx2, by2) {
-  const ex = bx2 - ax, ey = by2 - ay;
-  const det = dx * (-ey) - dy * (-ex);
+  const ex = bx2 - ax,
+    ey = by2 - ay;
+  const det = dx * -ey - dy * -ex;
   if (Math.abs(det) < 1e-10) return null;
-  const fx = ax - px, fy = ay - py;
-  const t = (fx * (-ey) - fy * (-ex)) / det;
+  const fx = ax - px,
+    fy = ay - py;
+  const t = (fx * -ey - fy * -ex) / det;
   const s = (dx * fy - dy * fx) / det;
   return { t, s };
 }
@@ -278,7 +280,7 @@ function isValidSideSpec(spec, vertexLabels) {
 
 // Splits content (any whitespace layout) into command chunks by keyword boundaries.
 function parseContent(content) {
-  const keywordRe = /(?=\b(?:triangle|label|mark|line)\b)/;
+  const keywordRe = /(?=\b(?:triangle|label|mark|line|point)\b)/;
   const lines = content
     .trim()
     .split(keywordRe)
@@ -299,18 +301,27 @@ function parseContent(content) {
   const sideLabelCmds = [];
   const markCmds = [];
   const lineCmds = [];
+  const pointCmds = [];
+  const drawCmds = [];
   const extraErrors = [];
 
-  // Pre-scan new point names from line chunks so "label" can reference them.
+  // Pre-scan new point names from line/point chunks so "label"/"mark" can reference them.
   const lineNewNames = new Set();
+  const pointNewNames = new Set();
   for (const chunk of lines.slice(1)) {
     const ws = chunk.trim().split(/\s+/);
     if (ws[0] === "line") {
       const ni = ws.indexOf("new");
       if (ni !== -1) ws.slice(ni + 1).forEach((n) => lineNewNames.add(n));
+    } else if (ws[0] === "point" && ws.length >= 5 && ws[3] === "new") {
+      pointNewNames.add(ws[4]);
     }
   }
-  const allPointNames = new Set([...vertexNames, ...lineNewNames]);
+  const allPointNames = new Set([
+    ...vertexNames,
+    ...lineNewNames,
+    ...pointNewNames,
+  ]);
 
   for (const line of lines.slice(1)) {
     const words = line.split(/\s+/);
@@ -357,7 +368,7 @@ function parseContent(content) {
           spec = words[i];
           i++;
         }
-        if (vertexNames.includes(spec)) {
+        if (vertexNames.includes(spec) || pointNewNames.has(spec)) {
           markCmds.push({ type: "vertex", spec });
         } else if (isAngleSpec(spec, vertexNames)) {
           let arcs = null,
@@ -379,21 +390,59 @@ function parseContent(content) {
           markCmds.push({ type: "side", spec, ticks });
         }
       }
+    } else if (words[0] === "point") {
+      if (words.length < 5 || words[3] !== "new") {
+        extraErrors.push(
+          `"point" requires: side ratio new name (e.g. "point KL 1:4 new H")`,
+        );
+      } else {
+        const sideSpec = words[1];
+        const ratioStr = words[2];
+        const name = words[4];
+        pointCmds.push({ sideSpec, ratioStr, name });
+      }
     } else if (words[0] === "line") {
-      let i = 1;
-      let lineType = null;
-      if (words[i] === "perpendicular" && words[i + 1] === "bisector")  { lineType = "perpendicular bisector"; i += 2; }
-      else if (words[i] === "angle" && words[i + 1] === "bisector")     { lineType = "angle bisector";         i += 2; }
-      else if (words[i] === "median")                                    { lineType = "median";                  i++;    }
-      else if (words[i] === "altitude")                                  { lineType = "altitude";                i++;    }
-      else if (words[i] === "midsegment")                                { lineType = "midsegment";              i++;    }
-      if (!lineType) { extraErrors.push(`Unknown line type in: "${line}"`); }
-      else {
-        const triangleSpec = words[i++] ?? "";
-        const specWords = [];
-        while (i < words.length && words[i] !== "new") specWords.push(words[i++]);
-        if (words[i] !== "new") { extraErrors.push(`"line ${lineType}": missing "new" keyword`); }
-        else { lineCmds.push({ lineType, triangleSpec, specWords, newNames: words.slice(i + 1) }); }
+      if (words[1] === "segment" || words[1] === "ray") {
+        drawCmds.push({ drawType: words[1], pts: words[2] ?? "" });
+      } else if (words[1] && words[1].length === 2) {
+        drawCmds.push({ drawType: "line", pts: words[1] });
+      } else {
+        let i = 1;
+        let lineType = null;
+        if (words[i] === "perpendicular" && words[i + 1] === "bisector") {
+          lineType = "perpendicular bisector";
+          i += 2;
+        } else if (words[i] === "angle" && words[i + 1] === "bisector") {
+          lineType = "angle bisector";
+          i += 2;
+        } else if (words[i] === "median") {
+          lineType = "median";
+          i++;
+        } else if (words[i] === "altitude") {
+          lineType = "altitude";
+          i++;
+        } else if (words[i] === "midsegment") {
+          lineType = "midsegment";
+          i++;
+        }
+        if (!lineType) {
+          extraErrors.push(`Unknown line type in: "${line}"`);
+        } else {
+          const triangleSpec = words[i++] ?? "";
+          const specWords = [];
+          while (i < words.length && words[i] !== "new")
+            specWords.push(words[i++]);
+          if (words[i] !== "new") {
+            extraErrors.push(`"line ${lineType}": missing "new" keyword`);
+          } else {
+            lineCmds.push({
+              lineType,
+              triangleSpec,
+              specWords,
+              newNames: words.slice(i + 1),
+            });
+          }
+        }
       }
     } else {
       extraErrors.push(`Unknown command: "${line}"`);
@@ -407,6 +456,8 @@ function parseContent(content) {
     sideLabelCmds,
     markCmds,
     lineCmds,
+    pointCmds,
+    drawCmds,
     extraErrors,
   };
 }
@@ -421,6 +472,8 @@ function syntaxCheck(content) {
     angleLabelCmds,
     sideLabelCmds,
     lineCmds,
+    pointCmds,
+    drawCmds,
     extraErrors,
   } = parseContent(content);
 
@@ -471,26 +524,75 @@ function syntaxCheck(content) {
     }
   }
 
+  const allKnownNames = new Set([
+    ...vertexNames,
+    ...pointCmds.map((c) => c.name),
+  ]);
+  for (const { drawType, pts } of drawCmds) {
+    if (!pts || pts.length < 2) {
+      errors.push(`"line ${drawType}": expects two point names (e.g. "KL")`);
+    } else if (pts[0] === pts[1]) {
+      errors.push(`"line ${drawType}": both points must be different`);
+    } else if (!allKnownNames.has(pts[0]) || !allKnownNames.has(pts[1])) {
+      errors.push(`"line ${drawType}": unknown point(s) in "${pts}"`);
+    }
+  }
+
+  for (const { sideSpec, ratioStr, name } of pointCmds) {
+    if (!isValidSideSpec(sideSpec, vertexNames)) {
+      errors.push(`"point": invalid side "${sideSpec}"`);
+    }
+    const parts = ratioStr.split(":");
+    if (parts.length !== 2 || parts.some((p) => isNaN(+p) || +p <= 0)) {
+      errors.push(
+        `"point": invalid ratio "${ratioStr}" (expected positive numbers, e.g. "1:4")`,
+      );
+    }
+    if (!name || !/^\S+$/.test(name)) {
+      errors.push(`"point": invalid name "${name}"`);
+    }
+  }
+
   for (const { lineType, triangleSpec, specWords, newNames } of lineCmds) {
     const tvChars = (triangleSpec ?? "").split("");
-    if (tvChars.length !== 3 || !tvChars.every((c) => vertexNames.includes(c))) {
-      errors.push(`"line ${lineType}": invalid triangle spec "${triangleSpec}"`);
+    if (
+      tvChars.length !== 3 ||
+      !tvChars.every((c) => vertexNames.includes(c))
+    ) {
+      errors.push(
+        `"line ${lineType}": invalid triangle spec "${triangleSpec}"`,
+      );
       continue;
     }
     const isVertexCh = (c) => tvChars.includes(c);
-    const isSideCh   = (s) => s.length === 2 && isVertexCh(s[0]) && isVertexCh(s[1]);
+    const isSideCh = (s) =>
+      s.length === 2 && isVertexCh(s[0]) && isVertexCh(s[1]);
     if (lineType === "perpendicular bisector") {
-      if (specWords.length !== 1 || !isSideCh(specWords[0])) errors.push(`"line perpendicular bisector": expects a side (e.g., "KL") before "new"`);
-      if (newNames.length !== 2) errors.push(`"line perpendicular bisector": expects 2 new point names`);
+      if (specWords.length !== 1 || !isSideCh(specWords[0]))
+        errors.push(
+          `"line perpendicular bisector": expects a side (e.g., "KL") before "new"`,
+        );
+      if (newNames.length !== 2)
+        errors.push(`"line perpendicular bisector": expects 2 new point names`);
     } else if (lineType === "angle bisector") {
-      if (specWords.length !== 0) errors.push(`"line angle bisector": expects nothing before "new"`);
-      if (newNames.length !== 2 || !isVertexCh(newNames[0])) errors.push(`"line angle bisector": expects "new <vertex> <point>"`);
+      if (specWords.length !== 0)
+        errors.push(`"line angle bisector": expects nothing before "new"`);
+      if (newNames.length !== 2 || !isVertexCh(newNames[0]))
+        errors.push(`"line angle bisector": expects "new <vertex> <point>"`);
     } else if (lineType === "median" || lineType === "altitude") {
-      if (specWords.length !== 1 || !isVertexCh(specWords[0])) errors.push(`"line ${lineType}": expects a vertex before "new"`);
-      if (newNames.length !== 1) errors.push(`"line ${lineType}": expects 1 new point name`);
+      if (specWords.length !== 1 || !isVertexCh(specWords[0]))
+        errors.push(`"line ${lineType}": expects a vertex before "new"`);
+      if (newNames.length !== 1)
+        errors.push(`"line ${lineType}": expects 1 new point name`);
     } else if (lineType === "midsegment") {
-      if (specWords.length !== 2 || !isSideCh(specWords[0]) || !isSideCh(specWords[1])) errors.push(`"line midsegment": expects two sides before "new"`);
-      if (newNames.length !== 2) errors.push(`"line midsegment": expects 2 new point names`);
+      if (
+        specWords.length !== 2 ||
+        !isSideCh(specWords[0]) ||
+        !isSideCh(specWords[1])
+      )
+        errors.push(`"line midsegment": expects two sides before "new"`);
+      if (newNames.length !== 2)
+        errors.push(`"line midsegment": expects 2 new point names`);
     }
   }
 
@@ -507,6 +609,8 @@ function compile(content, size) {
     sideLabelCmds,
     markCmds,
     lineCmds,
+    pointCmds,
+    drawCmds,
   } = parseContent(content);
   const angle = rawAngle ?? "acute";
   const side = rawSide ?? "scalene";
@@ -549,88 +653,211 @@ function compile(content, size) {
   // Triangle centroid + label offset for new points (shared by vertex labels & line rendering).
   const centX = (positions[0].x + positions[1].x + positions[2].x) / 3;
   const centY = (positions[0].y + positions[1].y + positions[2].y) / 3;
-  const ptLblOff = { small: 0.20, medium: 0.28, large: 0.43 }[size];
+  const ptLblOff = { small: 0.2, medium: 0.28, large: 0.43 }[size];
+  const ptCmdLblOff = { small: 0.32, medium: 0.45, large: 0.69 }[size];
+  const pointCmdByName = Object.fromEntries(pointCmds.map((c) => [c.name, c]));
 
   // Pre-compute geometry for all line commands (positions of new points + segment endpoints).
   const newPtsMap = {};
-  const lineGeoms = lineCmds.map(({ lineType, triangleSpec, specWords, newNames }) => {
-    const vp = {};
-    for (const ch of triangleSpec) {
-      const idx = labels.findIndex((l) => l.label === ch);
-      if (idx !== -1) vp[ch] = positions[idx];
-    }
-    let p1 = null, p2 = null;
-    const pts = {};
-    if (lineType === "perpendicular bisector") {
-      const side = specWords[0];
-      const A = vp[side[0]], B = vp[side[1]];
-      const C = vp[triangleSpec.split("").find((c) => c !== side[0] && c !== side[1])];
-      const G = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
-      let dx = -(B.y - A.y), dy = B.x - A.x;
-      if (dx * (C.x - G.x) + dy * (C.y - G.y) < 0) { dx = -dx; dy = -dy; }
-      let H = null;
-      for (const [Sa, Sb] of [[A, C], [B, C]]) {
-        const r = raySegIntersect(G.x, G.y, dx, dy, Sa.x, Sa.y, Sb.x, Sb.y);
-        if (r && r.t > 1e-6 && r.s >= -1e-6 && r.s <= 1 + 1e-6) { H = { x: G.x + r.t * dx, y: G.y + r.t * dy }; break; }
+  const lineGeoms = lineCmds.map(
+    ({ lineType, triangleSpec, specWords, newNames }) => {
+      const vp = {};
+      for (const ch of triangleSpec) {
+        const idx = labels.findIndex((l) => l.label === ch);
+        if (idx !== -1) vp[ch] = positions[idx];
       }
-      p1 = G; p2 = H;
-      if (newNames[0]) pts[newNames[0]] = G;
-      if (newNames[1] && H) pts[newNames[1]] = H;
-    } else if (lineType === "angle bisector") {
-      const V = vp[newNames[0]];
-      const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== newNames[0]);
-      const L = vp[oCh1], M = vp[oCh2];
-      const dVL = Math.hypot(L.x - V.x, L.y - V.y), dVM = Math.hypot(M.x - V.x, M.y - V.y);
-      const G = { x: L.x + (dVL / (dVL + dVM)) * (M.x - L.x), y: L.y + (dVL / (dVL + dVM)) * (M.y - L.y) };
-      p1 = V; p2 = G;
-      if (newNames[0]) pts[newNames[0]] = V;
-      if (newNames[1]) pts[newNames[1]] = G;
-    } else if (lineType === "median") {
-      const V = vp[specWords[0]];
-      const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
-      const L = vp[oCh1], M = vp[oCh2];
-      const G = { x: (L.x + M.x) / 2, y: (L.y + M.y) / 2 };
-      p1 = V; p2 = G;
-      if (newNames[0]) pts[newNames[0]] = G;
-    } else if (lineType === "altitude") {
-      const V = vp[specWords[0]];
-      const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
-      const L = vp[oCh1], M = vp[oCh2];
-      const ex = M.x - L.x, ey = M.y - L.y;
-      const t = ((V.x - L.x) * ex + (V.y - L.y) * ey) / (ex * ex + ey * ey);
-      const G = { x: L.x + t * ex, y: L.y + t * ey };
-      p1 = V; p2 = G;
-      if (newNames[0]) pts[newNames[0]] = G;
-    } else if (lineType === "midsegment") {
-      const s1 = specWords[0], s2 = specWords[1];
-      const G = { x: (vp[s1[0]].x + vp[s1[1]].x) / 2, y: (vp[s1[0]].y + vp[s1[1]].y) / 2 };
-      const H = { x: (vp[s2[0]].x + vp[s2[1]].x) / 2, y: (vp[s2[0]].y + vp[s2[1]].y) / 2 };
-      p1 = G; p2 = H;
-      if (newNames[0]) pts[newNames[0]] = G;
-      if (newNames[1]) pts[newNames[1]] = H;
+      let p1 = null,
+        p2 = null;
+      const pts = {};
+      if (lineType === "perpendicular bisector") {
+        const side = specWords[0];
+        const A = vp[side[0]],
+          B = vp[side[1]];
+        const C =
+          vp[
+            triangleSpec.split("").find((c) => c !== side[0] && c !== side[1])
+          ];
+        const G = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+        let dx = -(B.y - A.y),
+          dy = B.x - A.x;
+        if (dx * (C.x - G.x) + dy * (C.y - G.y) < 0) {
+          dx = -dx;
+          dy = -dy;
+        }
+        let H = null;
+        for (const [Sa, Sb] of [
+          [A, C],
+          [B, C],
+        ]) {
+          const r = raySegIntersect(G.x, G.y, dx, dy, Sa.x, Sa.y, Sb.x, Sb.y);
+          if (r && r.t > 1e-6 && r.s >= -1e-6 && r.s <= 1 + 1e-6) {
+            H = { x: G.x + r.t * dx, y: G.y + r.t * dy };
+            break;
+          }
+        }
+        p1 = G;
+        p2 = H;
+        if (newNames[0]) pts[newNames[0]] = G;
+        if (newNames[1] && H) pts[newNames[1]] = H;
+      } else if (lineType === "angle bisector") {
+        const V = vp[newNames[0]];
+        const [oCh1, oCh2] = triangleSpec
+          .split("")
+          .filter((c) => c !== newNames[0]);
+        const L = vp[oCh1],
+          M = vp[oCh2];
+        const dVL = Math.hypot(L.x - V.x, L.y - V.y),
+          dVM = Math.hypot(M.x - V.x, M.y - V.y);
+        const G = {
+          x: L.x + (dVL / (dVL + dVM)) * (M.x - L.x),
+          y: L.y + (dVL / (dVL + dVM)) * (M.y - L.y),
+        };
+        p1 = V;
+        p2 = G;
+        if (newNames[0]) pts[newNames[0]] = V;
+        if (newNames[1]) pts[newNames[1]] = G;
+      } else if (lineType === "median") {
+        const V = vp[specWords[0]];
+        const [oCh1, oCh2] = triangleSpec
+          .split("")
+          .filter((c) => c !== specWords[0]);
+        const L = vp[oCh1],
+          M = vp[oCh2];
+        const G = { x: (L.x + M.x) / 2, y: (L.y + M.y) / 2 };
+        p1 = V;
+        p2 = G;
+        if (newNames[0]) pts[newNames[0]] = G;
+      } else if (lineType === "altitude") {
+        const V = vp[specWords[0]];
+        const [oCh1, oCh2] = triangleSpec
+          .split("")
+          .filter((c) => c !== specWords[0]);
+        const L = vp[oCh1],
+          M = vp[oCh2];
+        const ex = M.x - L.x,
+          ey = M.y - L.y;
+        const t = ((V.x - L.x) * ex + (V.y - L.y) * ey) / (ex * ex + ey * ey);
+        const G = { x: L.x + t * ex, y: L.y + t * ey };
+        p1 = V;
+        p2 = G;
+        if (newNames[0]) pts[newNames[0]] = G;
+      } else if (lineType === "midsegment") {
+        const s1 = specWords[0],
+          s2 = specWords[1];
+        const G = {
+          x: (vp[s1[0]].x + vp[s1[1]].x) / 2,
+          y: (vp[s1[0]].y + vp[s1[1]].y) / 2,
+        };
+        const H = {
+          x: (vp[s2[0]].x + vp[s2[1]].x) / 2,
+          y: (vp[s2[0]].y + vp[s2[1]].y) / 2,
+        };
+        p1 = G;
+        p2 = H;
+        if (newNames[0]) pts[newNames[0]] = G;
+        if (newNames[1]) pts[newNames[1]] = H;
+      }
+      Object.assign(newPtsMap, pts);
+      return { p1, p2 };
+    },
+  );
+
+  // Compute positions for explicit points on sides.
+  for (const { sideSpec, ratioStr, name } of pointCmds) {
+    const [r1, r2] = ratioStr.split(":").map(Number);
+    const t = r1 / (r1 + r2);
+    const i1 = labels.findIndex((v) => v.label === sideSpec[0]);
+    const i2 = labels.findIndex((v) => v.label === sideSpec[1]);
+    if (i1 !== -1 && i2 !== -1) {
+      const p1 = positions[i1],
+        p2 = positions[i2];
+      newPtsMap[name] = {
+        x: p1.x + t * (p2.x - p1.x),
+        y: p1.y + t * (p2.y - p1.y),
+      };
     }
-    Object.assign(newPtsMap, pts);
-    return { p1, p2 };
-  });
+  }
 
   const lines = [];
   lines.push(
     `\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`,
   );
+
+  // Direct line / segment / ray draw commands.
+  if (drawCmds.length > 0) {
+    const extAmt = { small: 0.5, medium: 0.8, large: 1.2 }[size];
+    lines.push("");
+    for (const { drawType, pts } of drawCmds) {
+      const idx1 = labels.findIndex((v) => v.label === pts[0]);
+      const idx2 = labels.findIndex((v) => v.label === pts[1]);
+      const p1 = idx1 !== -1 ? positions[idx1] : (newPtsMap[pts[0]] ?? null);
+      const p2 = idx2 !== -1 ? positions[idx2] : (newPtsMap[pts[1]] ?? null);
+      if (!p1 || !p2) continue;
+      const dx = p2.x - p1.x,
+        dy = p2.y - p1.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-10) continue;
+      const ux = dx / len,
+        uy = dy / len;
+      if (drawType === "segment") {
+        lines.push(
+          `\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`,
+        );
+      } else if (drawType === "ray") {
+        const ex = p2.x + extAmt * ux,
+          ey = p2.y + extAmt * uy;
+        lines.push(
+          `\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(ex)},${f(ey)});`,
+        );
+      } else {
+        const sx = p1.x - extAmt * ux,
+          sy = p1.y - extAmt * uy;
+        const ex = p2.x + extAmt * ux,
+          ey = p2.y + extAmt * uy;
+        lines.push(
+          `\\draw[line width=1pt] (${f(sx)},${f(sy)}) -- (${f(ex)},${f(ey)});`,
+        );
+      }
+    }
+  }
   lines.push("");
 
   for (const { spec, text } of vertexLabelCmds) {
     const idx = labels.findIndex((v) => v.label === spec);
     if (idx !== -1) {
       const { x, y, pos } = positions[idx];
-      lines.push(`\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`);
+      lines.push(
+        `\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`,
+      );
     } else if (newPtsMap[spec]) {
       const pt = newPtsMap[spec];
-      const dx = pt.x - centX, dy = pt.y - centY;
-      const len = Math.hypot(dx, dy);
-      const lx = pt.x + (len > 0 ? ptLblOff * dx / len : 0);
-      const ly = pt.y + (len > 0 ? ptLblOff * dy / len : ptLblOff);
-      lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${text ?? spec}$};`);
+      let lx, ly;
+      const ptCmd = pointCmdByName[spec];
+      if (ptCmd) {
+        const i1 = labels.findIndex((v) => v.label === ptCmd.sideSpec[0]);
+        const i2 = labels.findIndex((v) => v.label === ptCmd.sideSpec[1]);
+        const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
+        const sdx = positions[i2].x - positions[i1].x;
+        const sdy = positions[i2].y - positions[i1].y;
+        const slen = Math.hypot(sdx, sdy);
+        const px = -sdy / slen,
+          py = sdx / slen;
+        const sign =
+          px * (pt.x - positions[i3].x) + py * (pt.y - positions[i3].y) >= 0
+            ? 1
+            : -1;
+        lx = pt.x + ptCmdLblOff * sign * px;
+        ly = pt.y + ptCmdLblOff * sign * py;
+      } else {
+        const dx = pt.x - centX,
+          dy = pt.y - centY;
+        const len = Math.hypot(dx, dy);
+        lx = pt.x + (len > 0 ? (ptLblOff * dx) / len : 0);
+        ly = pt.y + (len > 0 ? (ptLblOff * dy) / len : ptLblOff);
+      }
+      lines.push(
+        `\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${text ?? spec}$};`,
+      );
     }
   }
 
@@ -738,8 +965,10 @@ function compile(content, size) {
     for (const cmd of resolvedMarks) {
       if (cmd.type === "vertex") {
         const idx = labels.findIndex((v) => v.label === cmd.spec);
-        if (idx === -1) continue;
-        const { x, y } = positions[idx];
+        const ptCoord =
+          idx !== -1 ? positions[idx] : (newPtsMap[cmd.spec] ?? null);
+        if (!ptCoord) continue;
+        const { x, y } = ptCoord;
         lines.push(`\\fill (${f(x)},${f(y)}) circle (${dotR});`);
       } else if (cmd.type === "side") {
         const idxPair = resolveSide(cmd.spec, labels);
@@ -815,7 +1044,9 @@ function compile(content, size) {
     lines.push("");
     for (const { p1, p2 } of lineGeoms) {
       if (p1 && p2) {
-        lines.push(`\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`);
+        lines.push(
+          `\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`,
+        );
       }
     }
   }

@@ -215,7 +215,17 @@ line altitude KLM K new G
 line midsegment KLM KL LM new G H
 ```
 
-WIP
+WIP:
+
+point in segment:
+
+```
+geometry:
+triangle KLM
+point KL 1:4 new H
+mark H
+label H
+```
 
 general lines:
 
@@ -226,9 +236,11 @@ general lines:
 ```
 geometry:
 triangle KLM
+point KL 1:3 new H
+point KM 1:2 new G
 line KL
-line segment KL
-line ray KL
+line segment LG
+line ray MH
 ```
 
 TODO:
@@ -245,6 +257,7 @@ TO FIX:
 - angle arcs should start further and then go back.
 - \text{} fails when in side label
 - label for side should go along side.
+- SYNTAX CHECK - make sure element namings are not repeating.
 
 ## geometry circle
 
