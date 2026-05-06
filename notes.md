@@ -98,6 +98,11 @@ TODO:
 - allow to label point from any dir.
 - `function: graph cubic (-0.5;0) (0;1) (2;0) (5;0)`
 - labels - axis label with `\text{}`, point label with `\sin x` with space! --- introduce `""`?
+- fix exp when big numbers calculating when 19750, even tho not needed to compute:
+
+AI EXAMPLE (fixed):
+
+u19736
 
 ## Geometry - triangles
 
@@ -192,8 +197,6 @@ mark angle B II
 mark angle C right
 ```
 
-WIP:
-
 triangle lines:
 
 - perpendicular bisector
@@ -211,6 +214,8 @@ line median KLM K new G
 line altitude KLM K new G
 line midsegment KLM KL LM new G H
 ```
+
+WIP
 
 general lines:
 
@@ -232,4 +237,18 @@ TODO:
 geometry:
 triangle ABC
 point ...? -- introducing new point... dividing line in a few parts??? or for what else?
+```
+
+TO FIX:
+
+- angle labels with degrees not nice.
+- angle arcs should start further and then go back.
+- \text{} fails when in side label
+- label for side should go along side.
+
+## geometry circle
+
+```
+geometry:
+circle ...
 ```

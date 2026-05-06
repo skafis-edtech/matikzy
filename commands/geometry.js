@@ -301,6 +301,17 @@ function parseContent(content) {
   const lineCmds = [];
   const extraErrors = [];
 
+  // Pre-scan new point names from line chunks so "label" can reference them.
+  const lineNewNames = new Set();
+  for (const chunk of lines.slice(1)) {
+    const ws = chunk.trim().split(/\s+/);
+    if (ws[0] === "line") {
+      const ni = ws.indexOf("new");
+      if (ni !== -1) ws.slice(ni + 1).forEach((n) => lineNewNames.add(n));
+    }
+  }
+  const allPointNames = new Set([...vertexNames, ...lineNewNames]);
+
   for (const line of lines.slice(1)) {
     const words = line.split(/\s+/);
     if (words[0] === "label") {
@@ -325,7 +336,7 @@ function parseContent(content) {
         }
         const text = i < words.length ? words.slice(i).join(" ") : null;
 
-        if (vertexNames.includes(spec)) {
+        if (allPointNames.has(spec)) {
           vertexLabelCmds.push({ spec, text });
         } else if (isAngleSpec(spec, vertexNames)) {
           angleLabelCmds.push({ spec, bigger, text });
@@ -535,6 +546,73 @@ function compile(content, size) {
     return cmd;
   });
 
+  // Triangle centroid + label offset for new points (shared by vertex labels & line rendering).
+  const centX = (positions[0].x + positions[1].x + positions[2].x) / 3;
+  const centY = (positions[0].y + positions[1].y + positions[2].y) / 3;
+  const ptLblOff = { small: 0.20, medium: 0.28, large: 0.43 }[size];
+
+  // Pre-compute geometry for all line commands (positions of new points + segment endpoints).
+  const newPtsMap = {};
+  const lineGeoms = lineCmds.map(({ lineType, triangleSpec, specWords, newNames }) => {
+    const vp = {};
+    for (const ch of triangleSpec) {
+      const idx = labels.findIndex((l) => l.label === ch);
+      if (idx !== -1) vp[ch] = positions[idx];
+    }
+    let p1 = null, p2 = null;
+    const pts = {};
+    if (lineType === "perpendicular bisector") {
+      const side = specWords[0];
+      const A = vp[side[0]], B = vp[side[1]];
+      const C = vp[triangleSpec.split("").find((c) => c !== side[0] && c !== side[1])];
+      const G = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+      let dx = -(B.y - A.y), dy = B.x - A.x;
+      if (dx * (C.x - G.x) + dy * (C.y - G.y) < 0) { dx = -dx; dy = -dy; }
+      let H = null;
+      for (const [Sa, Sb] of [[A, C], [B, C]]) {
+        const r = raySegIntersect(G.x, G.y, dx, dy, Sa.x, Sa.y, Sb.x, Sb.y);
+        if (r && r.t > 1e-6 && r.s >= -1e-6 && r.s <= 1 + 1e-6) { H = { x: G.x + r.t * dx, y: G.y + r.t * dy }; break; }
+      }
+      p1 = G; p2 = H;
+      if (newNames[0]) pts[newNames[0]] = G;
+      if (newNames[1] && H) pts[newNames[1]] = H;
+    } else if (lineType === "angle bisector") {
+      const V = vp[newNames[0]];
+      const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== newNames[0]);
+      const L = vp[oCh1], M = vp[oCh2];
+      const dVL = Math.hypot(L.x - V.x, L.y - V.y), dVM = Math.hypot(M.x - V.x, M.y - V.y);
+      const G = { x: L.x + (dVL / (dVL + dVM)) * (M.x - L.x), y: L.y + (dVL / (dVL + dVM)) * (M.y - L.y) };
+      p1 = V; p2 = G;
+      if (newNames[0]) pts[newNames[0]] = V;
+      if (newNames[1]) pts[newNames[1]] = G;
+    } else if (lineType === "median") {
+      const V = vp[specWords[0]];
+      const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
+      const L = vp[oCh1], M = vp[oCh2];
+      const G = { x: (L.x + M.x) / 2, y: (L.y + M.y) / 2 };
+      p1 = V; p2 = G;
+      if (newNames[0]) pts[newNames[0]] = G;
+    } else if (lineType === "altitude") {
+      const V = vp[specWords[0]];
+      const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
+      const L = vp[oCh1], M = vp[oCh2];
+      const ex = M.x - L.x, ey = M.y - L.y;
+      const t = ((V.x - L.x) * ex + (V.y - L.y) * ey) / (ex * ex + ey * ey);
+      const G = { x: L.x + t * ex, y: L.y + t * ey };
+      p1 = V; p2 = G;
+      if (newNames[0]) pts[newNames[0]] = G;
+    } else if (lineType === "midsegment") {
+      const s1 = specWords[0], s2 = specWords[1];
+      const G = { x: (vp[s1[0]].x + vp[s1[1]].x) / 2, y: (vp[s1[0]].y + vp[s1[1]].y) / 2 };
+      const H = { x: (vp[s2[0]].x + vp[s2[1]].x) / 2, y: (vp[s2[0]].y + vp[s2[1]].y) / 2 };
+      p1 = G; p2 = H;
+      if (newNames[0]) pts[newNames[0]] = G;
+      if (newNames[1]) pts[newNames[1]] = H;
+    }
+    Object.assign(newPtsMap, pts);
+    return { p1, p2 };
+  });
+
   const lines = [];
   lines.push(
     `\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`,
@@ -543,11 +621,17 @@ function compile(content, size) {
 
   for (const { spec, text } of vertexLabelCmds) {
     const idx = labels.findIndex((v) => v.label === spec);
-    if (idx === -1) continue;
-    const { x, y, pos } = positions[idx];
-    lines.push(
-      `\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`,
-    );
+    if (idx !== -1) {
+      const { x, y, pos } = positions[idx];
+      lines.push(`\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${text ?? spec}$};`);
+    } else if (newPtsMap[spec]) {
+      const pt = newPtsMap[spec];
+      const dx = pt.x - centX, dy = pt.y - centY;
+      const len = Math.hypot(dx, dy);
+      const lx = pt.x + (len > 0 ? ptLblOff * dx / len : 0);
+      const ly = pt.y + (len > 0 ? ptLblOff * dy / len : ptLblOff);
+      lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${text ?? spec}$};`);
+    }
   }
 
   // Angle labels: placed at vertex, offset along the angle bisector.
@@ -728,96 +812,10 @@ function compile(content, size) {
 
   // Line constructions: bisectors, medians, altitudes, midsegments.
   if (lineCmds.length > 0) {
-    const centX = (positions[0].x + positions[1].x + positions[2].x) / 3;
-    const centY = (positions[0].y + positions[1].y + positions[2].y) / 3;
-    const ptLblOff = { small: 0.20, medium: 0.28, large: 0.43 }[size];
     lines.push("");
-
-    for (const { lineType, triangleSpec, specWords, newNames } of lineCmds) {
-      // Letter → position map for this triangle spec.
-      const vp = {};
-      for (const ch of triangleSpec) {
-        const idx = labels.findIndex((l) => l.label === ch);
-        if (idx !== -1) vp[ch] = positions[idx];
-      }
-
-      let p1 = null, p2 = null;
-      const newPts = {}; // name → {x, y}
-
-      if (lineType === "perpendicular bisector") {
-        const side = specWords[0];
-        const A = vp[side[0]], B = vp[side[1]];
-        const C = vp[triangleSpec.split("").find((c) => c !== side[0] && c !== side[1])];
-        const G = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
-        // Perpendicular to AB, oriented toward C.
-        let dx = -(B.y - A.y), dy = B.x - A.x;
-        if (dx * (C.x - G.x) + dy * (C.y - G.y) < 0) { dx = -dx; dy = -dy; }
-        let H = null;
-        for (const [Sa, Sb] of [[A, C], [B, C]]) {
-          const r = raySegIntersect(G.x, G.y, dx, dy, Sa.x, Sa.y, Sb.x, Sb.y);
-          if (r && r.t > 1e-6 && r.s >= -1e-6 && r.s <= 1 + 1e-6) {
-            H = { x: G.x + r.t * dx, y: G.y + r.t * dy }; break;
-          }
-        }
-        p1 = G; p2 = H;
-        if (newNames[0]) newPts[newNames[0]] = G;
-        if (newNames[1] && H) newPts[newNames[1]] = H;
-
-      } else if (lineType === "angle bisector") {
-        const startCh = newNames[0];
-        const V = vp[startCh];
-        const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== startCh);
-        const L = vp[oCh1], M = vp[oCh2];
-        const dVL = Math.hypot(L.x - V.x, L.y - V.y);
-        const dVM = Math.hypot(M.x - V.x, M.y - V.y);
-        const G = { x: L.x + (dVL / (dVL + dVM)) * (M.x - L.x), y: L.y + (dVL / (dVL + dVM)) * (M.y - L.y) };
-        p1 = V; p2 = G;
-        if (newNames[0]) newPts[newNames[0]] = V;
-        if (newNames[1]) newPts[newNames[1]] = G;
-
-      } else if (lineType === "median") {
-        const V = vp[specWords[0]];
-        const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
-        const L = vp[oCh1], M = vp[oCh2];
-        const G = { x: (L.x + M.x) / 2, y: (L.y + M.y) / 2 };
-        p1 = V; p2 = G;
-        if (newNames[0]) newPts[newNames[0]] = G;
-
-      } else if (lineType === "altitude") {
-        const V = vp[specWords[0]];
-        const [oCh1, oCh2] = triangleSpec.split("").filter((c) => c !== specWords[0]);
-        const L = vp[oCh1], M = vp[oCh2];
-        const ex = M.x - L.x, ey = M.y - L.y;
-        const t = ((V.x - L.x) * ex + (V.y - L.y) * ey) / (ex * ex + ey * ey);
-        const G = { x: L.x + t * ex, y: L.y + t * ey };
-        p1 = V; p2 = G;
-        if (newNames[0]) newPts[newNames[0]] = G;
-
-      } else if (lineType === "midsegment") {
-        const s1 = specWords[0], s2 = specWords[1];
-        const G = { x: (vp[s1[0]].x + vp[s1[1]].x) / 2, y: (vp[s1[0]].y + vp[s1[1]].y) / 2 };
-        const H = { x: (vp[s2[0]].x + vp[s2[1]].x) / 2, y: (vp[s2[0]].y + vp[s2[1]].y) / 2 };
-        p1 = G; p2 = H;
-        if (newNames[0]) newPts[newNames[0]] = G;
-        if (newNames[1]) newPts[newNames[1]] = H;
-      }
-
+    for (const { p1, p2 } of lineGeoms) {
       if (p1 && p2) {
         lines.push(`\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`);
-      }
-
-      for (const [name, pt] of Object.entries(newPts)) {
-        const existingIdx = labels.findIndex((l) => l.label === name);
-        if (existingIdx !== -1) {
-          const { x, y, pos } = positions[existingIdx];
-          lines.push(`\\node[${pos}, scale=1.5] at (${f(x)},${f(y)}) {$${name}$};`);
-        } else {
-          const dx = pt.x - centX, dy = pt.y - centY;
-          const len = Math.hypot(dx, dy);
-          const lx = pt.x + (len > 0 ? ptLblOff * dx / len : 0);
-          const ly = pt.y + (len > 0 ? ptLblOff * dy / len : ptLblOff);
-          lines.push(`\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${name}$};`);
-        }
       }
     }
   }
