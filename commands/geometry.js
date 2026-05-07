@@ -22,6 +22,24 @@ function parseLabels(str) {
   return verts.length === 3 ? verts : null;
 }
 
+function parseQuadLabels(str) {
+  if (!str) return null;
+  const verts = [];
+  let i = 0;
+  while (i < str.length) {
+    if (str[i] === "[") {
+      const close = str.indexOf("]", i + 1);
+      if (close === -1) return null;
+      verts.push({ label: str.slice(i + 1, close), mod: "mark" });
+      i = close + 1;
+    } else {
+      verts.push({ label: str[i], mod: "none" });
+      i++;
+    }
+  }
+  return verts.length === 4 ? verts : null;
+}
+
 function parseTriangle(content) {
   const words = content.trim().split(/\s+/);
   if (words[0] !== "triangle")
@@ -86,6 +104,57 @@ function parseTriangle(content) {
   }
 
   return { angle, side, unknown, labelStr, triMode: null, triValues: null, triTransforms: [] };
+}
+
+const QUAD_SINGLE_TYPES = new Set(["square", "rectangle", "parallelogram", "rhombus", "trapezoid"]);
+
+function parseQuadrilateral(content) {
+  const words = content.trim().split(/\s+/);
+  if (words[0] !== "quadrilateral") return null;
+
+  let transformStart = words.length;
+  for (let i = 1; i < words.length; i++) {
+    if (words[i].startsWith(">>")) { transformStart = i; break; }
+  }
+
+  const mainWords = words.slice(1, transformStart);
+  const transformWords = words.slice(transformStart);
+
+  let quadType = null;
+  let labelStr = null;
+  const unknown = [];
+
+  let i = 0;
+  while (i < mainWords.length) {
+    const w = mainWords[i];
+    const wNext = mainWords[i + 1];
+    const twoWord = (w === "right" || w === "isosceles") && wNext === "trapezoid"
+      ? w + " " + wNext : null;
+    if (twoWord) {
+      quadType === null ? (quadType = twoWord, i += 2) : (unknown.push(w), i++);
+    } else if (QUAD_SINGLE_TYPES.has(w)) {
+      quadType === null ? (quadType = w, i++) : (unknown.push(w), i++);
+    } else if (labelStr === null && parseQuadLabels(w)) {
+      labelStr = w; i++;
+    } else {
+      unknown.push(w); i++;
+    }
+  }
+
+  const quadTransforms = [];
+  for (const tw of transformWords) {
+    if (tw === ">>rot") {
+      quadTransforms.push({ type: "rot", degrees: null });
+    } else if (tw === ">>invert") {
+      quadTransforms.push({ type: "invert" });
+    } else if (/^>>rot-?\d+(\.\d+)?$/.test(tw)) {
+      quadTransforms.push({ type: "rot", degrees: parseFloat(tw.slice(5)) });
+    } else {
+      unknown.push(tw);
+    }
+  }
+
+  return { quadType, labelStr, quadTransforms, unknown };
 }
 
 // COORDS[side][angle] = coords for default [A]BC (special angle at position 0, bottom-left).
@@ -398,6 +467,58 @@ function applyTriTransforms(pts, transforms) {
   return cur.map(p => ({ x: p.x - minX, y: p.y - minY }));
 }
 
+// Medium-size vertices [A,B,C,D] for each quad type. Scaled ×0.75 for small, ×1.375 for large.
+// Clockwise from bottom-left: A=bottom-left, B=top-left, C=top-right, D=bottom-right.
+const QUAD_VERTS = {
+  square:                [[0,0],[0,4],[4,4],[4,0]],
+  rectangle:             [[0,0],[0,3],[5.5,3],[5.5,0]],
+  parallelogram:         [[0,0],[1.5,3],[6.5,3],[5,0]],
+  rhombus:               [[0,0],[1.368,3.759],[5.368,3.759],[4,0]],
+  trapezoid:             [[0,0],[0.5,3],[4,3],[5,0]],
+  "right trapezoid":     [[0,0],[0,3],[3.5,3],[5,0]],
+  "isosceles trapezoid": [[0,0],[1,3],[4,3],[5,0]],
+};
+const QUAD_SCALE = { small: 0.75, medium: 1.0, large: 1.375 };
+
+function applyQuadTransforms(pts, transforms) {
+  let cur = pts.map(p => ({ ...p }));
+  const sideVerts = [[0, 1], [1, 2], [2, 3], [3, 0]];
+  let baseIdx = 0;
+
+  for (const t of transforms) {
+    if (t.type === "invert") {
+      cur = cur.map(p => ({ x: -p.x, y: p.y }));
+    } else if (t.type === "rot" && t.degrees === null) {
+      baseIdx = (baseIdx + 1) % 4;
+      const [i1, i2] = sideVerts[baseIdx];
+      cur = sideToHorizontal(cur, i1, i2);
+    } else if (t.type === "rot") {
+      cur = rotVertsBy(cur, t.degrees);
+    }
+  }
+
+  const minY = Math.min(...cur.map(p => p.y));
+  const minX = Math.min(...cur.map(p => p.x));
+  return cur.map(p => ({ x: p.x - minX, y: p.y - minY }));
+}
+
+function quadLabelPos(x, y, cx, cy) {
+  const dy = y - cy, dx = x - cx;
+  const vert = dy >= 0 ? "above" : "below";
+  const horiz = dx <= 0 ? " left" : " right";
+  return vert + horiz;
+}
+
+function computeQuadPositions(quadType, quadTransforms, size) {
+  const scale = QUAD_SCALE[size];
+  const verts = QUAD_VERTS[quadType] ?? QUAD_VERTS.square;
+  const raw = verts.map(([x, y]) => ({ x: x * scale, y: y * scale }));
+  const transformed = applyQuadTransforms(raw, quadTransforms);
+  const cx = transformed.reduce((acc, p) => acc + p.x, 0) / 4;
+  const cy = transformed.reduce((acc, p) => acc + p.y, 0) / 4;
+  return transformed.map(p => ({ x: p.x, y: p.y, pos: quadLabelPos(p.x, p.y, cx, cy) }));
+}
+
 function triLabelPos(x, y, cx, cy) {
   const dy = y - cy, dx = x - cx;
   const vert = dy > 0.1 ? "above" : "below";
@@ -419,14 +540,18 @@ function computeTrianglePositions(triMode, triValues, triTransforms, size) {
 function parseContent(content) {
   const lines = content
     .trim()
-    .split(/(?<=\s)(?=(?:triangle|label|mark|line|point|circle)\b)/)
+    .split(/(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle)\b)/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   const hasTriangle = (lines[0] || "").split(/\s+/)[0] === "triangle";
+  const hasQuad = (lines[0] || "").split(/\s+/)[0] === "quadrilateral";
   const triangleResult = hasTriangle
     ? parseTriangle(lines[0] || "")
     : { angle: null, side: null, unknown: [], labelStr: null, triMode: null, triValues: null, triTransforms: [] };
-  const commandLines = lines.slice(hasTriangle ? 1 : 0);
+  const quadResult = hasQuad
+    ? parseQuadrilateral(lines[0] || "")
+    : { quadType: null, labelStr: null, quadTransforms: [], unknown: [] };
+  const commandLines = lines.slice(hasTriangle || hasQuad ? 1 : 0);
 
   const vertexNames = hasTriangle
     ? (
@@ -434,6 +559,15 @@ function parseContent(content) {
           { label: "A" },
           { label: "B" },
           { label: "C" },
+        ]
+      ).map((v) => v.label)
+    : hasQuad
+    ? (
+        parseQuadLabels(quadResult.labelStr) ?? [
+          { label: "A" },
+          { label: "B" },
+          { label: "C" },
+          { label: "D" },
         ]
       ).map((v) => v.label)
     : [];
@@ -452,6 +586,8 @@ function parseContent(content) {
   const circumscribedCircleCmds = [];
   const tangentLineCmds = [];
   const extraErrors = [];
+  if (hasQuad && quadResult.unknown.length > 0)
+    extraErrors.push(`Unknown modifier(s): ${quadResult.unknown.map(w => `"${w}"`).join(", ")}`);
 
   // Pre-scan new point names so "label"/"mark" can reference them.
   const lineNewNames = new Set();
@@ -704,6 +840,8 @@ function parseContent(content) {
     circumscribedCircleCmds,
     tangentLineCmds,
     hasTriangle,
+    hasQuad,
+    quadResult,
     extraErrors,
   };
 }
@@ -729,14 +867,16 @@ function syntaxCheck(content) {
     circumscribedCircleCmds,
     tangentLineCmds,
     hasTriangle,
+    hasQuad,
+    quadResult,
     extraErrors,
   } = parseContent(content);
 
   const firstCmd = content.trim().split(/\s+/)[0] || "";
-  if (firstCmd !== "triangle" && firstCmd !== "circle") {
+  if (firstCmd !== "triangle" && firstCmd !== "circle" && firstCmd !== "quadrilateral") {
     return {
       valid: false,
-      errors: [`Unknown shape. Only "triangle" and "circle" are supported.`],
+      errors: [`Unknown shape. Only "triangle", "quadrilateral", and "circle" are supported.`],
     };
   }
 
@@ -782,7 +922,7 @@ function syntaxCheck(content) {
   if (!triMode && side === "equilateral" && angle === "obtuse")
     errors.push("Equilateral triangles cannot be obtuse.");
 
-  if (labelStr !== null) {
+  if (hasTriangle && labelStr !== null) {
     const parsed = parseLabels(labelStr);
     if (!parsed) {
       errors.push(`Invalid label specification: "${labelStr}"`);
@@ -791,11 +931,27 @@ function syntaxCheck(content) {
     }
   }
 
+  if (hasQuad) {
+    if (!quadResult.quadType) {
+      errors.push(`"quadrilateral": shape type required (e.g., "square", "rectangle", "parallelogram", "rhombus", "trapezoid", "right trapezoid", "isosceles trapezoid")`);
+    }
+    if (quadResult.labelStr !== null) {
+      const parsed = parseQuadLabels(quadResult.labelStr);
+      if (!parsed) errors.push(`Invalid label specification: "${quadResult.labelStr}"`);
+    }
+  }
+
   errors.push(...extraErrors);
 
-  const vertexNames = (
-    parseLabels(labelStr) ?? [{ label: "A" }, { label: "B" }, { label: "C" }]
-  ).map((v) => v.label);
+  const vertexNames = hasQuad
+    ? (
+        parseQuadLabels(quadResult.labelStr) ?? [
+          { label: "A" }, { label: "B" }, { label: "C" }, { label: "D" },
+        ]
+      ).map((v) => v.label)
+    : (
+        parseLabels(labelStr) ?? [{ label: "A" }, { label: "B" }, { label: "C" }]
+      ).map((v) => v.label);
 
   const circleKnownNames = [];
   for (const { center, northPt } of circleCmds) {
@@ -990,6 +1146,8 @@ function compile(content, size) {
     circumscribedCircleCmds,
     tangentLineCmds,
     hasTriangle,
+    hasQuad,
+    quadResult,
   } = parseContent(content);
 
   // Labels map directly by position order. No mark = use DEFAULT_SPECIAL_POS.
@@ -998,6 +1156,13 @@ function compile(content, size) {
         { label: "A", mod: "none" },
         { label: "B", mod: "none" },
         { label: "C", mod: "none" },
+      ])
+    : hasQuad
+    ? (parseQuadLabels(quadResult.labelStr) ?? [
+        { label: "A", mod: "none" },
+        { label: "B", mod: "none" },
+        { label: "C", mod: "none" },
+        { label: "D", mod: "none" },
       ])
     : [];
 
@@ -1009,7 +1174,7 @@ function compile(content, size) {
       { x: 2.5, y: 4, pos: "above" },
       { x: 5, y: 0, pos: "below right" },
     ];
-  } else {
+  } else if (hasTriangle) {
     const angle = rawAngle ?? "acute";
     const side = rawSide ?? "scalene";
     const markedIdx = labels.findIndex((v) => v.mod === "mark");
@@ -1022,6 +1187,10 @@ function compile(content, size) {
       { x: bx, y: by, pos: bPos },
       { x: cx, y: 0, pos: "below right" },
     ];
+  } else if (hasQuad) {
+    positions = computeQuadPositions(quadResult.quadType, quadResult.quadTransforms, size);
+  } else {
+    positions = [];
   }
 
   // Shared size-scaled mark/arc constants (used by both angle labels and mark rendering).
@@ -1039,9 +1208,9 @@ function compile(content, size) {
     return cmd;
   });
 
-  // Triangle centroid + label offset for new points (shared by vertex labels & line rendering).
-  const centX = (positions[0].x + positions[1].x + positions[2].x) / 3;
-  const centY = (positions[0].y + positions[1].y + positions[2].y) / 3;
+  // Shape centroid + label offset for new points (shared by vertex labels & line rendering).
+  const centX = positions.length > 0 ? positions.reduce((s, p) => s + p.x, 0) / positions.length : 0;
+  const centY = positions.length > 0 ? positions.reduce((s, p) => s + p.y, 0) / positions.length : 0;
   const ptLblOff = { small: 0.26, medium: 0.36, large: 0.55 }[size];
   const ptCmdLblOff = { small: 0.38, medium: 0.53, large: 0.82 }[size];
   const pointCmdByName = Object.fromEntries(pointCmds.map((c) => [c.name, c]));
@@ -1300,7 +1469,7 @@ function compile(content, size) {
   // Bounding box of all content, used to clip full-line draw commands.
   const bbMargin = { small: 0.5, medium: 0.8, large: 1.2 }[size];
   const bbPts = [
-    ...(hasTriangle ? positions : []),
+    ...(hasTriangle || hasQuad ? positions : []),
     ...Object.values(newPtsMap),
   ];
   for (const { center: cName } of circleCmds) {
@@ -1338,6 +1507,11 @@ function compile(content, size) {
     const [p0, p1, p2] = positions;
     lines.push(
       `\\draw[line width=1.5pt] (${f(p0.x)},${f(p0.y)}) -- (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)}) -- cycle;`,
+    );
+  } else if (hasQuad) {
+    const [p0, p1, p2, p3] = positions;
+    lines.push(
+      `\\draw[line width=1.5pt] (${f(p0.x)},${f(p0.y)}) -- (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)}) -- (${f(p3.x)},${f(p3.y)}) -- cycle;`,
     );
   }
 

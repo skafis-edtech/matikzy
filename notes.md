@@ -312,3 +312,35 @@ Inscribing into triangle - KLM are the touchpoints (each is in the opposite of c
 TODO:
 
 - in geometry - area shading.
+
+### geometry quadrilateral
+
+also basis figures only here. Again starting from bottom left, going clockwise with notation ABCD (default is ABCD).
+
+Includes rotation, like in triangle.
+
+```
+geometry:
+quadrilateral square ABCD
+```
+
+```
+quadrilateral square ABCD
+quadrilateral rectangle ABCD
+quadrilateral parallelogram ABCD
+quadrilateral rhombus ABCD
+quadrilateral trapezoid ABCD
+quadrilateral right trapezoid ABCD
+quadrilateral isosceles trapezoid ABCD
+quadrilateral SSSSD 1 2 3 4 2 ABCD
+quadrilateral SSSDD 1 2 3 2 3 ABCD
+quadrilateral SSAAA 3 3 90 90 90 ABCD
+quadrilateral SSSAA 3 3 3 90 90 ABCD
+```
+
+Free form (D-diagonal):
+
+- SSSSD
+- SSSDD
+- SSAAA (adjacent S)
+- SSSAA (included A)
