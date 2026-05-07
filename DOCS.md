@@ -1,8 +1,10 @@
 # Docs
 
-Updated: 2026-05-06
+Updated: 2026-05-07
 
 > **Tip**: if lazy to read, analyze, learn - just drop the pure command javascript file to some LLM and ask what you want, it will format for you.
+
+_Note: syntax checks atm are minimal._
 
 Commands:
 
@@ -197,7 +199,9 @@ Start with `geometry` and then add components.
 
 `geometry[large]: ...`
 
-### Triangle OR Circle as basis
+### Circle as basis
+
+_Note: only one basis can be chosen._
 
 ```
 geometry:
@@ -208,7 +212,7 @@ circle A-AB
 
 (if name not mentioned - defaults to `O-OX`)
 
-OR
+### Triangle as basis
 
 ```
 geometry:
@@ -251,6 +255,38 @@ rotation (clockwise) and inversion:
 - `>>rot` makes next side of triangle "sitting" horizontally.
 - `>>rot120` or `>>rot-240` tells in degrees the rotation (as you see in eexample it can be a negative number).
 - `>>invert` mirrors by Y axis.
+
+### Quadrilateral as basis
+
+Again starting from bottom left, going clockwise with notation ABCD (default is ABCD).
+
+Includes rotation, like in triangle.
+
+```
+geometry:
+quadrilateral square ABCD >>rot45
+```
+
+```
+quadrilateral square ABCD
+quadrilateral rectangle ABCD
+quadrilateral parallelogram ABCD
+quadrilateral rhombus ABCD
+quadrilateral trapezoid ABCD
+quadrilateral right trapezoid ABCD
+quadrilateral isosceles trapezoid ABCD
+quadrilateral SSSSD 1 2 3 4 2 ABCD
+quadrilateral SSSDD 1 2 3 2 3 ABCD
+quadrilateral SSAAA 3 3 90 90 90 ABCD
+quadrilateral SSSAA 3 3 3 90 90 ABCD
+```
+
+Free form (D-diagonal):
+
+- SSSSD
+- SSSDD
+- SSAAA (adjacent S)
+- SSSAA (included A)
 
 ### Naming
 

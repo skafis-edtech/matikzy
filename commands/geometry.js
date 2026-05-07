@@ -107,16 +107,62 @@ function parseTriangle(content) {
 }
 
 const QUAD_SINGLE_TYPES = new Set(["square", "rectangle", "parallelogram", "rhombus", "trapezoid"]);
+const VALID_QUAD_MODES = new Set(["SSSSD", "SSSDD", "SSAAA", "SSSAA"]);
+
+function parseQuadTransforms(words, unknown) {
+  const quadTransforms = [];
+  for (const tw of words) {
+    if (tw === ">>rot") {
+      quadTransforms.push({ type: "rot", degrees: null });
+    } else if (tw === ">>invert") {
+      quadTransforms.push({ type: "invert" });
+    } else if (/^>>rot-?\d+(\.\d+)?$/.test(tw)) {
+      quadTransforms.push({ type: "rot", degrees: parseFloat(tw.slice(5)) });
+    } else {
+      unknown.push(tw);
+    }
+  }
+  return quadTransforms;
+}
 
 function parseQuadrilateral(content) {
   const words = content.trim().split(/\s+/);
   if (words[0] !== "quadrilateral") return null;
 
+  // Free-form numeric mode: quadrilateral SSSSD/SSSDD/SSAAA/SSSAA v1..v5 [label] [>>transforms]
+  if (words.length >= 2 && VALID_QUAD_MODES.has(words[1])) {
+    const quadMode = words[1];
+    const unknown = [];
+
+    let transformStart = words.length;
+    for (let i = 2; i < words.length; i++) {
+      if (words[i].startsWith(">>")) { transformStart = i; break; }
+    }
+    const mainWords = words.slice(2, transformStart);
+    const transformWords = words.slice(transformStart);
+
+    const numericWords = mainWords.filter(w => /^-?\d*\.?\d+$/.test(w));
+    const nonNumeric = mainWords.filter(w => !/^-?\d*\.?\d+$/.test(w));
+
+    let quadValues = null;
+    if (numericWords.length >= 5) quadValues = numericWords.slice(0, 5).map(Number);
+    if (numericWords.length > 5) unknown.push(...numericWords.slice(5));
+
+    let labelStr = null;
+    for (const w of nonNumeric) {
+      if (labelStr === null && parseQuadLabels(w)) labelStr = w;
+      else unknown.push(w);
+    }
+
+    const quadTransforms = parseQuadTransforms(transformWords, unknown);
+    return { quadType: null, quadMode, quadValues, labelStr, quadTransforms, unknown };
+  }
+
+  // Named type mode: quadrilateral square/rectangle/… [ABCD] [>>transforms]
   let transformStart = words.length;
   for (let i = 1; i < words.length; i++) {
     if (words[i].startsWith(">>")) { transformStart = i; break; }
   }
-
   const mainWords = words.slice(1, transformStart);
   const transformWords = words.slice(transformStart);
 
@@ -141,20 +187,8 @@ function parseQuadrilateral(content) {
     }
   }
 
-  const quadTransforms = [];
-  for (const tw of transformWords) {
-    if (tw === ">>rot") {
-      quadTransforms.push({ type: "rot", degrees: null });
-    } else if (tw === ">>invert") {
-      quadTransforms.push({ type: "invert" });
-    } else if (/^>>rot-?\d+(\.\d+)?$/.test(tw)) {
-      quadTransforms.push({ type: "rot", degrees: parseFloat(tw.slice(5)) });
-    } else {
-      unknown.push(tw);
-    }
-  }
-
-  return { quadType, labelStr, quadTransforms, unknown };
+  const quadTransforms = parseQuadTransforms(transformWords, unknown);
+  return { quadType, quadMode: null, quadValues: null, labelStr, quadTransforms, unknown };
 }
 
 // COORDS[side][angle] = coords for default [A]BC (special angle at position 0, bottom-left).
@@ -514,6 +548,107 @@ function computeQuadPositions(quadType, quadTransforms, size) {
   const verts = QUAD_VERTS[quadType] ?? QUAD_VERTS.square;
   const raw = verts.map(([x, y]) => ({ x: x * scale, y: y * scale }));
   const transformed = applyQuadTransforms(raw, quadTransforms);
+  const cx = transformed.reduce((acc, p) => acc + p.x, 0) / 4;
+  const cy = transformed.reduce((acc, p) => acc + p.y, 0) / 4;
+  return transformed.map(p => ({ x: p.x, y: p.y, pos: quadLabelPos(p.x, p.y, cx, cy) }));
+}
+
+const QUAD_FREEFORM_TARGET = { small: 3.1, medium: 5.0, large: 7.7 };
+
+function computeRawQuadVerts(mode, values) {
+  const deg2rad = d => d * Math.PI / 180;
+  const clamp = v => Math.max(-1, Math.min(1, v));
+
+  if (mode === "SSSSD") {
+    // AB, BC, CD, DA, diag_AC
+    const [sAB, sBC, sCD, sDA, sAC] = values;
+    const A = { x: 0, y: 0 }, B = { x: sAB, y: 0 };
+    const cosBAC = clamp((sAB*sAB + sAC*sAC - sBC*sBC) / (2*sAB*sAC));
+    const angBAC = Math.acos(cosBAC);
+    const C = { x: sAC * Math.cos(angBAC), y: sAC * Math.sin(angBAC) };
+    // D from triangle ACD on opposite side of AC from B
+    const cosCAD = clamp((sAC*sAC + sDA*sDA - sCD*sCD) / (2*sAC*sDA));
+    const angCAD = Math.acos(cosCAD);
+    const dirAD = angBAC + angCAD;
+    const D = { x: sDA * Math.cos(dirAD), y: sDA * Math.sin(dirAD) };
+    return [A, B, C, D];
+  }
+
+  if (mode === "SSSDD") {
+    // AB, BC, CD, diag_AC, diag_BD
+    const [sAB, sBC, sCD, sAC, sBD] = values;
+    const A = { x: 0, y: 0 }, B = { x: sAB, y: 0 };
+    const cosBAC = clamp((sAB*sAB + sAC*sAC - sBC*sBC) / (2*sAB*sAC));
+    const angBAC = Math.acos(cosBAC);
+    const C = { x: sAC * Math.cos(angBAC), y: sAC * Math.sin(angBAC) };
+    // D from circles: |BD|=sBD, |CD|=sCD; pick side opposite to B relative to AC
+    const dirBC = Math.atan2(C.y - B.y, C.x - B.x);
+    const dirCB = dirBC + Math.PI;
+    const cosBCD = clamp((sBC*sBC + sCD*sCD - sBD*sBD) / (2*sBC*sCD));
+    const angBCD = Math.acos(cosBCD);
+    const D1 = { x: C.x + sCD * Math.cos(dirCB + angBCD), y: C.y + sCD * Math.sin(dirCB + angBCD) };
+    const D2 = { x: C.x + sCD * Math.cos(dirCB - angBCD), y: C.y + sCD * Math.sin(dirCB - angBCD) };
+    // Pick D on opposite side of AC from B
+    const nx = C.y, ny = -C.x; // normal to AC direction (perpendicular, rotated CW)
+    const signB = B.x * nx + B.y * ny;
+    const sign1 = D1.x * nx + D1.y * ny;
+    const D = (signB * sign1 < 0) ? D1 : D2;
+    return [A, B, C, D];
+  }
+
+  if (mode === "SSAAA") {
+    // AB, BC, angleA, angleB, angleC (interior angles; polygon above x-axis, CCW traversal)
+    const [sAB, sBC, angA, angB, angC] = values;
+    const rA = deg2rad(angA), rB = deg2rad(angB), rC = deg2rad(angC);
+    const A = { x: 0, y: 0 }, B = { x: sAB, y: 0 };
+    const dirBC = Math.PI - rB;
+    const C = { x: B.x + sBC * Math.cos(dirBC), y: B.y + sBC * Math.sin(dirBC) };
+    const dirCD = 2 * Math.PI - rB - rC;
+    const dirAD = rA;
+    // D = intersection of ray from A (dirAD) and ray from C (dirCD)
+    const cAD = Math.cos(dirAD), sAD = Math.sin(dirAD);
+    const cCD = Math.cos(dirCD), sCD_val = Math.sin(dirCD);
+    const det = cAD * (-sCD_val) - sAD * (-cCD);
+    if (Math.abs(det) < 1e-10) return null;
+    const t = ((C.x - A.x) * (-sCD_val) - (C.y - A.y) * (-cCD)) / det;
+    if (t <= 0) return null;
+    const D = { x: A.x + t * cAD, y: A.y + t * sAD };
+    return [A, B, C, D];
+  }
+
+  if (mode === "SSSAA") {
+    // AB, BC, CD, angleB, angleC (included interior angles at B and C)
+    const [sAB, sBC, sCD, angB, angC] = values;
+    const rB = deg2rad(angB), rC = deg2rad(angC);
+    const A = { x: 0, y: 0 }, B = { x: sAB, y: 0 };
+    const dirBC = Math.PI - rB;
+    const C = { x: B.x + sBC * Math.cos(dirBC), y: B.y + sBC * Math.sin(dirBC) };
+    const dirCD = 2 * Math.PI - rB - rC;
+    const D = { x: C.x + sCD * Math.cos(dirCD), y: C.y + sCD * Math.sin(dirCD) };
+    return [A, B, C, D];
+  }
+
+  return null;
+}
+
+function scaleQuadVerts(pts, size) {
+  const sides = [
+    Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y),
+    Math.hypot(pts[2].x - pts[1].x, pts[2].y - pts[1].y),
+    Math.hypot(pts[3].x - pts[2].x, pts[3].y - pts[2].y),
+    Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y),
+  ];
+  const maxSide = Math.max(...sides);
+  if (maxSide < 1e-10) return pts;
+  const scale = QUAD_FREEFORM_TARGET[size] / maxSide;
+  return pts.map(p => ({ x: p.x * scale, y: p.y * scale }));
+}
+
+function computeQuadFreeformPositions(quadMode, quadValues, quadTransforms, size) {
+  const raw = computeRawQuadVerts(quadMode, quadValues);
+  if (!raw) return null;
+  const scaled = scaleQuadVerts(raw, size);
+  const transformed = applyQuadTransforms(scaled, quadTransforms);
   const cx = transformed.reduce((acc, p) => acc + p.x, 0) / 4;
   const cy = transformed.reduce((acc, p) => acc + p.y, 0) / 4;
   return transformed.map(p => ({ x: p.x, y: p.y, pos: quadLabelPos(p.x, p.y, cx, cy) }));
@@ -932,8 +1067,21 @@ function syntaxCheck(content) {
   }
 
   if (hasQuad) {
-    if (!quadResult.quadType) {
-      errors.push(`"quadrilateral": shape type required (e.g., "square", "rectangle", "parallelogram", "rhombus", "trapezoid", "right trapezoid", "isosceles trapezoid")`);
+    if (!quadResult.quadType && !quadResult.quadMode) {
+      errors.push(`"quadrilateral": shape type required (e.g., "square", "rectangle", "SSSSD", "SSSDD", "SSAAA", "SSSAA")`);
+    }
+    if (quadResult.quadMode) {
+      if (!quadResult.quadValues || quadResult.quadValues.length < 5 || quadResult.quadValues.some(v => isNaN(v) || v <= 0)) {
+        errors.push(`"quadrilateral ${quadResult.quadMode}": expected 5 positive numbers`);
+      } else {
+        const [v1, v2, v3, v4, v5] = quadResult.quadValues;
+        if (quadResult.quadMode === "SSAAA" && v3 + v4 + v5 >= 360)
+          errors.push(`"quadrilateral SSAAA": angles must sum to less than 360°`);
+        if (quadResult.quadMode === "SSSAA" && v4 + v5 >= 360)
+          errors.push(`"quadrilateral SSSAA": angles must sum to less than 360°`);
+        if ((quadResult.quadMode === "SSAAA" || quadResult.quadMode === "SSSAA") && (v4 <= 0 || v5 <= 0))
+          errors.push(`"quadrilateral ${quadResult.quadMode}": angles must be positive`);
+      }
     }
     if (quadResult.labelStr !== null) {
       const parsed = parseQuadLabels(quadResult.labelStr);
@@ -1188,7 +1336,12 @@ function compile(content, size) {
       { x: cx, y: 0, pos: "below right" },
     ];
   } else if (hasQuad) {
-    positions = computeQuadPositions(quadResult.quadType, quadResult.quadTransforms, size);
+    positions = quadResult.quadMode
+      ? (computeQuadFreeformPositions(quadResult.quadMode, quadResult.quadValues, quadResult.quadTransforms, size) ?? [
+          { x: 0, y: 0, pos: "below left" }, { x: 0, y: 4, pos: "above left" },
+          { x: 4, y: 4, pos: "above right" }, { x: 4, y: 0, pos: "below right" },
+        ])
+      : computeQuadPositions(quadResult.quadType, quadResult.quadTransforms, size);
   } else {
     positions = [];
   }
