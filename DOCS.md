@@ -221,7 +221,7 @@ or
 
 ```
 geometry:
-triangle AAS 120 30 2 ABC >>rot >>rot120 >>invert
+triangle AAS 120 30 ABC >>rot >>rot120 >>invert
 ```
 
 `triangle + <congruence rule> + <3 parts> + <name> + [<rotations and inversions>]`
@@ -295,6 +295,27 @@ line midsegment KLM KL LM new G H
 
 `line + <triangle segment name> + <triangle name> + <indicative sides or verteces> + new + <names of new verteces>`
 
+### More triangle - circles
+
+```
+geometry:
+triangle ABC
+circle inscribe ABC new O-OX K L M
+circle circumscribe ABC new O-OX
+```
+
+Inscribing into triangle - KLM are the touchpoints (each is in the opposite of correcpoinding mentioned triangle vertex: ABC - KLM - BC,AC,AB). And Circumscribing around triangle.
+
+### Circle part - tangent
+
+```
+geometry:
+circle O-OX
+line tangent O-OX X new Y
+```
+
+draws a tandeng through point X laying on circle O-OX. Y point is on tangent, a bit further, mostly just to indicate the tangent line later.
+
 ### Point (dividing segment, on circle)
 
 ```
@@ -313,6 +334,8 @@ point A-AB 120 new G
 
 ### Line
 
+Possible issues with ray naming, when line has more than 2 points indicated.
+
 ```
 geometry:
 triangle ABC
@@ -322,11 +345,15 @@ line AB
 line ray BC
 ```
 
-Draws new (or extends existing segment):
+Draws new:
 
 - line
 - line segment
 - line ray
+
+Line segment cuts off the (if already existing) line or ray excess.
+
+Line extends (if already existing) segment or say.
 
 ### Label
 

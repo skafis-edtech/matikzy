@@ -288,3 +288,23 @@ Rotation clockwise (same direction as triangle naming starts). no angle specifie
 ```
 ... >>rot >>rot >>rot125 >>invert
 ```
+
+### circle tangent and other
+
+```
+geometry:
+circle O-OX
+line tangent O-OX X new Y
+line segment XY
+```
+
+line segment XY cuts off the (if existing) line excess.
+
+```
+geometry:
+triangle
+circle inscribe ABC new O-OX K L M
+circle circumscribe ABC new O-OX
+```
+
+Inscribing into triangle - KLM are the touchpoints (each is in the opposite of correcpoinding mentioned triangle vertex: ABC - KLM - BC,AC,AB). And Circumscribing around triangle.

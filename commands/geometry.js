@@ -448,6 +448,9 @@ function parseContent(content) {
   const intersectPointCmds = [];
   const drawCmds = [];
   const circleCmds = [];
+  const inscribedCircleCmds = [];
+  const circumscribedCircleCmds = [];
+  const tangentLineCmds = [];
   const extraErrors = [];
 
   // Pre-scan new point names so "label"/"mark" can reference them.
@@ -466,7 +469,9 @@ function parseContent(content) {
         pointNewNames.add(ws[4]);
       }
     } else if (ws[0] === "circle") {
-      const nm = ws[1] || "O-OX";
+      const isSpec = ws[1] === "inscribe" || ws[1] === "circumscribe";
+      const ni = isSpec ? ws.indexOf("new") : -1;
+      const nm = isSpec ? (ni !== -1 ? (ws[ni + 1] ?? "") : "") : (ws[1] || "O-OX");
       const d = nm.indexOf("-");
       if (d > 0) {
         const ctr = nm.slice(0, d);
@@ -475,6 +480,7 @@ function parseContent(content) {
         circleNewNames.add(ctr);
         if (np) circleNewNames.add(np);
       }
+      if (isSpec && ni !== -1) ws.slice(ni + 2).forEach((n) => circleNewNames.add(n));
     }
   }
   const allPointNames = new Set([
@@ -594,6 +600,12 @@ function parseContent(content) {
         drawCmds.push({ drawType: words[1], pts: words[2] ?? "" });
       } else if (words[1] && words[1].length === 2) {
         drawCmds.push({ drawType: "line", pts: words[1] });
+      } else if (words[1] === "tangent") {
+        if (words.length < 6 || words[4] !== "new") {
+          extraErrors.push(`"line tangent": format is "line tangent <circle> <point> new <name>"`);
+        } else {
+          tangentLineCmds.push({ circleName: words[2], pointName: words[3], newName: words[5] });
+        }
       } else {
         let i = 1;
         let lineType = null;
@@ -633,19 +645,43 @@ function parseContent(content) {
         }
       }
     } else if (words[0] === "circle") {
-      const name = words[1] || "O-OX";
-      const dash = name.indexOf("-");
-      if (dash <= 0 || dash === name.length - 1) {
-        extraErrors.push(
-          `"circle": invalid format "${name}" — expected "center-radiusSide" (e.g. "O-OX")`,
-        );
+      if (words[1] === "inscribe" || words[1] === "circumscribe") {
+        const circleType = words[1];
+        const ni = words.indexOf("new");
+        if (ni === -1 || !words[ni + 1]) {
+          extraErrors.push(`"circle ${circleType}": missing "new <circleName>"`);
+        } else {
+          const triSpec = words[2] ?? "";
+          const circleName = words[ni + 1];
+          const dash = circleName.indexOf("-");
+          if (dash <= 0 || dash === circleName.length - 1) {
+            extraErrors.push(`"circle ${circleType}": invalid circle name "${circleName}" — expected "center-radiusSide"`);
+          } else {
+            const center = circleName.slice(0, dash);
+            const radiusSide = circleName.slice(dash + 1);
+            const northPt = radiusSide.startsWith(center) ? radiusSide.slice(center.length) : radiusSide;
+            if (circleType === "inscribe") {
+              inscribedCircleCmds.push({ triSpec, circleName, center, northPt, touchNames: words.slice(ni + 2) });
+            } else {
+              circumscribedCircleCmds.push({ triSpec, circleName, center, northPt });
+            }
+          }
+        }
       } else {
-        const center = name.slice(0, dash);
-        const radiusSide = name.slice(dash + 1);
-        const northPt = radiusSide.startsWith(center)
-          ? radiusSide.slice(center.length)
-          : radiusSide;
-        circleCmds.push({ name, center, radiusSide, northPt });
+        const name = words[1] || "O-OX";
+        const dash = name.indexOf("-");
+        if (dash <= 0 || dash === name.length - 1) {
+          extraErrors.push(
+            `"circle": invalid format "${name}" — expected "center-radiusSide" (e.g. "O-OX")`,
+          );
+        } else {
+          const center = name.slice(0, dash);
+          const radiusSide = name.slice(dash + 1);
+          const northPt = radiusSide.startsWith(center)
+            ? radiusSide.slice(center.length)
+            : radiusSide;
+          circleCmds.push({ name, center, radiusSide, northPt });
+        }
       }
     } else {
       extraErrors.push(`Unknown command: "${line}"`);
@@ -664,6 +700,9 @@ function parseContent(content) {
     intersectPointCmds,
     drawCmds,
     circleCmds,
+    inscribedCircleCmds,
+    circumscribedCircleCmds,
+    tangentLineCmds,
     hasTriangle,
     extraErrors,
   };
@@ -686,6 +725,9 @@ function syntaxCheck(content) {
     intersectPointCmds,
     drawCmds,
     circleCmds,
+    inscribedCircleCmds,
+    circumscribedCircleCmds,
+    tangentLineCmds,
     hasTriangle,
     extraErrors,
   } = parseContent(content);
@@ -760,6 +802,15 @@ function syntaxCheck(content) {
     circleKnownNames.push(center);
     if (northPt) circleKnownNames.push(northPt);
   }
+  for (const { center, northPt, touchNames } of inscribedCircleCmds) {
+    circleKnownNames.push(center);
+    if (northPt) circleKnownNames.push(northPt);
+    touchNames.forEach((n) => circleKnownNames.push(n));
+  }
+  for (const { center, northPt } of circumscribedCircleCmds) {
+    circleKnownNames.push(center);
+    if (northPt) circleKnownNames.push(northPt);
+  }
   const allKnownNames = new Set([
     ...vertexNames,
     ...pointCmds.map((c) => c.name),
@@ -767,6 +818,7 @@ function syntaxCheck(content) {
     ...intersectPointCmds.map((c) => c.name),
     ...circleKnownNames,
     ...lineCmds.flatMap((c) => c.newNames ?? []),
+    ...tangentLineCmds.map((c) => c.newName),
   ]);
 
   for (const { spec } of angleLabelCmds) {
@@ -841,6 +893,35 @@ function syntaxCheck(content) {
     }
   }
 
+  for (const { circleName, pointName, newName } of tangentLineCmds) {
+    if (!circleCmds.some((c) => c.name === circleName)) {
+      errors.push(`"line tangent": unknown circle "${circleName}"`);
+    }
+    if (!allKnownNames.has(pointName)) {
+      errors.push(`"line tangent": unknown point "${pointName}"`);
+    }
+    if (!newName || !/^\S+$/.test(newName)) {
+      errors.push(`"line tangent": invalid name "${newName}"`);
+    }
+  }
+
+  for (const { triSpec, circleName, touchNames } of inscribedCircleCmds) {
+    const tvChars = (triSpec ?? "").split("");
+    if (tvChars.length !== 3 || !tvChars.every((c) => vertexNames.includes(c)))
+      errors.push(`"circle inscribe": invalid triangle spec "${triSpec}"`);
+    if (touchNames.length !== 0 && touchNames.length !== 3)
+      errors.push(`"circle inscribe": expects 0 or 3 touch point names after circle name, got ${touchNames.length}`);
+    touchNames.forEach((n) => {
+      if (!n || !/^\S+$/.test(n)) errors.push(`"circle inscribe": invalid touch point name "${n}"`);
+    });
+  }
+
+  for (const { triSpec } of circumscribedCircleCmds) {
+    const tvChars = (triSpec ?? "").split("");
+    if (tvChars.length !== 3 || !tvChars.every((c) => vertexNames.includes(c)))
+      errors.push(`"circle circumscribe": invalid triangle spec "${triSpec}"`);
+  }
+
   for (const { lineType, triangleSpec, specWords, newNames } of lineCmds) {
     const tvChars = (triangleSpec ?? "").split("");
     if (
@@ -905,6 +986,9 @@ function compile(content, size) {
     intersectPointCmds,
     drawCmds,
     circleCmds,
+    inscribedCircleCmds,
+    circumscribedCircleCmds,
+    tangentLineCmds,
     hasTriangle,
   } = parseContent(content);
 
@@ -1136,6 +1220,21 @@ function compile(content, size) {
     };
   }
 
+  // Tangent line: place new point B along the tangent at the given circle point.
+  for (const { circleName, pointName, newName } of tangentLineCmds) {
+    const circleCmd = circleCmds.find((c) => c.name === circleName);
+    if (!circleCmd) continue;
+    const center = newPtsMap[circleCmd.center];
+    const pt = lookupPt(pointName);
+    if (!center || !pt) continue;
+    const rdx = pt.x - center.x, rdy = pt.y - center.y;
+    const rlen = Math.hypot(rdx, rdy);
+    if (rlen < 1e-10) continue;
+    const tx = -rdy / rlen, ty = rdx / rlen;
+    const bOff = circleR * 0.7;
+    newPtsMap[newName] = { x: pt.x + bOff * tx, y: pt.y + bOff * ty, originX: center.x, originY: center.y };
+  }
+
   // Compute positions for line-line intersection points (after all other points are placed).
   for (const { spec1, spec2, name } of intersectPointCmds) {
     const p1 = lookupPt(spec1[0]), p2 = lookupPt(spec1[1]);
@@ -1148,6 +1247,54 @@ function compile(content, size) {
     const gx = p3.x - p1.x, gy = p3.y - p1.y;
     const t = (gy * fx - gx * fy) / det;
     newPtsMap[name] = { x: p1.x + t * ex, y: p1.y + t * ey };
+  }
+
+  // Inscribed and circumscribed circles: compute geometry from triangle positions.
+  const computedCircleGeoms = [];
+  for (const { triSpec, center, northPt, touchNames } of inscribedCircleCmds) {
+    const triIdx = triSpec.split("").map((c) => labels.findIndex((l) => l.label === c));
+    if (triIdx.some((i) => i === -1)) continue;
+    const [A, B, C] = triIdx.map((i) => positions[i]);
+    const a = Math.hypot(C.x - B.x, C.y - B.y);
+    const b = Math.hypot(A.x - C.x, A.y - C.y);
+    const c2 = Math.hypot(B.x - A.x, B.y - A.y);
+    const s = (a + b + c2) / 2;
+    const area = Math.abs((B.x - A.x) * (C.y - A.y) - (C.x - A.x) * (B.y - A.y)) / 2;
+    const r = area / s;
+    const cx = (a * A.x + b * B.x + c2 * C.x) / (a + b + c2);
+    const cy = (a * A.y + b * B.y + c2 * C.y) / (a + b + c2);
+    const tcx = (A.x + B.x + C.x) / 3, tcy = (A.y + B.y + C.y) / 3;
+    newPtsMap[center] = { x: cx, y: cy, pos: triLabelPos(cx, cy, tcx, tcy) };
+    if (northPt) newPtsMap[northPt] = { x: cx + r, y: cy, pos: "right" };
+    if (touchNames.length >= 3) {
+      // touch on BC (side a): from B, distance s-b
+      const tBC = (s - b) / a;
+      newPtsMap[touchNames[0]] = { x: B.x + tBC * (C.x - B.x), y: B.y + tBC * (C.y - B.y), originX: cx, originY: cy };
+      // touch on CA (side b): from C, distance s-c2
+      const tCA = (s - c2) / b;
+      newPtsMap[touchNames[1]] = { x: C.x + tCA * (A.x - C.x), y: C.y + tCA * (A.y - C.y), originX: cx, originY: cy };
+      // touch on AB (side c): from A, distance s-a
+      const tAB = (s - a) / c2;
+      newPtsMap[touchNames[2]] = { x: A.x + tAB * (B.x - A.x), y: A.y + tAB * (B.y - A.y), originX: cx, originY: cy };
+    }
+    computedCircleGeoms.push({ cx, cy, r });
+  }
+  for (const { triSpec, center, northPt } of circumscribedCircleCmds) {
+    const triIdx = triSpec.split("").map((c) => labels.findIndex((l) => l.label === c));
+    if (triIdx.some((i) => i === -1)) continue;
+    const [A, B, C] = triIdx.map((i) => positions[i]);
+    const ax = B.x - A.x, ay = B.y - A.y;
+    const bx = C.x - A.x, by = C.y - A.y;
+    const D = 2 * (ax * by - ay * bx);
+    if (Math.abs(D) < 1e-10) continue;
+    const ux = (by * (ax * ax + ay * ay) - ay * (bx * bx + by * by)) / D;
+    const uy = (ax * (bx * bx + by * by) - bx * (ax * ax + ay * ay)) / D;
+    const cx = A.x + ux, cy = A.y + uy;
+    const r = Math.hypot(A.x - cx, A.y - cy);
+    const tcx = (A.x + B.x + C.x) / 3, tcy = (A.y + B.y + C.y) / 3;
+    newPtsMap[center] = { x: cx, y: cy, pos: triLabelPos(cx, cy, tcx, tcy) };
+    if (northPt) newPtsMap[northPt] = { x: cx + r, y: cy, pos: "right" };
+    computedCircleGeoms.push({ cx, cy, r });
   }
 
   // Bounding box of all content, used to clip full-line draw commands.
@@ -1164,6 +1311,12 @@ function compile(content, size) {
       bbPts.push({ x: cp.x, y: cp.y - circleR });
       bbPts.push({ x: cp.x, y: cp.y + circleR });
     }
+  }
+  for (const { cx, cy, r } of computedCircleGeoms) {
+    bbPts.push({ x: cx - r, y: cy });
+    bbPts.push({ x: cx + r, y: cy });
+    bbPts.push({ x: cx, y: cy - r });
+    bbPts.push({ x: cx, y: cy + r });
   }
   let bbMinX = Infinity,
     bbMaxX = -Infinity,
@@ -1188,6 +1341,21 @@ function compile(content, size) {
     );
   }
 
+  // A segment suppresses any line/ray/tangent whose infinite line it lies on (geometric check).
+  const segmentEndpoints = drawCmds
+    .filter((d) => d.drawType === "segment")
+    .map((d) => ({ sp1: lookupPt(d.pts[0]), sp2: lookupPt(d.pts[1]) }))
+    .filter(({ sp1, sp2 }) => sp1 && sp2);
+  const segmentCoversLine = (lp1, lp2) => {
+    const dx = lp2.x - lp1.x, dy = lp2.y - lp1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-10) return false;
+    return segmentEndpoints.some(({ sp1, sp2 }) =>
+      Math.abs(dx * (sp1.y - lp1.y) - dy * (sp1.x - lp1.x)) / len < 1e-6 &&
+      Math.abs(dx * (sp2.y - lp1.y) - dy * (sp2.x - lp1.x)) / len < 1e-6
+    );
+  };
+
   // Direct line / segment / ray draw commands.
   if (drawCmds.length > 0) {
     const extAmt = { small: 0.5, medium: 0.8, large: 1.2 }[size];
@@ -1198,6 +1366,7 @@ function compile(content, size) {
       const p1 = idx1 !== -1 ? positions[idx1] : (newPtsMap[pts[0]] ?? null);
       const p2 = idx2 !== -1 ? positions[idx2] : (newPtsMap[pts[1]] ?? null);
       if (!p1 || !p2) continue;
+      if (drawType !== "segment" && segmentCoversLine(p1, p2)) continue;
       const dx = p2.x - p1.x,
         dy = p2.y - p1.y;
       const len = Math.hypot(dx, dy);
@@ -1253,6 +1422,46 @@ function compile(content, size) {
       );
     }
   }
+  // Inscribed / circumscribed circles.
+  if (computedCircleGeoms.length > 0) {
+    lines.push("");
+    for (const { cx, cy, r } of computedCircleGeoms) {
+      lines.push(`\\draw[line width=1.5pt] (${f(cx)},${f(cy)}) circle (${f(r)});`);
+    }
+  }
+  // Tangent lines: drawn as full lines clipped to the padded bounding box.
+  if (tangentLineCmds.length > 0) {
+    lines.push("");
+    for (const { circleName, pointName, newName } of tangentLineCmds) {
+      const lp1 = lookupPt(pointName), lp2 = lookupPt(newName);
+      if (lp1 && lp2 && segmentCoversLine(lp1, lp2)) continue;
+      const circleCmd = circleCmds.find((c) => c.name === circleName);
+      if (!circleCmd) continue;
+      const center = newPtsMap[circleCmd.center];
+      const pt = lookupPt(pointName);
+      if (!center || !pt) continue;
+      const rdx = pt.x - center.x, rdy = pt.y - center.y;
+      const rlen = Math.hypot(rdx, rdy);
+      if (rlen < 1e-10) continue;
+      const tx = -rdy / rlen, ty = rdx / rlen;
+      let tMin = -Infinity, tMax = Infinity;
+      if (Math.abs(tx) > 1e-10) {
+        const ta = (bbX0 - pt.x) / tx, tb = (bbX1 - pt.x) / tx;
+        tMin = Math.max(tMin, Math.min(ta, tb));
+        tMax = Math.min(tMax, Math.max(ta, tb));
+      }
+      if (Math.abs(ty) > 1e-10) {
+        const ta = (bbY0 - pt.y) / ty, tb = (bbY1 - pt.y) / ty;
+        tMin = Math.max(tMin, Math.min(ta, tb));
+        tMax = Math.min(tMax, Math.max(ta, tb));
+      }
+      if (tMin >= tMax) continue;
+      lines.push(
+        `\\draw[line width=1pt] (${f(pt.x + tMin * tx)},${f(pt.y + tMin * ty)}) -- (${f(pt.x + tMax * tx)},${f(pt.y + tMax * ty)});`
+      );
+    }
+  }
+
   lines.push("");
 
   for (const { spec, text, labelPos } of vertexLabelCmds) {
