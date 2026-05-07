@@ -308,3 +308,7 @@ circle circumscribe ABC new O-OX
 ```
 
 Inscribing into triangle - KLM are the touchpoints (each is in the opposite of correcpoinding mentioned triangle vertex: ABC - KLM - BC,AC,AB). And Circumscribing around triangle.
+
+TODO:
+
+- in geometry - area shading.
