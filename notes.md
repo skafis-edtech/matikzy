@@ -78,7 +78,7 @@ transform:
 
 `angle right (x1;y1) (x2;y2) (x3;y3) label`
 
-TODO:
+Fixes done:
 
 - small graph dots not scale. DONE
 - parabola with 3 points. DONE
@@ -267,4 +267,24 @@ TODO: FIX THIS SYNTAX WITH DASHES
 
 ```
 point AB intersect BC new K
+```
+
+### triangle with lenths and angles and rotation
+
+Around 3-6 point length sides. Based on triangle congruence rules:
+
+SSS, SAS, ASA and AAS.
+
+```
+geometry:
+triangle SSS 3 4 6 ABC
+triangle SAS 3 120 4 ABC
+triangle ASA 120 3 30 ABC
+triangle AAS 120 30 3 ABC
+```
+
+Rotation clockwise (same direction as triangle naming starts). no angle specified - rotate so next side is on bottom. Or inverting.
+
+```
+... >>rot >>rot >>rot125 >>invert
 ```

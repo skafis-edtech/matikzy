@@ -212,10 +212,19 @@ OR
 
 ```
 geometry:
-triangle right isosceles A[B]C
+triangle right isosceles A[B]C >>rot >>rot120 >>invert
 ```
 
-`triangle + <angular type> + <sides type> + <name + special vertex>`
+`triangle + <angular type> + <sides type> + <name + special vertex> + [<rotations and inversions>]`
+
+or
+
+```
+geometry:
+triangle AAS 120 30 2 ABC >>rot >>rot120 >>invert
+```
+
+`triangle + <congruence rule> + <3 parts> + <name> + [<rotations and inversions>]`
 
 angular types:
 
@@ -228,6 +237,20 @@ side types:
 - scalene (default, if not mentioned)
 - isosceles (special vertex - different one, default B, if acute)
 - equilateral (only acute)
+
+congruence rules:
+
+- SSS, SAS, ASA and AAS.
+
+3 parts:
+
+- 3 numbers, in congruence rule order sides and angles.
+
+rotation (clockwise) and inversion:
+
+- `>>rot` makes next side of triangle "sitting" horizontally.
+- `>>rot120` or `>>rot-240` tells in degrees the rotation (as you see in eexample it can be a negative number).
+- `>>invert` mirrors by Y axis.
 
 ### Naming
 
@@ -365,6 +388,23 @@ mark angle B I mark angle C right
 
 ![alt text](image-7.png)
 
+```
+geometry:
+circle O-OX
+point O-OX 40 new D
+point O-OX -30 new B
+point O-OX 130 new C
+point O-OX -150 new A
+mark A mark B mark C mark D
+label A label B label C label D
+line segment AD line segment CB
+point AD intersect BC new E
+mark E label E -- bottom
+label CE 10 label ED 6 label AE 4
+```
+
+![alt text](image-8.png)
+
 ### Issues
 
 - not able to make arbitraty basis triangle (by side lengths, by angle sizes)
@@ -393,11 +433,3 @@ interval-arcs[closed-only]: ^{S'(a)}_{S(a)} \_\_ (0) _+_up |1\frac13| _-\_down (
 ```
 
 ![alt text](image-4.png)
-
-```
-
-```
-
-```
-
-```

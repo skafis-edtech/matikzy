@@ -1,5 +1,6 @@
 const ANGLE_TYPES = new Set(["acute", "right", "obtuse"]);
 const SIDE_TYPES = new Set(["equilateral", "isosceles", "scalene"]);
+const VALID_TRI_MODES = new Set(["SSS", "SAS", "ASA", "AAS"]);
 
 // Parse "ABC", "[A]BC", "A(B)C", "[A](B)C", "DEF" etc. into 3 vertex descriptors.
 // mod: "none" | "mark" ([] = special angle) | "hide" (() = no label rendered)
@@ -24,11 +25,52 @@ function parseLabels(str) {
 function parseTriangle(content) {
   const words = content.trim().split(/\s+/);
   if (words[0] !== "triangle")
-    return { angle: null, side: null, unknown: words, labelStr: null };
+    return { angle: null, side: null, unknown: words, labelStr: null, triMode: null, triValues: null, triTransforms: [] };
 
-  let angle = null,
-    side = null,
-    labelStr = null;
+  // New numeric format: triangle SSS/SAS/ASA/AAS v1 v2 v3 [label] [>>transforms...]
+  if (words.length >= 2 && VALID_TRI_MODES.has(words[1])) {
+    const mode = words[1];
+    const unknown = [];
+
+    let transformStart = words.length;
+    for (let i = 2; i < words.length; i++) {
+      if (words[i].startsWith(">>")) { transformStart = i; break; }
+    }
+
+    const mainWords = words.slice(2, transformStart);
+    const transformWords = words.slice(transformStart);
+
+    const numericWords = mainWords.filter(w => /^-?\d*\.?\d+$/.test(w));
+    const nonNumeric = mainWords.filter(w => !/^-?\d*\.?\d+$/.test(w));
+
+    let triValues = null;
+    if (numericWords.length >= 3) triValues = numericWords.slice(0, 3).map(Number);
+    if (numericWords.length > 3) unknown.push(...numericWords.slice(3));
+
+    let labelStr = null;
+    for (const w of nonNumeric) {
+      if (labelStr === null && parseLabels(w)) labelStr = w;
+      else unknown.push(w);
+    }
+
+    const triTransforms = [];
+    for (const tw of transformWords) {
+      if (tw === ">>rot") {
+        triTransforms.push({ type: "rot", degrees: null });
+      } else if (tw === ">>invert") {
+        triTransforms.push({ type: "invert" });
+      } else if (/^>>rot-?\d+(\.\d+)?$/.test(tw)) {
+        triTransforms.push({ type: "rot", degrees: parseFloat(tw.slice(5)) });
+      } else {
+        unknown.push(tw);
+      }
+    }
+
+    return { angle: null, side: null, unknown, labelStr, triMode: mode, triValues, triTransforms };
+  }
+
+  // Original keyword format
+  let angle = null, side = null, labelStr = null;
   const unknown = [];
 
   for (const word of words.slice(1)) {
@@ -43,7 +85,7 @@ function parseTriangle(content) {
     }
   }
 
-  return { angle, side, unknown, labelStr };
+  return { angle, side, unknown, labelStr, triMode: null, triValues: null, triTransforms: [] };
 }
 
 // COORDS[side][angle] = coords for default [A]BC (special angle at position 0, bottom-left).
@@ -265,6 +307,114 @@ function isValidSideSpec(spec, vertexLabels) {
   return false;
 }
 
+// --- Numeric triangle construction helpers ---
+
+function computeRawTriVerts(mode, values) {
+  const deg2rad = d => (d * Math.PI) / 180;
+  if (mode === "SSS") {
+    const [sAB, sBC, sCA] = values;
+    const cosA = Math.max(-1, Math.min(1, (sAB * sAB + sCA * sCA - sBC * sBC) / (2 * sAB * sCA)));
+    const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+    return [{ x: 0, y: 0 }, { x: sAB, y: 0 }, { x: sCA * cosA, y: sCA * sinA }];
+  }
+  if (mode === "SAS") {
+    const [s1, angleA, s2] = values;
+    const r = deg2rad(angleA);
+    return [{ x: 0, y: 0 }, { x: s1, y: 0 }, { x: s2 * Math.cos(r), y: s2 * Math.sin(r) }];
+  }
+  if (mode === "ASA") {
+    const [angleA, sAB, angleB] = values;
+    const angleC = 180 - angleA - angleB;
+    const rA = deg2rad(angleA), rB = deg2rad(angleB), rC = deg2rad(angleC);
+    const AC = (Math.sin(rC) > 1e-10) ? sAB * Math.sin(rB) / Math.sin(rC) : 0;
+    return [{ x: 0, y: 0 }, { x: sAB, y: 0 }, { x: AC * Math.cos(rA), y: AC * Math.sin(rA) }];
+  }
+  if (mode === "AAS") {
+    const [angleA, angleB, sideBC] = values;
+    const angleC = 180 - angleA - angleB;
+    const rA = deg2rad(angleA), rB = deg2rad(angleB), rC = deg2rad(angleC);
+    const sinA = Math.sin(rA);
+    const AB = sinA > 1e-10 ? sideBC * Math.sin(rC) / sinA : 0;
+    const AC = sinA > 1e-10 ? sideBC * Math.sin(rB) / sinA : 0;
+    return [{ x: 0, y: 0 }, { x: AB, y: 0 }, { x: AC * Math.cos(rA), y: AC * Math.sin(rA) }];
+  }
+  return null;
+}
+
+const TRI_LONGEST_TARGET = { small: 3.1, medium: 5.0, large: 7.7 };
+
+function scaleTriVerts(pts, size) {
+  const sides = [
+    Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y),
+    Math.hypot(pts[2].x - pts[1].x, pts[2].y - pts[1].y),
+    Math.hypot(pts[0].x - pts[2].x, pts[0].y - pts[2].y),
+  ];
+  const maxSide = Math.max(...sides);
+  if (maxSide < 1e-10) return pts;
+  const scale = TRI_LONGEST_TARGET[size] / maxSide;
+  return pts.map(p => ({ x: p.x * scale, y: p.y * scale }));
+}
+
+// Rotate all points clockwise by angleDeg.
+function rotVertsBy(pts, angleDeg) {
+  const rad = (-angleDeg * Math.PI) / 180;
+  return pts.map(p => ({
+    x: p.x * Math.cos(rad) - p.y * Math.sin(rad),
+    y: p.x * Math.sin(rad) + p.y * Math.cos(rad),
+  }));
+}
+
+// Translate/rotate so pts[i1] is at origin and pts[i2] is on positive x-axis.
+// Flips vertically if the third vertex ends up below the x-axis.
+function sideToHorizontal(pts, i1, i2) {
+  const ox = pts[i1].x, oy = pts[i1].y;
+  let tpts = pts.map(p => ({ x: p.x - ox, y: p.y - oy }));
+  const angleDeg = (Math.atan2(tpts[i2].y, tpts[i2].x) * 180) / Math.PI;
+  tpts = rotVertsBy(tpts, angleDeg);
+  const i3 = [0, 1, 2].find(i => i !== i1 && i !== i2);
+  if (tpts[i3].y < 0) tpts = tpts.map(p => ({ x: p.x, y: -p.y }));
+  return tpts;
+}
+
+function applyTriTransforms(pts, transforms) {
+  let cur = pts.map(p => ({ ...p }));
+  const sideVerts = [[0, 1], [1, 2], [2, 0]];
+  let baseIdx = 0;
+
+  for (const t of transforms) {
+    if (t.type === "invert") {
+      cur = cur.map(p => ({ x: -p.x, y: p.y }));
+    } else if (t.type === "rot" && t.degrees === null) {
+      baseIdx = (baseIdx + 1) % 3;
+      const [i1, i2] = sideVerts[baseIdx];
+      cur = sideToHorizontal(cur, i1, i2);
+    } else if (t.type === "rot") {
+      cur = rotVertsBy(cur, t.degrees);
+    }
+  }
+
+  const minY = Math.min(...cur.map(p => p.y));
+  const minX = Math.min(...cur.map(p => p.x));
+  return cur.map(p => ({ x: p.x - minX, y: p.y - minY }));
+}
+
+function triLabelPos(x, y, cx, cy) {
+  const dy = y - cy, dx = x - cx;
+  const vert = dy > 0.1 ? "above" : "below";
+  const horiz = dx < -0.2 ? " left" : dx > 0.2 ? " right" : "";
+  return vert + horiz;
+}
+
+function computeTrianglePositions(triMode, triValues, triTransforms, size) {
+  const raw = computeRawTriVerts(triMode, triValues);
+  if (!raw) return null;
+  const scaled = scaleTriVerts(raw, size);
+  const transformed = applyTriTransforms(scaled, triTransforms);
+  const cx = (transformed[0].x + transformed[1].x + transformed[2].x) / 3;
+  const cy = (transformed[0].y + transformed[1].y + transformed[2].y) / 3;
+  return transformed.map(p => ({ x: p.x, y: p.y, pos: triLabelPos(p.x, p.y, cx, cy) }));
+}
+
 // Splits content (any whitespace layout) into command chunks by keyword boundaries.
 function parseContent(content) {
   const lines = content
@@ -275,7 +425,7 @@ function parseContent(content) {
   const hasTriangle = (lines[0] || "").split(/\s+/)[0] === "triangle";
   const triangleResult = hasTriangle
     ? parseTriangle(lines[0] || "")
-    : { angle: null, side: null, unknown: [], labelStr: null };
+    : { angle: null, side: null, unknown: [], labelStr: null, triMode: null, triValues: null, triTransforms: [] };
   const commandLines = lines.slice(hasTriangle ? 1 : 0);
 
   const vertexNames = hasTriangle
@@ -526,6 +676,8 @@ function syntaxCheck(content) {
     side,
     unknown,
     labelStr,
+    triMode,
+    triValues,
     angleLabelCmds,
     sideLabelCmds,
     lineCmds,
@@ -552,9 +704,40 @@ function syntaxCheck(content) {
     );
   }
 
-  if (side === "equilateral" && angle === "right")
+  if (hasTriangle && triMode === null) {
+    const w1 = (content.trim().split(/\s+/)[1] ?? "");
+    if (w1.length >= 2 && /^[SA]+$/.test(w1)) {
+      errors.push(`"triangle ${w1}": invalid combination — use SSS, SAS, ASA, or AAS`);
+    }
+  }
+
+  if (triMode !== null) {
+    if (!triValues || triValues.length < 3 || triValues.some(v => isNaN(v) || v <= 0)) {
+      errors.push(`"triangle ${triMode}": expected 3 positive numbers`);
+    } else {
+      if (triMode === "SSS") {
+        const [a, b, c] = triValues;
+        if (a + b <= c || a + c <= b || b + c <= a)
+          errors.push(`"triangle SSS": triangle inequality violated`);
+      } else if (triMode === "SAS") {
+        const ang = triValues[1];
+        if (ang <= 0 || ang >= 180)
+          errors.push(`"triangle SAS": angle must be between 0 and 180 degrees (exclusive)`);
+      } else if (triMode === "ASA") {
+        const [a1, , a2] = triValues;
+        if (a1 <= 0 || a2 <= 0 || a1 + a2 >= 180)
+          errors.push(`"triangle ASA": angles must be positive and sum to less than 180`);
+      } else if (triMode === "AAS") {
+        const [a1, a2] = triValues;
+        if (a1 <= 0 || a2 <= 0 || a1 + a2 >= 180)
+          errors.push(`"triangle AAS": angles must be positive and sum to less than 180`);
+      }
+    }
+  }
+
+  if (!triMode && side === "equilateral" && angle === "right")
     errors.push("Equilateral triangles cannot be right-angled.");
-  if (side === "equilateral" && angle === "obtuse")
+  if (!triMode && side === "equilateral" && angle === "obtuse")
     errors.push("Equilateral triangles cannot be obtuse.");
 
   if (labelStr !== null) {
@@ -709,6 +892,9 @@ function compile(content, size) {
     angle: rawAngle,
     side: rawSide,
     labelStr,
+    triMode,
+    triValues,
+    triTransforms,
     vertexLabelCmds,
     angleLabelCmds,
     sideLabelCmds,
@@ -721,8 +907,6 @@ function compile(content, size) {
     circleCmds,
     hasTriangle,
   } = parseContent(content);
-  const angle = rawAngle ?? "acute";
-  const side = rawSide ?? "scalene";
 
   // Labels map directly by position order. No mark = use DEFAULT_SPECIAL_POS.
   const labels = hasTriangle
@@ -733,18 +917,28 @@ function compile(content, size) {
       ])
     : [];
 
-  const markedIdx = labels.findIndex((v) => v.mod === "mark");
-  const specialPos =
-    markedIdx !== -1 ? markedIdx : (DEFAULT_SPECIAL_POS[side]?.[angle] ?? 0);
-  const altSizeMap = COORDS_ALT[side]?.[angle]?.[specialPos];
-  const { bx, by, cx, bPos } = (altSizeMap ?? COORDS[side][angle])[size];
-
-  // Positions are always fixed: [0]=bottom-left, [1]=top, [2]=bottom-right.
-  const positions = [
-    { x: 0, y: 0, pos: "below left" },
-    { x: bx, y: by, pos: bPos },
-    { x: cx, y: 0, pos: "below right" },
-  ];
+  let positions;
+  if (triMode) {
+    const computed = computeTrianglePositions(triMode, triValues, triTransforms, size);
+    positions = computed ?? [
+      { x: 0, y: 0, pos: "below left" },
+      { x: 2.5, y: 4, pos: "above" },
+      { x: 5, y: 0, pos: "below right" },
+    ];
+  } else {
+    const angle = rawAngle ?? "acute";
+    const side = rawSide ?? "scalene";
+    const markedIdx = labels.findIndex((v) => v.mod === "mark");
+    const specialPos =
+      markedIdx !== -1 ? markedIdx : (DEFAULT_SPECIAL_POS[side]?.[angle] ?? 0);
+    const altSizeMap = COORDS_ALT[side]?.[angle]?.[specialPos];
+    const { bx, by, cx, bPos } = (altSizeMap ?? COORDS[side][angle])[size];
+    positions = [
+      { x: 0, y: 0, pos: "below left" },
+      { x: bx, y: by, pos: bPos },
+      { x: cx, y: 0, pos: "below right" },
+    ];
+  }
 
   // Shared size-scaled mark/arc constants (used by both angle labels and mark rendering).
   const arcBase = { small: 0.215, medium: 0.35, large: 0.539 }[size];
@@ -988,8 +1182,9 @@ function compile(content, size) {
 
   const lines = [];
   if (hasTriangle) {
+    const [p0, p1, p2] = positions;
     lines.push(
-      `\\draw[line width=1.5pt] (0,0) -- (${bx},${by}) -- (${cx},0) -- cycle;`,
+      `\\draw[line width=1.5pt] (${f(p0.x)},${f(p0.y)}) -- (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)}) -- cycle;`,
     );
   }
 
