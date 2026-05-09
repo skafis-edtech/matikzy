@@ -2,8 +2,6 @@ import express from "express";
 import crypto from "crypto";
 import Redis from "ioredis";
 import zlib from "zlib";
-import rateLimit from "express-rate-limit";
-import RedisStore from "rate-limit-redis";
 import { load, tex, dvi2svg } from "node-tikzjax";
 import { compile as compileMatikzy } from "./matikzy.js";
 await load();
@@ -30,17 +28,6 @@ if (process.env.REDIS_URL) {
     redis = null;
   }
 }
-
-const limiter = rateLimit({
-  windowMs: 60_000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Rate limit exceeded",
-  store: redis
-    ? new RedisStore({ sendCommand: (...args) => redis.call(...args) })
-    : undefined,
-});
 
 async function inc(key) {
   if (redis) {
@@ -158,7 +145,7 @@ function withRenderLock(fn) {
   return next;
 }
 
-app.post("/render", limiter, async (req, res) => {
+app.post("/render", async (req, res) => {
   const { lang, content } = req.body ?? {};
   if (!lang || !content) {
     res

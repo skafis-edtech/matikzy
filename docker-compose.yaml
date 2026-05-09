@@ -27,3 +27,20 @@ services:
 
 volumes:
   redis-tikz:
+
+# tikz.simtukas.lt {
+#     @render {
+#         method POST
+#         path /render
+#     }
+
+#     rate_limit @render {
+#         zone render {
+#             key     {remote_host}
+#             events  60
+#             window  1m
+#         }
+#     }
+
+#     reverse_proxy tikz-server:3000
+# }
