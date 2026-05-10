@@ -449,6 +449,21 @@ mark BCA right
 
 Marks point as point, segment with ticks in the center, angle with arcs or right angle. point has no variation in marking, segment and angle Is indicates number of ticks/arcs. Default is enuerating I, II, III.... For angles can be "right" instead of Is.
 
+### Area
+
+```
+geometry:
+circle O-OX
+point O-OX 30 new A
+point O-OX -30 new B
+line segment OA
+line segment OB
+// line segment AB
+area OAB
+```
+
+Depending on if the line segment AB exists or not, a sector or triangle would be filled out.
+
 ### Examples
 
 ```

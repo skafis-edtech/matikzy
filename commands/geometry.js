@@ -690,7 +690,7 @@ function computeTrianglePositions(triMode, triValues, triTransforms, size) {
 function parseContent(content) {
   const lines = content
     .trim()
-    .split(/(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle)\b)/)
+    .split(/(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area)\b)/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   const hasTriangle = (lines[0] || "").split(/\s+/)[0] === "triangle";
@@ -726,6 +726,7 @@ function parseContent(content) {
   const angleLabelCmds = [];
   const sideLabelCmds = [];
   const arcLabelCmds = [];
+  const areaFillCmds = [];
   const markCmds = [];
   const lineCmds = [];
   const pointCmds = [];
@@ -830,6 +831,10 @@ function parseContent(content) {
           sideLabelCmds.push({ sideSpec: spec, labelText, labelSide, labelOrient });
         }
       }
+    } else if (words[0] === "area") {
+      const pts = (words[1] ?? "").split("");
+      const color = words[2] ?? null;
+      areaFillCmds.push({ pts, color });
     } else if (words[0] === "mark") {
       if (words.length < 2) {
         extraErrors.push(`"mark" requires at least a specification: "${line}"`);
@@ -991,6 +996,7 @@ function parseContent(content) {
     angleLabelCmds,
     sideLabelCmds,
     arcLabelCmds,
+    areaFillCmds,
     markCmds,
     lineCmds,
     pointCmds,
@@ -1020,6 +1026,7 @@ function syntaxCheck(content) {
     angleLabelCmds,
     sideLabelCmds,
     arcLabelCmds,
+    areaFillCmds,
     lineCmds,
     pointCmds,
     circlePointCmds,
@@ -1324,6 +1331,7 @@ function compile(content, size) {
     angleLabelCmds,
     sideLabelCmds,
     arcLabelCmds,
+    areaFillCmds,
     markCmds,
     lineCmds,
     pointCmds,
@@ -1693,7 +1701,50 @@ function compile(content, size) {
   const bbY0 = bbMinY - bbMargin,
     bbY1 = bbMaxY + bbMargin;
 
-  const lines = [];
+  const buildFillLines = () => {
+    const out = [];
+    for (const { pts, color } of areaFillCmds) {
+      if (pts.length < 2) continue;
+      const first = lookupPt(pts[0]);
+      if (!first) continue;
+      const fillColor = color ?? "gray!25";
+      let path = `(${f(first.x)},${f(first.y)})`;
+      const n = pts.length;
+      for (let i = 0; i < n; i++) {
+        const curr = lookupPt(pts[i]);
+        const next = lookupPt(pts[(i + 1) % n]);
+        if (!curr || !next) continue;
+        const na = pts[i], nb = pts[(i + 1) % n];
+        const hasExplicitSegment = drawCmds.some(
+          (d) => d.drawType === "segment" &&
+            ((d.pts[0] === na && d.pts[1] === nb) || (d.pts[0] === nb && d.pts[1] === na))
+        );
+        const onSameCircle =
+          !hasExplicitSegment &&
+          curr.originX !== undefined && next.originX !== undefined &&
+          Math.abs(curr.originX - next.originX) < 1e-6 &&
+          Math.abs(curr.originY - next.originY) < 1e-6;
+        if (onSameCircle) {
+          const cx = curr.originX, cy = curr.originY;
+          const R = Math.hypot(curr.x - cx, curr.y - cy);
+          let angA = (Math.atan2(curr.y - cy, curr.x - cx) * 180) / Math.PI;
+          let angB = (Math.atan2(next.y - cy, next.x - cx) * 180) / Math.PI;
+          while (angB < angA) angB += 360;
+          if (angB - angA > 180) angB -= 360;
+          path += ` arc (${f(angA)}:${f(angB)}:${f(R)})`;
+        } else if (i === n - 1) {
+          path += ` -- cycle`;
+        } else {
+          path += ` -- (${f(next.x)},${f(next.y)})`;
+        }
+      }
+      if (!path.endsWith("cycle")) path += ` -- cycle`;
+      out.push(`\\fill[${fillColor}] ${path};`);
+    }
+    return out;
+  };
+
+  const lines = [...buildFillLines()];
   if (hasTriangle) {
     const [p0, p1, p2] = positions;
     lines.push(
@@ -1827,6 +1878,7 @@ function compile(content, size) {
     }
   }
 
+  // Area fills: drawn before labels/marks so they stay underneath.
   lines.push("");
 
   for (const { spec, text, labelPos } of vertexLabelCmds) {
