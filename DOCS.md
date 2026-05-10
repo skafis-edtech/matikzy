@@ -368,7 +368,7 @@ line tangent O-OX X new Y
 
 draws a tandeng through point X laying on circle O-OX. Y point is on tangent, a bit further, mostly just to indicate the tangent line later.
 
-### Point (dividing segment, on circle)
+### Point (dividing segment, on circle, on line)
 
 ```
 geometry:
@@ -383,6 +383,16 @@ For circle it's just indicating rotation angle:
 ```
 point A-AB 120 new G
 ```
+
+For line, you can add a point at a certain distance form another point on line.
+
+```
+point AB A 5 right new C
+```
+
+right or left is optional, default is right.
+
+This example puts point C on AB line, 5 parts to the right form point A.
 
 ### Line
 

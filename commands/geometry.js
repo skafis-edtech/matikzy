@@ -795,6 +795,7 @@ function parseContent(content) {
   const circumscribedCircleCmds = [];
   const tangentLineCmds = [];
   const distanceCmds = [];
+  const linearPointCmds = [];
   const secondaryPolyFigureCmds = [];
   const extraErrors = [];
   if (hasQuad && quadResult.unknown.length > 0) {
@@ -822,6 +823,9 @@ function parseContent(content) {
         pointNewNames.add(ws[5]);
       } else if (ws.length >= 5 && ws[3] === "new") {
         pointNewNames.add(ws[4]);
+      } else {
+        const ni = ws.indexOf("new");
+        if (ni !== -1 && ws[ni + 1]) pointNewNames.add(ws[ni + 1]);
       }
     } else if (ws[0] === "circle") {
       const isSpec = ws[1] === "inscribe" || ws[1] === "circumscribe";
@@ -958,9 +962,26 @@ function parseContent(content) {
         } else {
           intersectPointCmds.push({ spec1: words[1], spec2: words[3], name: words[5] });
         }
+      } else if (
+        words[1]?.length === 2 && /^[A-Z]$/.test(words[2] ?? "") &&
+        !isNaN(parseFloat(words[3] ?? "")) && words[3] !== undefined
+      ) {
+        // Linear point: point AB A 5 [right|left] new C
+        const lineSpec = words[1];
+        const refPt = words[2];
+        const dist = parseFloat(words[3]);
+        const newIdx = words.indexOf("new");
+        const dirWord = newIdx > 4 ? words[4] : null;
+        const left = dirWord === "left";
+        const newName = newIdx !== -1 ? (words[newIdx + 1] ?? "") : "";
+        if (!newName) {
+          extraErrors.push(`"point": linear format requires "new <name>" (e.g. "point AB A 5 right new C")`);
+        } else {
+          linearPointCmds.push({ lineSpec, refPt, dist, left, newName });
+        }
       } else if (words.length < 5 || words[3] !== "new") {
         extraErrors.push(
-          `"point" requires: side ratio new name (e.g. "point KL 1:4 new H"), circle angle new name (e.g. "point O-OX -120 new G"), or side intersect side new name (e.g. "point AB intersect CD new K")`,
+          `"point" requires: side ratio new name (e.g. "point KL 1:4 new H"), circle angle new name (e.g. "point O-OX -120 new G"), side intersect side new name (e.g. "point AB intersect CD new K"), or linear point (e.g. "point AB A 5 right new C")`,
         );
       } else {
         const spec = words[1];
@@ -1119,6 +1140,7 @@ function parseContent(content) {
     circumscribedCircleCmds,
     tangentLineCmds,
     distanceCmds,
+    linearPointCmds,
     secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
@@ -1150,6 +1172,7 @@ function syntaxCheck(content) {
     circumscribedCircleCmds,
     tangentLineCmds,
     distanceCmds,
+    linearPointCmds,
     secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
@@ -1457,6 +1480,16 @@ function syntaxCheck(content) {
     if (!newName) errors.push(`"line distance": missing new point name`);
   }
 
+  for (const { lineSpec, refPt, dist, newName } of linearPointCmds) {
+    if (!allKnownNames.has(lineSpec[0]) || !allKnownNames.has(lineSpec[1]))
+      errors.push(`"point ${lineSpec}": unknown line point(s)`);
+    if (!allKnownNames.has(refPt))
+      errors.push(`"point ${lineSpec} ${refPt}": unknown reference point "${refPt}"`);
+    if (isNaN(dist) || dist <= 0)
+      errors.push(`"point ${lineSpec} ${refPt}": distance must be a positive number`);
+    if (!newName) errors.push(`"point ${lineSpec} ${refPt}": missing new point name`);
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -1484,6 +1517,7 @@ function compile(content, size) {
     circumscribedCircleCmds,
     tangentLineCmds,
     distanceCmds,
+    linearPointCmds,
     secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
@@ -1728,6 +1762,20 @@ function compile(content, size) {
     if (len2 < 1e-12) continue;
     const t = ((C.x - L.x) * ex + (C.y - L.y) * ey) / len2;
     newPtsMap[newName] = { x: L.x + t * ex, y: L.y + t * ey };
+  }
+
+  // Compute linear points: point on a line at a given distance from a reference point.
+  for (const { lineSpec, refPt, dist, left, newName } of linearPointCmds) {
+    const A = lookupPt(lineSpec[0]);
+    const B = lookupPt(lineSpec[1]);
+    const R = lookupPt(refPt);
+    if (!A || !B || !R) continue;
+    const ex = B.x - A.x, ey = B.y - A.y;
+    const len = Math.hypot(ex, ey);
+    if (len < 1e-10) continue;
+    const ux = ex / len, uy = ey / len;
+    const sign = left ? -1 : 1;
+    newPtsMap[newName] = { x: R.x + sign * dist * ux, y: R.y + sign * dist * uy };
   }
 
   // Circle point positions must be in newPtsMap before draw commands run.
