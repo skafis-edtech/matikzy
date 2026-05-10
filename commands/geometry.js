@@ -666,10 +666,14 @@ function triLabelPos(x, y, cx, cy) {
   return vert + horiz;
 }
 
+const TRI_SIZE_SCALE = { small: 0.55, medium: 1.0, large: 1.375 };
+
 function computeTrianglePositions(triMode, triValues, triTransforms, size) {
   const raw = computeRawTriVerts(triMode, triValues);
   if (!raw) return null;
-  const transformed = applyTriTransforms(raw, triTransforms);
+  const scale = TRI_SIZE_SCALE[size] ?? 1;
+  const scaled = raw.map(p => ({ x: p.x * scale, y: p.y * scale }));
+  const transformed = applyTriTransforms(scaled, triTransforms);
   const cx = (transformed[0].x + transformed[1].x + transformed[2].x) / 3;
   const cy = (transformed[0].y + transformed[1].y + transformed[2].y) / 3;
   return transformed.map(p => ({ x: p.x, y: p.y, pos: triLabelPos(p.x, p.y, cx, cy) }));
@@ -1851,11 +1855,9 @@ function compile(content, size) {
     }
   }
 
-  // Angle labels: placed at vertex, offset along the angle bisector.
-  // The offset grows for small angles (≤60°) and pushes past any arc mark.
-  const normalAngleOffset = { small: 0.46, medium: 0.55, large: 0.85 }[size];
-  const arcPadding = { small: 0.07, medium: 0.11, large: 0.17 }[size];
-  const angleLblTextOff = { small: 0.03, medium: 0.04, large: 0.06 }[size];
+  // Angle labels: placed just past the arc radius (same adaptive radius as the arc mark).
+  const arcPaddingShort = { small: 0.22, medium: 0.34, large: 0.52 }[size];
+  const arcPaddingLong  = { small: 0.18, medium: 0.28, large: 0.43 }[size];
   let angleDefaultCounter = 0;
   for (const { spec, bigger, text } of angleLabelCmds) {
     const resolved = resolveAngleCoords(spec);
@@ -1878,14 +1880,17 @@ function compile(content, size) {
       bisY = -bisY;
     }
 
-    // sin(θ/2) drives the offset: at θ=60° it equals normalOffset; smaller → further.
+    const displayText = text ?? String(++angleDefaultCounter);
+    const textLen = displayText.length;
+
     const sinHalf = Math.max(
       Math.sin(Math.acos(Math.max(-1, Math.min(1, u1x * u2x + u1y * u2y))) / 2),
       0.05,
     );
-    let offset = normalAngleOffset * Math.max(1, 0.5 / sinHalf);
+    // Arc radius mirrors the mark: adapts to angle sharpness just like the drawn arc.
+    const SIN_45_HALF = Math.sin((22.5 * Math.PI) / 180);
+    const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalf);
 
-    // If there is an arc mark at this vertex, push the label past the outermost arc.
     const vertLabel = spec.startsWith("angle ") ? spec.slice(6) : spec[1];
     const matchMark = resolvedMarks.find(
       (m) =>
@@ -1894,25 +1899,21 @@ function compile(content, size) {
         (m.spec.startsWith("angle ") ? m.spec.slice(6) : m.spec[1]) ===
           vertLabel,
     );
-    if (matchMark) {
-      const SIN_45_HALF = Math.sin((22.5 * Math.PI) / 180);
-      const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalf);
-      const na = matchMark.arcs;
-      const outerR =
-        na === 1
-          ? adaptedArcBase * 1.3
-          : na <= 3
-            ? adaptedArcBase * 0.9 + (na - 1) * arcGap * 0.7
-            : adaptedArcBase * 1.1 + (na - 1) * arcGap;
-      offset = Math.max(offset, outerR + arcPadding);
-    }
+    // Outer edge of the arc (real mark if present, else treat as 1-arc baseline).
+    const na = matchMark ? matchMark.arcs : 1;
+    const outerR =
+      na === 1
+        ? adaptedArcBase * 1.3
+        : na <= 3
+          ? adaptedArcBase * 0.9 + (na - 1) * arcGap * 0.7
+          : adaptedArcBase * 1.1 + (na - 1) * arcGap;
+    const arcPaddingBase = textLen <= 2 ? arcPaddingShort : arcPaddingLong;
+    const arcPadding = arcPaddingBase * Math.max(1.5, adaptedArcBase / arcBase);
+    const offset = outerR + arcPadding;
 
-    const displayText = text ?? String(++angleDefaultCounter);
-    const textLen = displayText.length;
-    const finalOffset = offset + (textLen - 1) * angleLblTextOff;
     const fontScale = Math.max(1.2, 1.5 - (textLen - 1) * 0.07);
-    const lx = vx + finalOffset * bisX;
-    const ly = vy + finalOffset * bisY;
+    const lx = vx + offset * bisX;
+    const ly = vy + offset * bisY;
     lines.push(
       `\\node[scale=${f(fontScale)}] at (${f(lx)},${f(ly)}) {$${displayText}$};`,
     );
