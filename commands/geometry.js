@@ -1909,7 +1909,10 @@ function compile(content, size) {
           : adaptedArcBase * 1.1 + (na - 1) * arcGap;
     const arcPaddingBase = textLen <= 2 ? arcPaddingShort : arcPaddingLong;
     const arcPadding = arcPaddingBase * Math.max(1.5, adaptedArcBase / arcBase);
-    const offset = outerR + arcPadding;
+    const cosAngle = u1x * u2x + u1y * u2y;
+    const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+    const bigAngleFactor = angleDeg > 80 ? 0.82 : 1.0;
+    const offset = (outerR + arcPadding) * bigAngleFactor;
 
     const fontScale = Math.max(1.2, 1.5 - (textLen - 1) * 0.07);
     const lx = vx + offset * bisX;
@@ -1968,29 +1971,33 @@ function compile(content, size) {
             ? 1
             : -1
           : 1;
+      const textLen = text.length;
       let rotateDeg = 0;
-      const useAligned = labelOrient ? labelOrient === "aligned" : text.length > 3;
+      const useAligned = labelOrient ? labelOrient === "aligned" : textLen > 3;
       if (useAligned) {
         rotateDeg = (Math.atan2(sdy, sdx) * 180) / Math.PI;
         if (rotateDeg > 90) rotateDeg -= 180;
         else if (rotateDeg < -90) rotateDeg += 180;
       }
-      // Horizontal labels use anchor (edge at offset point) so need less offset.
-      const effectiveOffset = rotateDeg === 0 ? offset * 0.6 : offset;
-      const lx = mx + effectiveOffset * sign * px;
-      const ly = my + effectiveOffset * sign * py;
-      const rotateAttr = rotateDeg !== 0 ? `, rotate=${f(rotateDeg)}` : "";
-      // For horizontal labels, anchor the edge nearest the segment at the placement
-      // point so long text extends away from the segment instead of overlapping it.
-      let anchorAttr = "";
-      if (rotateDeg === 0) {
-        const adx = sign * px, ady = sign * py; // direction from segment to label
+      // Short horizontal labels: center-aligned close to the line.
+      // Long horizontal labels: anchor-based so text extends away from the segment.
+      let effectiveOffset, anchorAttr = "";
+      if (rotateDeg !== 0) {
+        effectiveOffset = offset;
+      } else if (textLen <= 2) {
+        effectiveOffset = offset * 0.75;
+      } else {
+        effectiveOffset = offset * 0.15;
+        const adx = sign * px, ady = sign * py;
         const ax = Math.abs(adx), ay = Math.abs(ady);
         const v = ay > ax * 0.4 ? (ady > 0 ? "south" : "north") : "";
         const h = ax > ay * 0.4 ? (adx > 0 ? "west" : "east") : "";
         const anchor = (v + (v && h ? " " : "") + h) || "center";
         anchorAttr = `, anchor=${anchor}`;
       }
+      const lx = mx + effectiveOffset * sign * px;
+      const ly = my + effectiveOffset * sign * py;
+      const rotateAttr = rotateDeg !== 0 ? `, rotate=${f(rotateDeg)}` : "";
       lines.push(
         `\\node[scale=1.5${rotateAttr}${anchorAttr}] at (${f(lx)},${f(ly)}) {$${text}$};`,
       );
