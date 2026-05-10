@@ -496,6 +496,18 @@ area OAB -- solid light
 
 None, solid, solid light.
 
+## Misc - hide circle sector (arc)
+
+Can hide part of the circle, logic like with area. Can hide a sector of circle with at least 3 points - 2 are the boundary, another one says the direction.
+
+```
+geometry:
+circle new O-OX
+point O-OX 90 new K
+point O-OX -90 new L
+hide O-OX KLX
+```
+
 ## Shortcuts
 
 Yes, everything is possible with current setup (pretty much). But sometimes it's a bit exhaustive, e.g.:
