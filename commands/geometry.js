@@ -1259,10 +1259,10 @@ function syntaxCheck(content) {
       if (newNames.length !== 2)
         errors.push(`"line perpendicular bisector": expects 2 new point names`);
     } else if (lineType === "angle bisector") {
-      if (specWords.length !== 0)
-        errors.push(`"line angle bisector": expects nothing before "new"`);
-      if (newNames.length !== 2 || !isVertexCh(newNames[0]))
-        errors.push(`"line angle bisector": expects "new <vertex> <point>"`);
+      if (specWords.length !== 1 || !isVertexCh(specWords[0]))
+        errors.push(`"line angle bisector": expects a vertex before "new"`);
+      if (newNames.length !== 1)
+        errors.push(`"line angle bisector": expects 1 new point name`);
     } else if (lineType === "median" || lineType === "altitude") {
       if (specWords.length !== 1 || !isVertexCh(specWords[0]))
         errors.push(`"line ${lineType}": expects a vertex before "new"`);
@@ -1453,10 +1453,10 @@ function compile(content, size) {
         if (newNames[0]) pts[newNames[0]] = G;
         if (newNames[1] && H) pts[newNames[1]] = H;
       } else if (lineType === "angle bisector") {
-        const V = vp[newNames[0]];
+        const V = vp[specWords[0]];
         const [oCh1, oCh2] = triangleSpec
           .split("")
-          .filter((c) => c !== newNames[0]);
+          .filter((c) => c !== specWords[0]);
         const L = vp[oCh1],
           M = vp[oCh2];
         const dVL = Math.hypot(L.x - V.x, L.y - V.y),
@@ -1467,8 +1467,7 @@ function compile(content, size) {
         };
         p1 = V;
         p2 = G;
-        if (newNames[0]) pts[newNames[0]] = V;
-        if (newNames[1]) pts[newNames[1]] = G;
+        if (newNames[0]) pts[newNames[0]] = G;
       } else if (lineType === "median") {
         const V = vp[specWords[0]];
         const [oCh1, oCh2] = triangleSpec

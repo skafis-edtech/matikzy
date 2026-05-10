@@ -6,6 +6,8 @@ Updated: 2026-05-07
 
 _Note: syntax checks atm are minimal._
 
+Comments: use `//` to add comment (to the end of line).
+
 Commands:
 
 - [function](./commands/function.js) - DONE, has issues,
@@ -17,7 +19,7 @@ Commands:
   - cuboid - not started,
   - cone - not started,
   - cylinder - not started,
-  - parallelogram - not started,
+  - parallelogram - in progress,
   - quadritelateral-pyramid - not started,
   - triangle-pyramid - not started.
 
@@ -337,7 +339,7 @@ Points, line segments, angles, triangles, circles - have their own notation for 
 geometry:
 triangle KLM
 line perpendicular bisector KLM KL new A B
-line angle bisector KLM new C D
+line angle bisector KLM M new D
 line median KLM K new E
 line altitude KLM K new F
 line midsegment KLM KL LM new G H

@@ -26,7 +26,15 @@ allCommands.forEach(({ prefix, syntaxCheck, compile }) =>
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+function stripComments(src) {
+  return src.split("\n").map(line => {
+    const i = line.indexOf("//");
+    return i === -1 ? line : line.slice(0, i);
+  }).join("\n");
+}
+
 export function syntaxCheck(matikzy) {
+  matikzy = stripComments(matikzy);
   const entry = Object.entries(COMMANDS).find(([prefix]) =>
     matikzy.startsWith(prefix),
   );
@@ -42,6 +50,7 @@ export function syntaxCheck(matikzy) {
 }
 
 export function compile(matikzy) {
+  matikzy = stripComments(matikzy);
   const entry = Object.entries(COMMANDS).find(([prefix]) =>
     matikzy.startsWith(prefix),
   );
