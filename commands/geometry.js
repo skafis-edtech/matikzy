@@ -2161,39 +2161,6 @@ function compile(content, size) {
     }
   }
 
-  // Compute foot-of-perpendicular for "line distance" commands.
-  for (const { fromPt, segPts, newName } of distanceCmds) {
-    const C = lookupPt(fromPt);
-    const L = lookupPt(segPts[0]);
-    const M = lookupPt(segPts[1]);
-    if (!C || !L || !M) continue;
-    const ex = M.x - L.x,
-      ey = M.y - L.y;
-    const len2 = ex * ex + ey * ey;
-    if (len2 < 1e-12) continue;
-    const t = ((C.x - L.x) * ex + (C.y - L.y) * ey) / len2;
-    newPtsMap[newName] = { x: L.x + t * ex, y: L.y + t * ey };
-  }
-
-  // Compute linear points: point on a line at a given distance from a reference point.
-  for (const { lineSpec, refPt, dist, left, newName } of linearPointCmds) {
-    const A = lookupPt(lineSpec[0]);
-    const B = lookupPt(lineSpec[1]);
-    const R = lookupPt(refPt);
-    if (!A || !B || !R) continue;
-    const ex = B.x - A.x,
-      ey = B.y - A.y;
-    const len = Math.hypot(ex, ey);
-    if (len < 1e-10) continue;
-    const ux = ex / len,
-      uy = ey / len;
-    const sign = left ? -1 : 1;
-    newPtsMap[newName] = {
-      x: R.x + sign * dist * ux,
-      y: R.y + sign * dist * uy,
-    };
-  }
-
   // Circle point positions must be in newPtsMap before draw commands run.
   const circleR = { small: 1.5, medium: 2.0, large: 3.8 }[size];
   for (const { center, northPt, fromExisting } of circleCmds) {
@@ -2242,6 +2209,36 @@ function compile(content, size) {
       y: center.y + R * Math.sin(rad),
       originX: center.x,
       originY: center.y,
+    };
+  }
+
+  // Compute foot-of-perpendicular for "line distance" commands.
+  for (const { fromPt, segPts, newName } of distanceCmds) {
+    const C = lookupPt(fromPt);
+    const L = lookupPt(segPts[0]);
+    const M = lookupPt(segPts[1]);
+    if (!C || !L || !M) continue;
+    const ex = M.x - L.x, ey = M.y - L.y;
+    const len2 = ex * ex + ey * ey;
+    if (len2 < 1e-12) continue;
+    const t = ((C.x - L.x) * ex + (C.y - L.y) * ey) / len2;
+    newPtsMap[newName] = { x: L.x + t * ex, y: L.y + t * ey };
+  }
+
+  // Compute linear points: point on a line at a given distance from a reference point.
+  for (const { lineSpec, refPt, dist, left, newName } of linearPointCmds) {
+    const A = lookupPt(lineSpec[0]);
+    const B = lookupPt(lineSpec[1]);
+    const R = lookupPt(refPt);
+    if (!A || !B || !R) continue;
+    const ex = B.x - A.x, ey = B.y - A.y;
+    const len = Math.hypot(ex, ey);
+    if (len < 1e-10) continue;
+    const ux = ex / len, uy = ey / len;
+    const sign = left ? -1 : 1;
+    newPtsMap[newName] = {
+      x: R.x + sign * dist * ux,
+      y: R.y + sign * dist * uy,
     };
   }
 
