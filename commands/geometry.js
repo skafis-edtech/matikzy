@@ -413,33 +413,37 @@ function isValidSideSpec(spec, vertexLabels) {
 // --- Numeric triangle construction helpers ---
 
 function computeRawTriVerts(mode, values) {
+  // A=(0,0) bottom-left, B=apex top, C=(sCA,0) bottom-right — clockwise A→B→C.
   const deg2rad = d => (d * Math.PI) / 180;
   if (mode === "SSS") {
     const [sAB, sBC, sCA] = values;
     const cosA = Math.max(-1, Math.min(1, (sAB * sAB + sCA * sCA - sBC * sBC) / (2 * sAB * sCA)));
     const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
-    return [{ x: 0, y: 0 }, { x: sAB, y: 0 }, { x: sCA * cosA, y: sCA * sinA }];
+    return [{ x: 0, y: 0 }, { x: sAB * cosA, y: sAB * sinA }, { x: sCA, y: 0 }];
   }
   if (mode === "SAS") {
-    const [s1, angleA, s2] = values;
-    const r = deg2rad(angleA);
-    return [{ x: 0, y: 0 }, { x: s1, y: 0 }, { x: s2 * Math.cos(r), y: s2 * Math.sin(r) }];
+    const [sAB, angleB, sBC] = values;
+    const rB = deg2rad(angleB);
+    const sCA = Math.sqrt(Math.max(0, sAB * sAB + sBC * sBC - 2 * sAB * sBC * Math.cos(rB)));
+    const cosA = sCA > 1e-10 ? Math.max(-1, Math.min(1, (sAB * sAB + sCA * sCA - sBC * sBC) / (2 * sAB * sCA))) : 1;
+    const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+    return [{ x: 0, y: 0 }, { x: sAB * cosA, y: sAB * sinA }, { x: sCA, y: 0 }];
   }
   if (mode === "ASA") {
     const [angleA, sAB, angleB] = values;
     const angleC = 180 - angleA - angleB;
     const rA = deg2rad(angleA), rB = deg2rad(angleB), rC = deg2rad(angleC);
-    const AC = (Math.sin(rC) > 1e-10) ? sAB * Math.sin(rB) / Math.sin(rC) : 0;
-    return [{ x: 0, y: 0 }, { x: sAB, y: 0 }, { x: AC * Math.cos(rA), y: AC * Math.sin(rA) }];
+    const sCA = Math.sin(rC) > 1e-10 ? sAB * Math.sin(rB) / Math.sin(rC) : 0;
+    return [{ x: 0, y: 0 }, { x: sAB * Math.cos(rA), y: sAB * Math.sin(rA) }, { x: sCA, y: 0 }];
   }
   if (mode === "AAS") {
-    const [angleA, angleB, sideBC] = values;
+    const [angleA, angleB, sBC] = values;
     const angleC = 180 - angleA - angleB;
-    const rA = deg2rad(angleA), rB = deg2rad(angleB), rC = deg2rad(angleC);
+    const rA = deg2rad(angleA), rC = deg2rad(angleC);
     const sinA = Math.sin(rA);
-    const AB = sinA > 1e-10 ? sideBC * Math.sin(rC) / sinA : 0;
-    const AC = sinA > 1e-10 ? sideBC * Math.sin(rB) / sinA : 0;
-    return [{ x: 0, y: 0 }, { x: AB, y: 0 }, { x: AC * Math.cos(rA), y: AC * Math.sin(rA) }];
+    const sAB = sinA > 1e-10 ? sBC * Math.sin(rC) / sinA : 0;
+    const sCA = sinA > 1e-10 ? sBC * Math.sin(deg2rad(angleB)) / sinA : 0;
+    return [{ x: 0, y: 0 }, { x: sAB * Math.cos(rA), y: sAB * Math.sin(rA) }, { x: sCA, y: 0 }];
   }
   return null;
 }
@@ -481,7 +485,8 @@ function sideToHorizontal(pts, i1, i2) {
 
 function applyTriTransforms(pts, transforms) {
   let cur = pts.map(p => ({ ...p }));
-  const sideVerts = [[0, 1], [1, 2], [2, 0]];
+  // Cycle: AC base (default) → CB base → BA base → AC base
+  const sideVerts = [[0, 2], [2, 1], [1, 0]];
   let baseIdx = 0;
 
   for (const t of transforms) {
@@ -664,8 +669,7 @@ function triLabelPos(x, y, cx, cy) {
 function computeTrianglePositions(triMode, triValues, triTransforms, size) {
   const raw = computeRawTriVerts(triMode, triValues);
   if (!raw) return null;
-  const scaled = scaleTriVerts(raw, size);
-  const transformed = applyTriTransforms(scaled, triTransforms);
+  const transformed = applyTriTransforms(raw, triTransforms);
   const cx = (transformed[0].x + transformed[1].x + transformed[2].x) / 3;
   const cy = (transformed[0].y + transformed[1].y + transformed[2].y) / 3;
   return transformed.map(p => ({ x: p.x, y: p.y, pos: triLabelPos(p.x, p.y, cx, cy) }));
@@ -799,9 +803,12 @@ function parseContent(content) {
           const text = textWords.length > 0 ? textWords.join(" ") : null;
           angleLabelCmds.push({ spec, bigger, text });
         } else {
-          const labelSide = posWords.length > 0 ? posWords[0] : null;
+          const orientWord = posWords.find(w => w === "horizontal" || w === "aligned");
+          const sideWords = posWords.filter(w => w !== "horizontal" && w !== "aligned");
+          const labelSide = sideWords.length > 0 ? sideWords[0] : null;
+          const labelOrient = orientWord ?? null;
           const labelText = textWords.length > 0 ? textWords.join(" ") : null;
-          sideLabelCmds.push({ sideSpec: spec, labelText, labelSide });
+          sideLabelCmds.push({ sideSpec: spec, labelText, labelSide, labelOrient });
         }
       }
     } else if (words[0] === "mark") {
@@ -1916,7 +1923,7 @@ function compile(content, size) {
     const offsetBySize = { small: 0.28, medium: 0.35, large: 0.54 };
     const offset = offsetBySize[size];
     lines.push("");
-    for (const { sideSpec, labelText, labelSide } of sideLabelCmds) {
+    for (const { sideSpec, labelText, labelSide, labelOrient } of sideLabelCmds) {
       let p1, p2, defaultLabel, refPt;
       if (sideSpec.length === 1 && /^[a-z]$/.test(sideSpec)) {
         const idxPair = resolveSide(sideSpec, labels);
@@ -1960,17 +1967,31 @@ function compile(content, size) {
             ? 1
             : -1
           : 1;
-      const lx = mx + offset * sign * px;
-      const ly = my + offset * sign * py;
       let rotateDeg = 0;
-      if (text.length > 3) {
+      const useAligned = labelOrient ? labelOrient === "aligned" : text.length > 3;
+      if (useAligned) {
         rotateDeg = (Math.atan2(sdy, sdx) * 180) / Math.PI;
         if (rotateDeg > 90) rotateDeg -= 180;
         else if (rotateDeg < -90) rotateDeg += 180;
       }
+      // Horizontal labels use anchor (edge at offset point) so need less offset.
+      const effectiveOffset = rotateDeg === 0 ? offset * 0.6 : offset;
+      const lx = mx + effectiveOffset * sign * px;
+      const ly = my + effectiveOffset * sign * py;
       const rotateAttr = rotateDeg !== 0 ? `, rotate=${f(rotateDeg)}` : "";
+      // For horizontal labels, anchor the edge nearest the segment at the placement
+      // point so long text extends away from the segment instead of overlapping it.
+      let anchorAttr = "";
+      if (rotateDeg === 0) {
+        const adx = sign * px, ady = sign * py; // direction from segment to label
+        const ax = Math.abs(adx), ay = Math.abs(ady);
+        const v = ay > ax * 0.4 ? (ady > 0 ? "south" : "north") : "";
+        const h = ax > ay * 0.4 ? (adx > 0 ? "west" : "east") : "";
+        const anchor = (v + (v && h ? " " : "") + h) || "center";
+        anchorAttr = `, anchor=${anchor}`;
+      }
       lines.push(
-        `\\node[scale=1.5${rotateAttr}] at (${f(lx)},${f(ly)}) {$${text}$};`,
+        `\\node[scale=1.5${rotateAttr}${anchorAttr}] at (${f(lx)},${f(ly)}) {$${text}$};`,
       );
     }
   }

@@ -246,6 +246,20 @@ congruence rules:
 
 - SSS, SAS, ASA and AAS.
 
+```
+  ┌──────┬───────────────────────────┐
+  │ Mode │          Values           │
+  ├──────┼───────────────────────────┤
+  │ SSS  │ side AB, side BC, side CA │
+  ├──────┼───────────────────────────┤
+  │ SAS  │ side AB, angle B, side BC │
+  ├──────┼───────────────────────────┤
+  │ ASA  │ angle A, side AB, angle B │
+  ├──────┼───────────────────────────┤
+  │ AAS  │ angle A, angle B, side BC │
+  └──────┴───────────────────────────┘
+```
+
 3 parts:
 
 - 3 numbers, in congruence rule order sides and angles.
@@ -407,11 +421,11 @@ For segment label - if more than 3 symbols, aligns with the line.
 
 TODO: choose right/left with default right if not in triangle and default outside if on triangle.
 
-Labels have default positions, but can be explicitly stated. For point choose "top bottom left right", for segment choose "left right".
+Labels have default positions, but can be explicitly stated. For point choose "top bottom, left right", for segment choose "left right, horizontal aligned".
 
 ```
 label A B -- top right
-label AB a -- left
+label AB x\;\mathrm{cm} -- left horizontal
 ```
 
 ### Mark

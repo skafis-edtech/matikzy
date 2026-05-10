@@ -249,24 +249,41 @@
     >
 function: graph parabola y=x^2+2x-1</textarea
     >
-    <button id="compile-btn" class="action-btn">Compile to TikZ</button>
+    <button id="compile-btn" class="action-btn">Compile &amp; Render</button>
     <div id="compile-error" class="error-msg"></div>
+
+    <div id="error" class="error-msg"></div>
+    <div id="output"></div>
+    <div id="render-status" style="font-size:13px;color:var(--text-muted);min-height:1em;margin-top:0.35rem"></div>
+    <button id="download-btn" class="action-btn" style="display:none;margin-top:0.5rem">Download SVG</button>
 
     <label for="tikz">TikZ</label>
     <textarea id="tikz" style="height: 180px"> </textarea>
     <button id="render-btn" class="action-btn">Render</button>
-    <div id="error" class="error-msg"></div>
-    <div id="output"></div>
 
     <script type="module">
       import { compile } from "/matikzy.js";
 
-      document
-        .getElementById("compile-btn")
-        .addEventListener("click", compileMatikzy);
+      document.getElementById("compile-btn").addEventListener("click", compileMatikzy);
       document.getElementById("render-btn").addEventListener("click", render);
 
-      function compileMatikzy() {
+      let debounceTimer;
+      document.getElementById("matikzy").addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(compileMatikzy, 600);
+      });
+      document.getElementById("download-btn").addEventListener("click", () => {
+        const svg = document.getElementById("output").innerHTML;
+        const blob = new Blob([svg], { type: "image/svg+xml" });
+        const a = Object.assign(document.createElement("a"), {
+          href: URL.createObjectURL(blob),
+          download: "diagram.svg",
+        });
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      async function compileMatikzy() {
         const matikzy = document.getElementById("matikzy").value.trim();
         const compileError = document.getElementById("compile-error");
         compileError.textContent = "";
@@ -274,15 +291,21 @@ function: graph parabola y=x^2+2x-1</textarea
           document.getElementById("tikz").value = compile(matikzy);
         } catch (e) {
           compileError.textContent = e.message;
+          return;
         }
+        await render();
       }
 
+      let renderSeq = 0;
       async function render() {
         const tikz = document.getElementById("tikz").value;
         const error = document.getElementById("error");
         const output = document.getElementById("output");
+        const status = document.getElementById("render-status");
+        const downloadBtn = document.getElementById("download-btn");
         error.textContent = "";
-        output.innerHTML = "Rendering...";
+        status.textContent = "Rendering...";
+        const seq = ++renderSeq;
         try {
           const res = await fetch("/render", {
             method: "POST",
@@ -290,10 +313,15 @@ function: graph parabola y=x^2+2x-1</textarea
             body: JSON.stringify({ lang: "tikz", content: tikz }),
           });
           if (!res.ok) throw new Error(await res.text());
-          output.innerHTML = await res.text();
+          const svg = await res.text();
+          if (seq !== renderSeq) return; // superseded by a newer render
+          output.innerHTML = svg;
+          status.textContent = "";
+          downloadBtn.style.display = "";
           loadStats();
         } catch (e) {
-          output.innerHTML = "";
+          if (seq !== renderSeq) return;
+          status.textContent = "";
           error.textContent = e.message;
         }
       }
