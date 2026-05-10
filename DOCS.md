@@ -207,10 +207,10 @@ _Note: only one basis can be chosen._
 
 ```
 geometry:
-circle A-AB
+circle new A-AB
 ```
 
-`circle + <name(center, ray to right)>`
+`circle + new + <name(center, ray to right)>`
 
 (if name not mentioned - defaults to `O-OX`)
 
@@ -218,19 +218,19 @@ circle A-AB
 
 ```
 geometry:
-triangle right isosceles A[B]C >>rot >>rot120 >>invert
+triangle right isosceles new A[B]C >>rot >>rot120 >>invert
 ```
 
-`triangle + <angular type> + <sides type> + <name + special vertex> + [<rotations and inversions>]`
+`triangle + <angular type> + <sides type> + new + <name + special vertex> + [<rotations and inversions>]`
 
 or
 
 ```
 geometry:
-triangle AAS 120 30 ABC >>rot >>rot120 >>invert
+triangle AAS 120 30 new ABC >>rot >>rot120 >>invert
 ```
 
-`triangle + <congruence rule> + <3 parts> + <name> + [<rotations and inversions>]`
+`triangle + <congruence rule> + <3 parts> + new + <name> + [<rotations and inversions>]`
 
 angular types:
 
@@ -280,21 +280,21 @@ Includes rotation, like in triangle.
 
 ```
 geometry:
-quadrilateral square ABCD >>rot45
+quadrilateral square new ABCD >>rot45
 ```
 
 ```
-quadrilateral square ABCD
-quadrilateral rectangle ABCD
-quadrilateral parallelogram ABCD
-quadrilateral rhombus ABCD
-quadrilateral trapezoid ABCD
-quadrilateral right trapezoid ABCD
-quadrilateral isosceles trapezoid ABCD
-quadrilateral SSSSD 1 2 3 4 2 ABCD
-quadrilateral SSSDD 1 2 3 2 3 ABCD
-quadrilateral SSAAA 3 3 90 90 90 ABCD
-quadrilateral SSSAA 3 3 3 90 90 ABCD
+quadrilateral square new ABCD
+quadrilateral rectangle new ABCD
+quadrilateral parallelogram new ABCD
+quadrilateral rhombus new ABCD
+quadrilateral trapezoid new ABCD
+quadrilateral right trapezoid new ABCD
+quadrilateral isosceles trapezoid new ABCD
+quadrilateral SSSSD 1 2 3 4 2 new ABCD
+quadrilateral SSSDD 1 2 3 2 3 new ABCD
+quadrilateral SSAAA 3 3 90 90 90 new ABCD
+quadrilateral SSSAA 3 3 3 90 90 new ABCD
 ```
 
 Free form (D-diagonal):
@@ -337,7 +337,7 @@ Points, line segments, angles, triangles, circles - have their own notation for 
 
 ```
 geometry:
-triangle KLM
+triangle new KLM
 line perpendicular bisector KLM KL new A B
 line angle bisector KLM M new D
 line median KLM K new E
@@ -351,7 +351,7 @@ line midsegment KLM KL LM new G H
 
 ```
 geometry:
-triangle ABC
+triangle new ABC
 circle inscribe ABC new O-OX K L M
 circle circumscribe ABC new O-OX
 ```
@@ -362,7 +362,7 @@ Inscribing into triangle - KLM are the touchpoints (each is in the opposite of c
 
 ```
 geometry:
-circle O-OX
+circle new O-OX
 line tangent O-OX X new Y
 ```
 
@@ -372,7 +372,7 @@ draws a tandeng through point X laying on circle O-OX. Y point is on tangent, a 
 
 ```
 geometry:
-triangle ABC
+triangle new ABC
 point AB 1:4 new K
 ```
 
@@ -390,11 +390,12 @@ Possible issues with ray naming, when line has more than 2 points indicated.
 
 ```
 geometry:
-triangle ABC
+triangle new ABC
 point AB 1:4 new K
 line segment CK
 line AB
 line ray BC
+arrow CK
 ```
 
 Draws new:
@@ -402,16 +403,24 @@ Draws new:
 - line
 - line segment
 - line ray
+- arrow
 
 Line segment cuts off the (if already existing) line or ray excess.
 
-Line extends (if already existing) segment or say.
+Line extends (if already existing) segment or ray.
+
+Also possible to do dashed or dotted with:
+
+```
+line AB -- dashed
+line AB -- dotted
+```
 
 ### Label
 
 ```
 geometry:
-triangle ABC
+triangle new ABC
 label A A
 label a a
 label angle A 1
@@ -440,7 +449,7 @@ label arc O-OX AB bigger 220^\circ
 
 ```
 geometry:
-triangle ABC
+triangle new ABC
 mark A
 mark a III
 mark angle A bigger II
@@ -453,7 +462,7 @@ Marks point as point, segment with ticks in the center, angle with arcs or right
 
 ```
 geometry:
-circle O-OX
+circle new O-OX
 point O-OX 30 new A
 point O-OX -30 new B
 line segment OA
@@ -464,11 +473,47 @@ area OAB
 
 Depending on if the line segment AB exists or not, a sector or triangle would be filled out.
 
+Also possible to choose the middle label and fill style.
+
+```
+area OAB S_1 -- none
+area OAB -- solid light
+```
+
+None, solid, solid light.
+
+### Figures from points
+
+The `new` keyword was used for triangle, circle, quad - all as basis figures. But we can create these things on already existing graphic.
+
+```
+geometry:
+quadrilateral square new ABCD
+point AB 1:2 new K
+point BC 1:2 new L
+point CD 1:2 new M
+point DA 1:2 new N
+
+// New figures from points
+quadrilateral ABMN
+point MN 1:3 new X
+triangle ACX
+circle D-DN
+```
+
+## From basic principles
+
+TODO: make everything from points and lines.
+
+## Shortcuts
+
+Yes, everything is possible with current setup (pretty much).
+
 ### Examples
 
 ```
 geometry:
-circle O-OX
+circle new O-OX
 point O-OX 85 new C
 point O-OX -30 new B
 point O-OX -135 new A
@@ -481,7 +526,7 @@ label O label A label B label C
 
 ```
 geometry:
-triangle right BA[C]
+triangle right new BA[C]
 label a label b label c label angle B \beta
 mark angle B I mark angle C right
 ```
@@ -490,7 +535,7 @@ mark angle B I mark angle C right
 
 ```
 geometry:
-circle O-OX
+circle new O-OX
 point O-OX 40 new D
 point O-OX -30 new B
 point O-OX 130 new C

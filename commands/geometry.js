@@ -45,7 +45,7 @@ function parseTriangle(content) {
   if (words[0] !== "triangle")
     return { angle: null, side: null, unknown: words, labelStr: null, triMode: null, triValues: null, triTransforms: [] };
 
-  // New numeric format: triangle SSS/SAS/ASA/AAS v1 v2 v3 [label] [>>transforms...]
+  // New numeric format: triangle SSS/SAS/ASA/AAS v1 v2 v3 new <label> [>>transforms...]
   if (words.length >= 2 && VALID_TRI_MODES.has(words[1])) {
     const mode = words[1];
     const unknown = [];
@@ -58,17 +58,27 @@ function parseTriangle(content) {
     const mainWords = words.slice(2, transformStart);
     const transformWords = words.slice(transformStart);
 
-    const numericWords = mainWords.filter(w => /^-?\d*\.?\d+$/.test(w));
-    const nonNumeric = mainWords.filter(w => !/^-?\d*\.?\d+$/.test(w));
+    const isNumeric = (w) => /^-?\d*\.?\d+$/.test(w);
+    const numericWords = mainWords.filter(isNumeric);
 
     let triValues = null;
     if (numericWords.length >= 3) triValues = numericWords.slice(0, 3).map(Number);
     if (numericWords.length > 3) unknown.push(...numericWords.slice(3));
 
+    const newIdx = mainWords.indexOf("new");
     let labelStr = null;
-    for (const w of nonNumeric) {
-      if (labelStr === null && parseLabels(w)) labelStr = w;
-      else unknown.push(w);
+    if (newIdx === -1) {
+      unknown.push("__missing_new__");
+    } else if (!mainWords[newIdx + 1] || !parseLabels(mainWords[newIdx + 1])) {
+      unknown.push("__missing_label__");
+    } else {
+      labelStr = mainWords[newIdx + 1];
+    }
+
+    for (let idx = 0; idx < mainWords.length; idx++) {
+      const w = mainWords[idx];
+      if (newIdx !== -1 && (idx === newIdx || idx === newIdx + 1)) continue;
+      if (!isNumeric(w)) unknown.push(w);
     }
 
     const triTransforms = [];
@@ -87,23 +97,52 @@ function parseTriangle(content) {
     return { angle: null, side: null, unknown, labelStr, triMode: mode, triValues, triTransforms };
   }
 
-  // Original keyword format
+  // Original keyword format: triangle [angle] [side] [>>transforms...] new <label>
   let angle = null, side = null, labelStr = null;
   const unknown = [];
 
-  for (const word of words.slice(1)) {
+  let transformStart = words.length;
+  for (let i = 1; i < words.length; i++) {
+    if (words[i].startsWith(">>")) { transformStart = i; break; }
+  }
+  const mainWords = words.slice(1, transformStart);
+  const transformWords = words.slice(transformStart);
+
+  const newIdx = mainWords.indexOf("new");
+  if (newIdx === -1) {
+    unknown.push("__missing_new__");
+  } else if (!mainWords[newIdx + 1] || !parseLabels(mainWords[newIdx + 1])) {
+    unknown.push("__missing_label__");
+  } else {
+    labelStr = mainWords[newIdx + 1];
+  }
+
+  for (let idx = 0; idx < mainWords.length; idx++) {
+    const word = mainWords[idx];
+    if (newIdx !== -1 && (idx === newIdx || idx === newIdx + 1)) continue;
     if (ANGLE_TYPES.has(word)) {
       angle === null ? (angle = word) : unknown.push(word);
     } else if (SIDE_TYPES.has(word)) {
       side === null ? (side = word) : unknown.push(word);
-    } else if (labelStr === null && parseLabels(word)) {
-      labelStr = word;
     } else {
       unknown.push(word);
     }
   }
 
-  return { angle, side, unknown, labelStr, triMode: null, triValues: null, triTransforms: [] };
+  const triTransforms = [];
+  for (const tw of transformWords) {
+    if (tw === ">>rot") {
+      triTransforms.push({ type: "rot", degrees: null });
+    } else if (tw === ">>invert") {
+      triTransforms.push({ type: "invert" });
+    } else if (/^>>rot-?\d+(\.\d+)?$/.test(tw)) {
+      triTransforms.push({ type: "rot", degrees: parseFloat(tw.slice(5)) });
+    } else {
+      unknown.push(tw);
+    }
+  }
+
+  return { angle, side, unknown, labelStr, triMode: null, triValues: null, triTransforms };
 }
 
 const QUAD_SINGLE_TYPES = new Set(["square", "rectangle", "parallelogram", "rhombus", "trapezoid"]);
@@ -141,17 +180,27 @@ function parseQuadrilateral(content) {
     const mainWords = words.slice(2, transformStart);
     const transformWords = words.slice(transformStart);
 
-    const numericWords = mainWords.filter(w => /^-?\d*\.?\d+$/.test(w));
-    const nonNumeric = mainWords.filter(w => !/^-?\d*\.?\d+$/.test(w));
+    const isNumeric = (w) => /^-?\d*\.?\d+$/.test(w);
+    const numericWords = mainWords.filter(isNumeric);
 
     let quadValues = null;
     if (numericWords.length >= 5) quadValues = numericWords.slice(0, 5).map(Number);
     if (numericWords.length > 5) unknown.push(...numericWords.slice(5));
 
+    const newIdx = mainWords.indexOf("new");
     let labelStr = null;
-    for (const w of nonNumeric) {
-      if (labelStr === null && parseQuadLabels(w)) labelStr = w;
-      else unknown.push(w);
+    if (newIdx === -1) {
+      unknown.push("__missing_new__");
+    } else if (!mainWords[newIdx + 1] || !parseQuadLabels(mainWords[newIdx + 1])) {
+      unknown.push("__missing_label__");
+    } else {
+      labelStr = mainWords[newIdx + 1];
+    }
+
+    for (let idx = 0; idx < mainWords.length; idx++) {
+      const w = mainWords[idx];
+      if (newIdx !== -1 && (idx === newIdx || idx === newIdx + 1)) continue;
+      if (!isNumeric(w)) unknown.push(w);
     }
 
     const quadTransforms = parseQuadTransforms(transformWords, unknown);
@@ -170,8 +219,18 @@ function parseQuadrilateral(content) {
   let labelStr = null;
   const unknown = [];
 
+  const newIdx = mainWords.indexOf("new");
+  if (newIdx === -1) {
+    unknown.push("__missing_new__");
+  } else if (!mainWords[newIdx + 1] || !parseQuadLabels(mainWords[newIdx + 1])) {
+    unknown.push("__missing_label__");
+  } else {
+    labelStr = mainWords[newIdx + 1];
+  }
+
   let i = 0;
   while (i < mainWords.length) {
+    if (newIdx !== -1 && (i === newIdx || i === newIdx + 1)) { i++; continue; }
     const w = mainWords[i];
     const wNext = mainWords[i + 1];
     const twoWord = (w === "right" || w === "isosceles") && wNext === "trapezoid"
@@ -180,8 +239,6 @@ function parseQuadrilateral(content) {
       quadType === null ? (quadType = twoWord, i += 2) : (unknown.push(w), i++);
     } else if (QUAD_SINGLE_TYPES.has(w)) {
       quadType === null ? (quadType = w, i++) : (unknown.push(w), i++);
-    } else if (labelStr === null && parseQuadLabels(w)) {
-      labelStr = w; i++;
     } else {
       unknown.push(w); i++;
     }
@@ -690,7 +747,7 @@ function computeTrianglePositions(triMode, triValues, triTransforms, size) {
 function parseContent(content) {
   const lines = content
     .trim()
-    .split(/(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area)\b)/)
+    .split(/(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arrow)\b)/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   const hasTriangle = (lines[0] || "").split(/\s+/)[0] === "triangle";
@@ -737,9 +794,18 @@ function parseContent(content) {
   const inscribedCircleCmds = [];
   const circumscribedCircleCmds = [];
   const tangentLineCmds = [];
+  const secondaryPolyFigureCmds = [];
   const extraErrors = [];
-  if (hasQuad && quadResult.unknown.length > 0)
-    extraErrors.push(`Unknown modifier(s): ${quadResult.unknown.map(w => `"${w}"`).join(", ")}`);
+  if (hasQuad && quadResult.unknown.length > 0) {
+    const qu = quadResult.unknown;
+    if (qu.includes("__missing_new__"))
+      extraErrors.push(`Basis shape must include "new" before the name (e.g. "quadrilateral square new ABCD")`);
+    if (qu.includes("__missing_label__"))
+      extraErrors.push(`Basis shape requires a valid name after "new" (e.g. "quadrilateral square new ABCD")`);
+    const realQu = qu.filter(w => !w.startsWith("__"));
+    if (realQu.length > 0)
+      extraErrors.push(`Unknown modifier(s): ${realQu.map(w => `"${w}"`).join(", ")}`);
+  }
 
   // Pre-scan new point names so "label"/"mark" can reference them.
   const lineNewNames = new Set();
@@ -759,7 +825,7 @@ function parseContent(content) {
     } else if (ws[0] === "circle") {
       const isSpec = ws[1] === "inscribe" || ws[1] === "circumscribe";
       const ni = isSpec ? ws.indexOf("new") : -1;
-      const nm = isSpec ? (ni !== -1 ? (ws[ni + 1] ?? "") : "") : (ws[1] || "O-OX");
+      const nm = isSpec ? (ni !== -1 ? (ws[ni + 1] ?? "") : "") : (ws[2] ?? "");
       const d = nm.indexOf("-");
       if (d > 0) {
         const ctr = nm.slice(0, d);
@@ -833,8 +899,20 @@ function parseContent(content) {
       }
     } else if (words[0] === "area") {
       const pts = (words[1] ?? "").split("");
-      const color = words[2] ?? null;
-      areaFillCmds.push({ pts, color });
+      const rest = words.slice(2);
+      const sepIdx = rest.indexOf("--");
+      let label = null, style = "solid";
+      if (sepIdx === -1) {
+        label = rest.length > 0 ? rest.join(" ") : null;
+      } else {
+        label = sepIdx > 0 ? rest.slice(0, sepIdx).join(" ") : null;
+        style = rest.slice(sepIdx + 1).join(" ") || "solid";
+      }
+      areaFillCmds.push({ pts, label, style });
+    } else if (words[0] === "arrow") {
+      const sepIdx = words.indexOf("--");
+      const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
+      drawCmds.push({ drawType: "arrow", pts: words[1] ?? "", lineStyle });
     } else if (words[0] === "mark") {
       if (words.length < 2) {
         extraErrors.push(`"mark" requires at least a specification: "${line}"`);
@@ -899,9 +977,13 @@ function parseContent(content) {
       }
     } else if (words[0] === "line") {
       if (words[1] === "segment" || words[1] === "ray") {
-        drawCmds.push({ drawType: words[1], pts: words[2] ?? "" });
+        const sepIdx = words.indexOf("--");
+        const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
+        drawCmds.push({ drawType: words[1], pts: words[2] ?? "", lineStyle });
       } else if (words[1] && words[1].length === 2) {
-        drawCmds.push({ drawType: "line", pts: words[1] });
+        const sepIdx = words.indexOf("--");
+        const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
+        drawCmds.push({ drawType: "line", pts: words[1], lineStyle });
       } else if (words[1] === "tangent") {
         if (words.length < 6 || words[4] !== "new") {
           extraErrors.push(`"line tangent": format is "line tangent <circle> <point> new <name>"`);
@@ -970,21 +1052,39 @@ function parseContent(content) {
           }
         }
       } else {
-        const name = words[1] || "O-OX";
-        const dash = name.indexOf("-");
-        if (dash <= 0 || dash === name.length - 1) {
-          extraErrors.push(
-            `"circle": invalid format "${name}" — expected "center-radiusSide" (e.g. "O-OX")`,
-          );
+        const nm = words[1] ?? "";
+        const secDash = nm.indexOf("-");
+        if (secDash > 0 && secDash < nm.length - 1) {
+          // Secondary circle from existing points: circle D-DN
+          const center = nm.slice(0, secDash);
+          const radiusSide = nm.slice(secDash + 1);
+          const northPt = radiusSide.startsWith(center) ? radiusSide.slice(center.length) : radiusSide;
+          circleCmds.push({ name: nm, center, radiusSide, northPt, fromExisting: true });
+        } else if (words[1] !== "new") {
+          extraErrors.push(`"circle": requires "new" before the name (e.g. "circle new O-OX") or use existing points (e.g. "circle D-DN")`);
+        } else if (!words[2]) {
+          extraErrors.push(`"circle new": name required (e.g. "circle new O-OX")`);
         } else {
-          const center = name.slice(0, dash);
-          const radiusSide = name.slice(dash + 1);
-          const northPt = radiusSide.startsWith(center)
-            ? radiusSide.slice(center.length)
-            : radiusSide;
-          circleCmds.push({ name, center, radiusSide, northPt });
+          const name = words[2];
+          const dash = name.indexOf("-");
+          if (dash <= 0 || dash === name.length - 1) {
+            extraErrors.push(
+              `"circle new ${name}": invalid format — expected "center-radiusSide" (e.g. "circle new O-OX")`,
+            );
+          } else {
+            const center = name.slice(0, dash);
+            const radiusSide = name.slice(dash + 1);
+            const northPt = radiusSide.startsWith(center)
+              ? radiusSide.slice(center.length)
+              : radiusSide;
+            circleCmds.push({ name, center, radiusSide, northPt });
+          }
         }
       }
+    } else if (words[0] === "triangle" && words[1] && /^[A-Z]{3}$/.test(words[1])) {
+      secondaryPolyFigureCmds.push({ type: "triangle", pts: words[1].split("") });
+    } else if (words[0] === "quadrilateral" && words[1] && /^[A-Z]{4}$/.test(words[1])) {
+      secondaryPolyFigureCmds.push({ type: "quadrilateral", pts: words[1].split("") });
     } else {
       extraErrors.push(`Unknown command: "${line}"`);
     }
@@ -1007,6 +1107,7 @@ function parseContent(content) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1036,6 +1137,7 @@ function syntaxCheck(content) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1050,9 +1152,16 @@ function syntaxCheck(content) {
     };
   }
 
-  if (unknown.length > 0) {
+  const realUnknown = unknown.filter(w => !w.startsWith("__"));
+  if (unknown.includes("__missing_new__")) {
+    errors.push(`Basis shape must include "new" before the name (e.g. "triangle right isosceles new A[B]C")`);
+  }
+  if (unknown.includes("__missing_label__")) {
+    errors.push(`Basis shape requires a valid name after "new" (e.g. "circle new O-OX", "triangle new ABC")`);
+  }
+  if (realUnknown.length > 0) {
     errors.push(
-      `Unknown modifier(s): ${unknown.map((w) => `"${w}"`).join(", ")}`,
+      `Unknown modifier(s): ${realUnknown.map((w) => `"${w}"`).join(", ")}`,
     );
   }
 
@@ -1316,6 +1425,15 @@ function syntaxCheck(content) {
     }
   }
 
+  for (const { type, pts } of secondaryPolyFigureCmds) {
+    for (const p of pts) {
+      if (!allKnownNames.has(p))
+        errors.push(`"${type} ${pts.join("")}": unknown point "${p}"`);
+    }
+    if (new Set(pts).size !== pts.length)
+      errors.push(`"${type} ${pts.join("")}": points must be distinct`);
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -1342,6 +1460,7 @@ function compile(content, size) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1379,11 +1498,19 @@ function compile(content, size) {
       markedIdx !== -1 ? markedIdx : (DEFAULT_SPECIAL_POS[side]?.[angle] ?? 0);
     const altSizeMap = COORDS_ALT[side]?.[angle]?.[specialPos];
     const { bx, by, cx, bPos } = (altSizeMap ?? COORDS[side][angle])[size];
-    positions = [
+    const rawPts = [
       { x: 0, y: 0, pos: "below left" },
       { x: bx, y: by, pos: bPos },
       { x: cx, y: 0, pos: "below right" },
     ];
+    if (triTransforms.length > 0) {
+      const transformed = applyTriTransforms(rawPts, triTransforms);
+      const centX = (transformed[0].x + transformed[1].x + transformed[2].x) / 3;
+      const centY = (transformed[0].y + transformed[1].y + transformed[2].y) / 3;
+      positions = transformed.map(p => ({ x: p.x, y: p.y, pos: triLabelPos(p.x, p.y, centX, centY) }));
+    } else {
+      positions = rawPts;
+    }
   } else if (hasQuad) {
     positions = quadResult.quadMode
       ? (computeQuadFreeformPositions(quadResult.quadMode, quadResult.quadValues, quadResult.quadTransforms, size) ?? [
@@ -1568,10 +1695,26 @@ function compile(content, size) {
 
   // Circle point positions must be in newPtsMap before draw commands run.
   const circleR = { small: 1.5, medium: 2.0, large: 3.8 }[size];
-  for (const { center, northPt } of circleCmds) {
-    newPtsMap[center] = { x: 0, y: 0, pos: "below" };
-    if (northPt) newPtsMap[northPt] = { x: circleR, y: 0, pos: "right" };
+  for (const { center, northPt, fromExisting } of circleCmds) {
+    if (fromExisting) {
+      // Points already exist; tag northPt with originX/originY for arc detection.
+      const cp = lookupPt(center);
+      const np = northPt ? lookupPt(northPt) : null;
+      if (cp && np && !newPtsMap[northPt])
+        newPtsMap[northPt] = { ...np, originX: cp.x, originY: cp.y };
+      else if (cp && np)
+        newPtsMap[northPt] = { ...newPtsMap[northPt], originX: cp.x, originY: cp.y };
+    } else {
+      newPtsMap[center] = { x: 0, y: 0, pos: "below" };
+      if (northPt) newPtsMap[northPt] = { x: circleR, y: 0, originX: 0, originY: 0, pos: "right" };
+    }
   }
+
+  const getCircleR = (circleCmd) => {
+    if (!circleCmd.fromExisting) return circleR;
+    const cp = lookupPt(circleCmd.center), np = circleCmd.northPt ? lookupPt(circleCmd.northPt) : null;
+    return cp && np ? Math.hypot(cp.x - np.x, cp.y - np.y) : circleR;
+  };
 
   // Compute positions for explicit points on circles.
   for (const { circleName, angleStr, name } of circlePointCmds) {
@@ -1579,10 +1722,11 @@ function compile(content, size) {
     if (!circleCmd) continue;
     const center = newPtsMap[circleCmd.center];
     if (!center) continue;
+    const R = getCircleR(circleCmd);
     const rad = (parseFloat(angleStr) * Math.PI) / 180;
     newPtsMap[name] = {
-      x: center.x + circleR * Math.cos(rad),
-      y: center.y + circleR * Math.sin(rad),
+      x: center.x + R * Math.cos(rad),
+      y: center.y + R * Math.sin(rad),
       originX: center.x,
       originY: center.y,
     };
@@ -1633,7 +1777,7 @@ function compile(content, size) {
     const cy = (a * A.y + b * B.y + c2 * C.y) / (a + b + c2);
     const tcx = (A.x + B.x + C.x) / 3, tcy = (A.y + B.y + C.y) / 3;
     newPtsMap[center] = { x: cx, y: cy, pos: triLabelPos(cx, cy, tcx, tcy) };
-    if (northPt) newPtsMap[northPt] = { x: cx + r, y: cy, pos: "right" };
+    if (northPt) newPtsMap[northPt] = { x: cx + r, y: cy, originX: cx, originY: cy, pos: "right" };
     if (touchNames.length >= 3) {
       // touch on BC (side a): from B, distance s-b
       const tBC = (s - b) / a;
@@ -1661,7 +1805,7 @@ function compile(content, size) {
     const r = Math.hypot(A.x - cx, A.y - cy);
     const tcx = (A.x + B.x + C.x) / 3, tcy = (A.y + B.y + C.y) / 3;
     newPtsMap[center] = { x: cx, y: cy, pos: triLabelPos(cx, cy, tcx, tcy) };
-    if (northPt) newPtsMap[northPt] = { x: cx + r, y: cy, pos: "right" };
+    if (northPt) newPtsMap[northPt] = { x: cx + r, y: cy, originX: cx, originY: cy, pos: "right" };
     computedCircleGeoms.push({ cx, cy, r });
   }
 
@@ -1671,13 +1815,14 @@ function compile(content, size) {
     ...(hasTriangle || hasQuad ? positions : []),
     ...Object.values(newPtsMap),
   ];
-  for (const { center: cName } of circleCmds) {
-    const cp = newPtsMap[cName];
+  for (const circleCmd of circleCmds) {
+    const cp = lookupPt(circleCmd.center);
     if (cp) {
-      bbPts.push({ x: cp.x - circleR, y: cp.y });
-      bbPts.push({ x: cp.x + circleR, y: cp.y });
-      bbPts.push({ x: cp.x, y: cp.y - circleR });
-      bbPts.push({ x: cp.x, y: cp.y + circleR });
+      const R = getCircleR(circleCmd);
+      bbPts.push({ x: cp.x - R, y: cp.y });
+      bbPts.push({ x: cp.x + R, y: cp.y });
+      bbPts.push({ x: cp.x, y: cp.y - R });
+      bbPts.push({ x: cp.x, y: cp.y + R });
     }
   }
   for (const { cx, cy, r } of computedCircleGeoms) {
@@ -1701,60 +1846,148 @@ function compile(content, size) {
   const bbY0 = bbMinY - bbMargin,
     bbY1 = bbMaxY + bbMargin;
 
+  // Returns per-edge arc direction: "cw", "ccw", or null (=shorter arc) for non-arc edges.
+  const resolveAreaArcDirs = (pts) => {
+    const n = pts.length;
+    const isArcEdge = (i) => {
+      const na = pts[i], nb = pts[(i + 1) % n];
+      const curr = lookupPt(na), next = lookupPt(nb);
+      if (!curr || !next) return false;
+      const hasExplicit = drawCmds.some(d =>
+        (d.drawType === "segment" || d.drawType === "line" || d.drawType === "ray") &&
+        ((d.pts[0] === na && d.pts[1] === nb) || (d.pts[0] === nb && d.pts[1] === na))
+      );
+      return !hasExplicit &&
+        curr.originX !== undefined && next.originX !== undefined &&
+        Math.abs(curr.originX - next.originX) < 1e-6 &&
+        Math.abs(curr.originY - next.originY) < 1e-6;
+    };
+    const arcEdge = Array.from({ length: n }, (_, i) => isArcEdge(i));
+    const dirs = new Array(n).fill(null);
+    const visited = new Array(n).fill(false);
+    for (let start = 0; start < n; start++) {
+      if (!arcEdge[start] || visited[start]) continue;
+      let len = 0;
+      while (arcEdge[(start + len) % n] && !visited[(start + len) % n] && len < n) len++;
+      if (len < 2) { visited[start] = true; continue; }
+      // Points in run: pts[start..start+len]
+      const runPts = Array.from({ length: len + 1 }, (_, k) => lookupPt(pts[(start + k) % n]));
+      const p0 = runPts[0];
+      const ox = p0.originX, oy = p0.originY;
+      const a0 = Math.atan2(p0.y - oy, p0.x - ox) * 180 / Math.PI;
+      const relCCW = runPts.map(p => (((Math.atan2(p.y - oy, p.x - ox) * 180 / Math.PI) - a0) % 360 + 360) % 360);
+      const relCW  = runPts.map(p => (((a0 - Math.atan2(p.y - oy, p.x - ox) * 180 / Math.PI) % 360 + 360) % 360));
+      const isCCW = relCCW.every((v, i) => i === 0 || v >= relCCW[i - 1]);
+      const isCW  = relCW.every((v, i) => i === 0 || v >= relCW[i - 1]);
+      const dir = isCCW ? "ccw" : isCW ? "cw" : null;
+      for (let k = 0; k < len; k++) { dirs[(start + k) % n] = dir; visited[(start + k) % n] = true; }
+    }
+    return dirs;
+  };
+
+  const arcAngles = (curr, next, dir) => {
+    const cx = curr.originX, cy = curr.originY;
+    const R = Math.hypot(curr.x - cx, curr.y - cy);
+    let angA = (Math.atan2(curr.y - cy, curr.x - cx) * 180) / Math.PI;
+    let angB = (Math.atan2(next.y - cy, next.x - cx) * 180) / Math.PI;
+    if (dir === "ccw") { while (angB <= angA) angB += 360; }
+    else if (dir === "cw") { while (angB >= angA) angB -= 360; }
+    else { while (angB < angA) angB += 360; if (angB - angA > 180) angB -= 360; }
+    return { angA, angB, cx, cy, R };
+  };
+
+  const buildAreaPath = (pts) => {
+    const first = lookupPt(pts[0]);
+    if (!first) return null;
+    const n = pts.length;
+    const dirs = resolveAreaArcDirs(pts);
+    let path = `(${f(first.x)},${f(first.y)})`;
+    for (let i = 0; i < n; i++) {
+      const curr = lookupPt(pts[i]);
+      const next = lookupPt(pts[(i + 1) % n]);
+      if (!curr || !next) continue;
+      const na = pts[i], nb = pts[(i + 1) % n];
+      const hasExplicit = drawCmds.some(d =>
+        (d.drawType === "segment" || d.drawType === "line" || d.drawType === "ray") &&
+        ((d.pts[0] === na && d.pts[1] === nb) || (d.pts[0] === nb && d.pts[1] === na))
+      );
+      const isArcEdge = !hasExplicit &&
+        curr.originX !== undefined && next.originX !== undefined &&
+        Math.abs(curr.originX - next.originX) < 1e-6 &&
+        Math.abs(curr.originY - next.originY) < 1e-6;
+      if (isArcEdge) {
+        const { angA, angB, R } = arcAngles(curr, next, dirs[i]);
+        path += ` arc (${f(angA)}:${f(angB)}:${f(R)})`;
+      } else if (i === n - 1) {
+        path += ` -- cycle`;
+      } else {
+        path += ` -- (${f(next.x)},${f(next.y)})`;
+      }
+    }
+    if (!path.endsWith("cycle")) path += ` -- cycle`;
+    return path;
+  };
+
   const buildFillLines = () => {
     const out = [];
-    for (const { pts, color } of areaFillCmds) {
-      if (pts.length < 2) continue;
-      const first = lookupPt(pts[0]);
-      if (!first) continue;
-      const fillColor = color ?? "gray!25";
-      let path = `(${f(first.x)},${f(first.y)})`;
-      const n = pts.length;
-      for (let i = 0; i < n; i++) {
-        const curr = lookupPt(pts[i]);
-        const next = lookupPt(pts[(i + 1) % n]);
-        if (!curr || !next) continue;
-        const na = pts[i], nb = pts[(i + 1) % n];
-        const hasExplicitSegment = drawCmds.some(
-          (d) => d.drawType === "segment" &&
-            ((d.pts[0] === na && d.pts[1] === nb) || (d.pts[0] === nb && d.pts[1] === na))
-        );
-        const onSameCircle =
-          !hasExplicitSegment &&
-          curr.originX !== undefined && next.originX !== undefined &&
-          Math.abs(curr.originX - next.originX) < 1e-6 &&
-          Math.abs(curr.originY - next.originY) < 1e-6;
-        if (onSameCircle) {
-          const cx = curr.originX, cy = curr.originY;
-          const R = Math.hypot(curr.x - cx, curr.y - cy);
-          let angA = (Math.atan2(curr.y - cy, curr.x - cx) * 180) / Math.PI;
-          let angB = (Math.atan2(next.y - cy, next.x - cx) * 180) / Math.PI;
-          while (angB < angA) angB += 360;
-          if (angB - angA > 180) angB -= 360;
-          path += ` arc (${f(angA)}:${f(angB)}:${f(R)})`;
-        } else if (i === n - 1) {
-          path += ` -- cycle`;
-        } else {
-          path += ` -- (${f(next.x)},${f(next.y)})`;
-        }
+    for (const { pts, style } of areaFillCmds) {
+      if (pts.length < 2 || style === "none") continue;
+      const path = buildAreaPath(pts);
+      if (!path) continue;
+      if (style === "solid light") {
+        out.push(`\\fill[gray!25] ${path};`);
+      } else {
+        out.push(`\\fill[gray!55] ${path};`);
       }
-      if (!path.endsWith("cycle")) path += ` -- cycle`;
-      out.push(`\\fill[${fillColor}] ${path};`);
     }
     return out;
+  };
+
+  const consumedDrawCmds = new Set();
+
+  // Returns the lineStyle of a drawCmd that overrides this side, or null.
+  // Marks that cmd as consumed so it isn't redrawn in the drawCmds loop.
+  const consumeSideStyle = (la, lb) => {
+    const cmd = drawCmds.find(
+      (d) =>
+        (d.drawType === "segment" || d.drawType === "line") &&
+        d.lineStyle &&
+        ((d.pts[0] === la && d.pts[1] === lb) || (d.pts[0] === lb && d.pts[1] === la)),
+    );
+    if (cmd) { consumedDrawCmds.add(cmd); return cmd.lineStyle; }
+    return null;
   };
 
   const lines = [...buildFillLines()];
   if (hasTriangle) {
     const [p0, p1, p2] = positions;
-    lines.push(
-      `\\draw[line width=1.5pt] (${f(p0.x)},${f(p0.y)}) -- (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)}) -- cycle;`,
-    );
+    const [la, lb, lc] = labels.map((v) => v.label);
+    for (const [pt1, pt2, a, b] of [[p0, p1, la, lb], [p1, p2, lb, lc], [p2, p0, lc, la]]) {
+      const style = consumeSideStyle(a, b);
+      const sa = style === "dashed" ? ",dashed" : style === "dotted" ? ",dotted" : "";
+      lines.push(`\\draw[line width=1.5pt${sa}] (${f(pt1.x)},${f(pt1.y)}) -- (${f(pt2.x)},${f(pt2.y)});`);
+    }
   } else if (hasQuad) {
     const [p0, p1, p2, p3] = positions;
-    lines.push(
-      `\\draw[line width=1.5pt] (${f(p0.x)},${f(p0.y)}) -- (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)}) -- (${f(p3.x)},${f(p3.y)}) -- cycle;`,
-    );
+    const [la, lb, lc, ld] = labels.map((v) => v.label);
+    for (const [pt1, pt2, a, b] of [[p0, p1, la, lb], [p1, p2, lb, lc], [p2, p3, lc, ld], [p3, p0, ld, la]]) {
+      const style = consumeSideStyle(a, b);
+      const sa = style === "dashed" ? ",dashed" : style === "dotted" ? ",dotted" : "";
+      lines.push(`\\draw[line width=1.5pt${sa}] (${f(pt1.x)},${f(pt1.y)}) -- (${f(pt2.x)},${f(pt2.y)});`);
+    }
+  }
+
+  // Secondary triangle/quadrilateral outlines from existing points.
+  if (secondaryPolyFigureCmds.length > 0) {
+    lines.push("");
+    for (const { pts } of secondaryPolyFigureCmds) {
+      const n = pts.length;
+      for (let i = 0; i < n; i++) {
+        const p1 = lookupPt(pts[i]), p2 = lookupPt(pts[(i + 1) % n]);
+        if (!p1 || !p2) continue;
+        lines.push(`\\draw[line width=1.5pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`);
+      }
+    }
   }
 
   // A segment suppresses any line/ray/tangent whose infinite line it lies on (geometric check).
@@ -1773,31 +2006,46 @@ function compile(content, size) {
   };
 
   // Direct line / segment / ray draw commands.
+  const arrowHeads = [];
   if (drawCmds.length > 0) {
     const extAmt = { small: 0.5, medium: 0.8, large: 1.2 }[size];
     lines.push("");
-    for (const { drawType, pts } of drawCmds) {
+    for (const cmd of drawCmds) {
+      if (consumedDrawCmds.has(cmd)) continue;
+      const { drawType, pts, lineStyle } = cmd;
       const idx1 = labels.findIndex((v) => v.label === pts[0]);
       const idx2 = labels.findIndex((v) => v.label === pts[1]);
       const p1 = idx1 !== -1 ? positions[idx1] : (newPtsMap[pts[0]] ?? null);
       const p2 = idx2 !== -1 ? positions[idx2] : (newPtsMap[pts[1]] ?? null);
       if (!p1 || !p2) continue;
-      if (drawType !== "segment" && segmentCoversLine(p1, p2)) continue;
+      if (drawType !== "segment" && drawType !== "arrow" && segmentCoversLine(p1, p2)) continue;
       const dx = p2.x - p1.x,
         dy = p2.y - p1.y;
       const len = Math.hypot(dx, dy);
       if (len < 1e-10) continue;
       const ux = dx / len,
         uy = dy / len;
-      if (drawType === "segment") {
+      const styleAttr = lineStyle === "dashed" ? ",dashed" : lineStyle === "dotted" ? ",dotted" : "";
+      if (drawType === "arrow") {
+        const aLen = 0.30, aWid = 0.13;
+        const bx = p2.x - aLen * ux, by = p2.y - aLen * uy;
+        const lx = bx - aWid * uy, ly = by + aWid * ux;
+        const rx = bx + aWid * uy, ry = by - aWid * ux;
         lines.push(
-          `\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`,
+          `\\draw[line width=1pt${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(bx)},${f(by)});`,
+        );
+        arrowHeads.push(
+          `\\fill (${f(p2.x)},${f(p2.y)}) -- (${f(lx)},${f(ly)}) -- (${f(rx)},${f(ry)}) -- cycle;`,
+        );
+      } else if (drawType === "segment") {
+        lines.push(
+          `\\draw[line width=1pt${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`,
         );
       } else if (drawType === "ray") {
         const ex = p2.x + extAmt * ux,
           ey = p2.y + extAmt * uy;
         lines.push(
-          `\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(ex)},${f(ey)});`,
+          `\\draw[line width=1pt${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(ex)},${f(ey)});`,
         );
       } else {
         // Clip the infinite line to the padded image bounding box (slab method).
@@ -1817,7 +2065,7 @@ function compile(content, size) {
         }
         if (tMin >= tMax) continue;
         lines.push(
-          `\\draw[line width=1pt] (${f(p1.x + tMin * ux)},${f(p1.y + tMin * uy)}) -- (${f(p1.x + tMax * ux)},${f(p1.y + tMax * uy)});`,
+          `\\draw[line width=1pt${styleAttr}] (${f(p1.x + tMin * ux)},${f(p1.y + tMin * uy)}) -- (${f(p1.x + tMax * ux)},${f(p1.y + tMax * uy)});`,
         );
       }
     }
@@ -1825,17 +2073,21 @@ function compile(content, size) {
 
   // Circles: draw the circle; register center + north point as named points.
   if (circleCmds.length > 0) {
-    const circleR = { small: 1.5, medium: 2.0, large: 3.8 }[size];
     lines.push("");
-    for (const { center, northPt } of circleCmds) {
-      const ccx = 0,
-        ccy = 0;
-      newPtsMap[center] = { x: ccx, y: ccy, pos: "below" };
-      if (northPt)
-        newPtsMap[northPt] = { x: ccx + circleR, y: ccy, pos: "right" };
-      lines.push(
-        `\\draw[line width=1.5pt] (${f(ccx)},${f(ccy)}) circle (${f(circleR)});`,
-      );
+    for (const circleCmd of circleCmds) {
+      const { center, northPt, fromExisting } = circleCmd;
+      let ccx, ccy, R;
+      if (fromExisting) {
+        const cp = lookupPt(center);
+        if (!cp) continue;
+        ccx = cp.x; ccy = cp.y;
+        R = getCircleR(circleCmd);
+      } else {
+        ccx = 0; ccy = 0; R = circleR;
+        newPtsMap[center] = { x: ccx, y: ccy, pos: "below" };
+        if (northPt) newPtsMap[northPt] = { x: ccx + R, y: ccy, originX: ccx, originY: ccy, pos: "right" };
+      }
+      lines.push(`\\draw[line width=1.5pt] (${f(ccx)},${f(ccy)}) circle (${f(R)});`);
     }
   }
   // Inscribed / circumscribed circles.
@@ -1878,7 +2130,12 @@ function compile(content, size) {
     }
   }
 
-  // Area fills: drawn before labels/marks so they stay underneath.
+  // Arrowheads: drawn after all strokes so they paint over everything.
+  if (arrowHeads.length > 0) {
+    lines.push("");
+    for (const h of arrowHeads) lines.push(h);
+  }
+
   lines.push("");
 
   for (const { spec, text, labelPos } of vertexLabelCmds) {
@@ -2226,6 +2483,54 @@ function compile(content, size) {
         );
       }
     }
+  }
+
+  // Area labels: rendered last so they sit on top of fills and strokes.
+  for (const { pts, label } of areaFillCmds) {
+    if (!label) continue;
+    const n = pts.length;
+    const dirs = resolveAreaArcDirs(pts);
+    // Build a sampled polygon: arcs are subdivided so the centroid formula accounts for the curved boundary.
+    const poly = [];
+    for (let i = 0; i < n; i++) {
+      const curr = lookupPt(pts[i]);
+      const next = lookupPt(pts[(i + 1) % n]);
+      if (!curr) continue;
+      poly.push(curr);
+      if (!next) continue;
+      const na = pts[i], nb = pts[(i + 1) % n];
+      const hasExplicit = drawCmds.some(d =>
+        (d.drawType === "segment" || d.drawType === "line" || d.drawType === "ray") &&
+        ((d.pts[0] === na && d.pts[1] === nb) || (d.pts[0] === nb && d.pts[1] === na))
+      );
+      const isArcEdge = !hasExplicit &&
+        curr.originX !== undefined && next.originX !== undefined &&
+        Math.abs(curr.originX - next.originX) < 1e-6 &&
+        Math.abs(curr.originY - next.originY) < 1e-6;
+      if (isArcEdge) {
+        const { angA, angB, cx: ocx, cy: ocy, R } = arcAngles(curr, next, dirs[i]);
+        const angAR = angA * Math.PI / 180, angBR = angB * Math.PI / 180;
+        for (let s = 1; s <= 7; s++) {
+          const ang = angAR + (s / 8) * (angBR - angAR);
+          poly.push({ x: ocx + R * Math.cos(ang), y: ocy + R * Math.sin(ang) });
+        }
+      }
+    }
+    if (poly.length < 3) continue;
+    // Polygon centroid formula (signed area weighted).
+    let area = 0, cx = 0, cy = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const j = (i + 1) % poly.length;
+      const cross = poly[i].x * poly[j].y - poly[j].x * poly[i].y;
+      area += cross;
+      cx += (poly[i].x + poly[j].x) * cross;
+      cy += (poly[i].y + poly[j].y) * cross;
+    }
+    area /= 2;
+    if (Math.abs(area) < 1e-10) continue;
+    cx /= 6 * area;
+    cy /= 6 * area;
+    lines.push(`\\node[scale=1.5] at (${f(cx)},${f(cy)}) {$${label}$};`);
   }
 
   return `\\begin{document}\n\n\\begin{tikzpicture}\n\n${lines.join("\n")}\n\n\\end{tikzpicture}\n\n\\end{document}`;
