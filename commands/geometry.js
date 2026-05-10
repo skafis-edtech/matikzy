@@ -747,7 +747,7 @@ function computeTrianglePositions(triMode, triValues, triTransforms, size) {
 function parseContent(content) {
   const lines = content
     .trim()
-    .split(/(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arrow)\b)/)
+    .split(/(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area)\b)/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   const hasTriangle = (lines[0] || "").split(/\s+/)[0] === "triangle";
@@ -794,6 +794,7 @@ function parseContent(content) {
   const inscribedCircleCmds = [];
   const circumscribedCircleCmds = [];
   const tangentLineCmds = [];
+  const distanceCmds = [];
   const secondaryPolyFigureCmds = [];
   const extraErrors = [];
   if (hasQuad && quadResult.unknown.length > 0) {
@@ -909,10 +910,6 @@ function parseContent(content) {
         style = rest.slice(sepIdx + 1).join(" ") || "solid";
       }
       areaFillCmds.push({ pts, label, style });
-    } else if (words[0] === "arrow") {
-      const sepIdx = words.indexOf("--");
-      const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
-      drawCmds.push({ drawType: "arrow", pts: words[1] ?? "", lineStyle });
     } else if (words[0] === "mark") {
       if (words.length < 2) {
         extraErrors.push(`"mark" requires at least a specification: "${line}"`);
@@ -980,6 +977,20 @@ function parseContent(content) {
         const sepIdx = words.indexOf("--");
         const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
         drawCmds.push({ drawType: words[1], pts: words[2] ?? "", lineStyle });
+      } else if (words[1] === "arrow") {
+        const sepIdx = words.indexOf("--");
+        const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
+        drawCmds.push({ drawType: "arrow", pts: words[2] ?? "", lineStyle });
+      } else if (words[1] === "distance") {
+        const newIdx = words.indexOf("new");
+        const fromPt = words[2] ?? "";
+        const segSpec = words[3] ?? "";
+        const newName = newIdx !== -1 ? (words[newIdx + 1] ?? "") : "";
+        if (!fromPt || segSpec.length !== 2 || !newName) {
+          extraErrors.push(`"line distance": format is "line distance <point> <segment> new <name>" (e.g. "line distance C AB new K")`);
+        } else {
+          distanceCmds.push({ fromPt, segPts: [segSpec[0], segSpec[1]], newName });
+        }
       } else if (words[1] && words[1].length === 2) {
         const sepIdx = words.indexOf("--");
         const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
@@ -1107,6 +1118,7 @@ function parseContent(content) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    distanceCmds,
     secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
@@ -1137,6 +1149,7 @@ function syntaxCheck(content) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    distanceCmds,
     secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
@@ -1434,6 +1447,16 @@ function syntaxCheck(content) {
       errors.push(`"${type} ${pts.join("")}": points must be distinct`);
   }
 
+  for (const { fromPt, segPts, newName } of distanceCmds) {
+    if (!allKnownNames.has(fromPt))
+      errors.push(`"line distance": unknown point "${fromPt}"`);
+    for (const p of segPts) {
+      if (!allKnownNames.has(p))
+        errors.push(`"line distance": unknown segment point "${p}"`);
+    }
+    if (!newName) errors.push(`"line distance": missing new point name`);
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -1460,6 +1483,7 @@ function compile(content, size) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    distanceCmds,
     secondaryPolyFigureCmds,
     hasTriangle,
     hasQuad,
@@ -1691,6 +1715,19 @@ function compile(content, size) {
         y: p1.y + t * (p2.y - p1.y),
       };
     }
+  }
+
+  // Compute foot-of-perpendicular for "line distance" commands.
+  for (const { fromPt, segPts, newName } of distanceCmds) {
+    const C = lookupPt(fromPt);
+    const L = lookupPt(segPts[0]);
+    const M = lookupPt(segPts[1]);
+    if (!C || !L || !M) continue;
+    const ex = M.x - L.x, ey = M.y - L.y;
+    const len2 = ex * ex + ey * ey;
+    if (len2 < 1e-12) continue;
+    const t = ((C.x - L.x) * ex + (C.y - L.y) * ey) / len2;
+    newPtsMap[newName] = { x: L.x + t * ex, y: L.y + t * ey };
   }
 
   // Circle point positions must be in newPtsMap before draw commands run.
@@ -2159,37 +2196,29 @@ function compile(content, size) {
         );
         continue;
       }
-      let lx, ly;
+      let outDx, outDy;
       const ptCmd = pointCmdByName[spec];
       if (ptCmd) {
         const sp1 = lookupPt(ptCmd.sideSpec[0]);
         const sp2 = lookupPt(ptCmd.sideSpec[1]);
-        const sdx = sp2.x - sp1.x;
-        const sdy = sp2.y - sp1.y;
+        const sdx = sp2.x - sp1.x, sdy = sp2.y - sp1.y;
         const slen = Math.hypot(sdx, sdy);
-        const px = -sdy / slen,
-          py = sdx / slen;
-        const i1 = labels.findIndex((v) => v.label === ptCmd.sideSpec[0]);
-        const i2 = labels.findIndex((v) => v.label === ptCmd.sideSpec[1]);
-        const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
-        const refX = i3 !== undefined ? positions[i3].x : centX;
-        const refY = i3 !== undefined ? positions[i3].y : centY;
-        const sign = px * (pt.x - refX) + py * (pt.y - refY) >= 0 ? 1 : -1;
-        lx = pt.x + ptCmdLblOff * sign * px;
-        ly = pt.y + ptCmdLblOff * sign * py;
+        const px = -sdy / slen, py = sdx / slen;
+        const sign = px * (pt.x - centX) + py * (pt.y - centY) >= 0 ? 1 : -1;
+        outDx = sign * px; outDy = sign * py;
       } else {
-        const ox = pt.originX ?? centX;
-        const oy = pt.originY ?? centY;
-        const dx = pt.x - ox,
-          dy = pt.y - oy;
+        const ox = pt.originX ?? centX, oy = pt.originY ?? centY;
+        const dx = pt.x - ox, dy = pt.y - oy;
         const len = Math.hypot(dx, dy);
-        lx = pt.x + (len > 0 ? (ptLblOff * dx) / len : 0);
-        ly = pt.y + (len > 0 ? (ptLblOff * dy) / len : ptLblOff);
+        outDx = len > 0 ? dx / len : 0; outDy = len > 0 ? dy / len : 1;
       }
-      const adx = lx - pt.x, ady = ly - pt.y;
-      const anchor = dirToAnchor(adx, ady);
+      const posStr = normPos(
+        (Math.abs(outDy) > Math.abs(outDx) * 0.4 ? (outDy > 0 ? "top" : "bottom") : "") +
+        (Math.abs(outDy) > Math.abs(outDx) * 0.4 && Math.abs(outDx) > Math.abs(outDy) * 0.4 ? " " : "") +
+        (Math.abs(outDx) > Math.abs(outDy) * 0.4 ? (outDx > 0 ? "right" : "left") : "")
+      ) || "above";
       lines.push(
-        `\\node[scale=1.5, anchor=${anchor}] at (${f(lx)},${f(ly)}) {$${text ?? spec}$};`,
+        `\\node[${posStr}, scale=1.5] at (${f(pt.x)},${f(pt.y)}) {$${text ?? spec}$};`,
       );
     }
   }
@@ -2481,6 +2510,18 @@ function compile(content, size) {
         lines.push(
           `\\draw[line width=1pt] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`,
         );
+      }
+    }
+  }
+
+  // Distance (perpendicular foot) segments.
+  if (distanceCmds.length > 0) {
+    lines.push("");
+    for (const { fromPt, newName } of distanceCmds) {
+      const C = lookupPt(fromPt);
+      const K = lookupPt(newName);
+      if (C && K) {
+        lines.push(`\\draw[line width=1pt] (${f(C.x)},${f(C.y)}) -- (${f(K.x)},${f(K.y)});`);
       }
     }
   }

@@ -395,15 +395,19 @@ point AB 1:4 new K
 line segment CK
 line AB
 line ray BC
-arrow CK
+line arrow CK
+line distance C AB new K
 ```
+
+line altitude ABC C new K
 
 Draws new:
 
 - line
 - line segment
 - line ray
-- arrow
+- line arrow
+- line distance
 
 Line segment cuts off the (if already existing) line or ray excess.
 
@@ -482,7 +486,39 @@ area OAB -- solid light
 
 None, solid, solid light.
 
-### Figures from points
+## Shortcuts
+
+Yes, everything is possible with current setup (pretty much). But sometimes it's a bit exhaustive, e.g.:
+
+```
+geometry:
+circle O-OX
+point O-OX 200 new K
+point O-OX 100 new L
+point O-OX 340 new M
+point O-OX 260 new N
+line tangent O-OX K new E
+line tangent O-OX L new F
+line tangent O-OX M new G
+line tangent O-OX N new H
+point NH intersect KE new A
+point KE intersect LF new B
+point LF intersect MG new C
+point MG intersect NH new D
+line segment AB
+line segment BC
+line segment CD
+line segment AD
+label A label B label C label D
+label AB 9
+label BC 10
+label CD x
+label AD 6 -- right
+```
+
+All this just to draw inscribed circle into a quadrilateral.
+
+**Figures from points**
 
 The `new` keyword was used for triangle, circle, quad - all as basis figures. But we can create these things on already existing graphic.
 
@@ -501,13 +537,13 @@ triangle ACX
 circle D-DN
 ```
 
+**Inscribing circumscribing for quad**
+
+TODO...
+
 ## From basic principles
 
 TODO: make everything from points and lines.
-
-## Shortcuts
-
-Yes, everything is possible with current setup (pretty much).
 
 ### Examples
 
