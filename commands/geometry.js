@@ -2010,6 +2010,16 @@ function compile(content, size) {
     const tickHalf = 0.15;
     const tickGap = 0.12;
     // arcBase / arcGap defined above.
+    // Assign radial offsets to angle marks sharing the same vertex+arcCount.
+    const _arcVertCount = new Map();
+    for (const cmd of resolvedMarks) {
+      if (cmd.type !== "angle" || cmd.isRight) continue;
+      const vl = cmd.spec.startsWith("angle ") ? cmd.spec.slice(6) : cmd.spec[1];
+      const key = `${vl}:${cmd.arcs ?? 0}`;
+      const idx = _arcVertCount.get(key) ?? 0;
+      cmd._radialOff = idx * 0.14;
+      _arcVertCount.set(key, idx + 1);
+    }
     lines.push("");
     for (const cmd of resolvedMarks) {
       if (cmd.type === "vertex") {
@@ -2040,9 +2050,9 @@ function compile(content, size) {
         const sdy = p2.y - p1.y;
         const slen = Math.hypot(sdx, sdy);
         const tx = sdx / slen,
-          ty = sdy / slen; // along segment
+          ty = sdy / slen;
         const px = -ty,
-          py = tx; // perpendicular
+          py = tx;
         for (let t = 0; t < n; t++) {
           const off = (t - (n - 1) / 2) * tickGap;
           const tcx = mx + off * tx,
@@ -2068,25 +2078,22 @@ function compile(content, size) {
             Math.sin(Math.acos(Math.max(-1, Math.min(1, dot45))) / 2),
             0.05,
           );
-          // For θ < 45°: push arcs further from the vertex.
-          const SIN_45_HALF = Math.sin((22.5 * Math.PI) / 180); // ≈ 0.383
+          const SIN_45_HALF = Math.sin((22.5 * Math.PI) / 180);
           const adaptedArcBase = arcBase * Math.max(1, SIN_45_HALF / sinHalfM);
           let sa = (Math.atan2(a1y - vy, a1x - vx) * 180) / Math.PI;
           let ea = (Math.atan2(a2y - vy, a2x - vx) * 180) / Math.PI;
           const cross = (a1x - vx) * (a2y - vy) - (a1y - vy) * (a2x - vx);
           if (cross < 0) {
-            const tmp = sa;
-            sa = ea;
-            ea = tmp;
+            [sa, ea] = [ea, sa];
           }
           while (ea <= sa) ea += 360;
           for (let arc = 0; arc < n; arc++) {
             const r =
-              n === 1
+              (n === 1
                 ? adaptedArcBase * 1.3
                 : n <= 3
                   ? adaptedArcBase * 0.9 + arc * arcGap * 0.7
-                  : adaptedArcBase * 1.1 + arc * arcGap;
+                  : adaptedArcBase * 1.1 + arc * arcGap) + cmd._radialOff;
             const saRad = (sa * Math.PI) / 180;
             lines.push(
               `\\draw[line width=1pt] (${f(vx + r * Math.cos(saRad))},${f(vy + r * Math.sin(saRad))}) arc (${f(sa)}:${f(ea)}:${f(r)});`,
