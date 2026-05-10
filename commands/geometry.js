@@ -1358,8 +1358,8 @@ function compile(content, size) {
   }
 
   // Shared size-scaled mark/arc constants (used by both angle labels and mark rendering).
-  const arcBase = { small: 0.215, medium: 0.35, large: 0.539 }[size];
-  const arcGap = { small: 0.092, medium: 0.15, large: 0.231 }[size];
+  const arcBase = 0.35;
+  const arcGap = 0.15;
 
   // Pre-resolve mark auto-counts so angle labels can look up the final arc count.
   let _segCtr = 0,
@@ -1856,8 +1856,8 @@ function compile(content, size) {
   }
 
   // Angle labels: placed just past the arc radius (same adaptive radius as the arc mark).
-  const arcPaddingShort = { small: 0.22, medium: 0.34, large: 0.52 }[size];
-  const arcPaddingLong  = { small: 0.18, medium: 0.28, large: 0.43 }[size];
+  const arcPaddingShort = 0.34;
+  const arcPaddingLong  = 0.28;
   let angleDefaultCounter = 0;
   for (const { spec, bigger, text } of angleLabelCmds) {
     const resolved = resolveAngleCoords(spec);
@@ -2006,9 +2006,9 @@ function compile(content, size) {
 
   // Mark commands.
   if (resolvedMarks.length > 0) {
-    const dotR = { small: 0.055, medium: 0.09, large: 0.138 }[size];
-    const tickHalf = { small: 0.092, medium: 0.15, large: 0.231 }[size];
-    const tickGap = { small: 0.074, medium: 0.12, large: 0.185 }[size];
+    const dotR = 0.09;
+    const tickHalf = 0.15;
+    const tickGap = 0.12;
     // arcBase / arcGap defined above.
     lines.push("");
     for (const cmd of resolvedMarks) {
