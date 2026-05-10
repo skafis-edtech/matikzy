@@ -430,6 +430,12 @@ label A B -- top right
 label AB x\;\mathrm{cm} -- left horizontal
 ```
 
+Also labeling circle arcs (where with angle) (bigger means taking the bigger of 2 arcs):
+
+```
+label arc O-OX AB bigger 220^\circ
+```
+
 ### Mark
 
 ```

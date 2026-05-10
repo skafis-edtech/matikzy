@@ -392,6 +392,13 @@ function isAngleSpec(spec, vertexNames, allPointNames) {
   return spec.length === 3 && spec.split("").every((c) => pts.has(c));
 }
 
+function dirToAnchor(dx, dy) {
+  const ax = Math.abs(dx), ay = Math.abs(dy);
+  const v = ay > ax * 0.4 ? (dy > 0 ? "south" : "north") : "";
+  const h = ax > ay * 0.4 ? (dx > 0 ? "west" : "east") : "";
+  return (v + (v && h ? " " : "") + h) || "center";
+}
+
 function normPos(p) {
   return p.replace("top", "above").replace("bottom", "below");
 }
@@ -718,6 +725,7 @@ function parseContent(content) {
   const vertexLabelCmds = [];
   const angleLabelCmds = [];
   const sideLabelCmds = [];
+  const arcLabelCmds = [];
   const markCmds = [];
   const lineCmds = [];
   const pointCmds = [];
@@ -776,6 +784,13 @@ function parseContent(content) {
         extraErrors.push(
           `"label" requires at least a specification: "${line}"`,
         );
+      } else if (words[1] === "arc") {
+        const circleName = words[2] ?? "";
+        const arcPts = words[3] ?? "";
+        let i = 4;
+        const bigger = words[i] === "bigger" ? (i++, true) : false;
+        const text = words.slice(i).join(" ") || null;
+        arcLabelCmds.push({ circleName, arcPts, bigger, text });
       } else {
         let i = 1;
         let spec;
@@ -975,6 +990,7 @@ function parseContent(content) {
     vertexLabelCmds,
     angleLabelCmds,
     sideLabelCmds,
+    arcLabelCmds,
     markCmds,
     lineCmds,
     pointCmds,
@@ -1003,6 +1019,7 @@ function syntaxCheck(content) {
     triValues,
     angleLabelCmds,
     sideLabelCmds,
+    arcLabelCmds,
     lineCmds,
     pointCmds,
     circlePointCmds,
@@ -1153,6 +1170,13 @@ function syntaxCheck(content) {
       errors.push(`Invalid side specification: "${sideSpec}"`);
     }
   }
+  for (const { circleName, arcPts } of arcLabelCmds) {
+    const knownCircle = circleCmds.some((c) => c.name === circleName);
+    if (!knownCircle)
+      errors.push(`"label arc": unknown circle "${circleName}"`);
+    if (arcPts.length !== 2 || !allKnownNames.has(arcPts[0]) || !allKnownNames.has(arcPts[1]))
+      errors.push(`"label arc": invalid points "${arcPts}"`);
+  }
   for (const { drawType, pts } of drawCmds) {
     if (!pts || pts.length < 2) {
       errors.push(`"line ${drawType}": expects two point names (e.g. "KL")`);
@@ -1164,7 +1188,12 @@ function syntaxCheck(content) {
   }
 
   for (const { sideSpec, ratioStr, name } of pointCmds) {
-    if (!isValidSideSpec(sideSpec, vertexNames)) {
+    const validPointSeg =
+      sideSpec.length === 2 &&
+      allKnownNames.has(sideSpec[0]) &&
+      allKnownNames.has(sideSpec[1]) &&
+      sideSpec[0] !== sideSpec[1];
+    if (!isValidSideSpec(sideSpec, vertexNames) && !validPointSeg) {
       errors.push(`"point": invalid side "${sideSpec}"`);
     }
     const parts = ratioStr.split(":");
@@ -1294,6 +1323,7 @@ function compile(content, size) {
     vertexLabelCmds,
     angleLabelCmds,
     sideLabelCmds,
+    arcLabelCmds,
     markCmds,
     lineCmds,
     pointCmds,
@@ -1375,8 +1405,8 @@ function compile(content, size) {
   // Shape centroid + label offset for new points (shared by vertex labels & line rendering).
   const centX = positions.length > 0 ? positions.reduce((s, p) => s + p.x, 0) / positions.length : 0;
   const centY = positions.length > 0 ? positions.reduce((s, p) => s + p.y, 0) / positions.length : 0;
-  const ptLblOff = { small: 0.26, medium: 0.36, large: 0.55 }[size];
-  const ptCmdLblOff = { small: 0.38, medium: 0.53, large: 0.82 }[size];
+  const ptLblOff = { small: 0.18, medium: 0.25, large: 0.38 }[size];
+  const ptCmdLblOff = { small: 0.27, medium: 0.37, large: 0.57 }[size];
   const pointCmdByName = Object.fromEntries(pointCmds.map((c) => [c.name, c]));
   const lookupPt = (name) => {
     const idx = labels.findIndex((v) => v.label === name);
@@ -1518,11 +1548,9 @@ function compile(content, size) {
   for (const { sideSpec, ratioStr, name } of pointCmds) {
     const [r1, r2] = ratioStr.split(":").map(Number);
     const t = r1 / (r1 + r2);
-    const i1 = labels.findIndex((v) => v.label === sideSpec[0]);
-    const i2 = labels.findIndex((v) => v.label === sideSpec[1]);
-    if (i1 !== -1 && i2 !== -1) {
-      const p1 = positions[i1],
-        p2 = positions[i2];
+    const p1 = lookupPt(sideSpec[0]);
+    const p2 = lookupPt(sideSpec[1]);
+    if (p1 && p2) {
       newPtsMap[name] = {
         x: p1.x + t * (p2.x - p1.x),
         y: p1.y + t * (p2.y - p1.y),
@@ -1825,18 +1853,19 @@ function compile(content, size) {
       let lx, ly;
       const ptCmd = pointCmdByName[spec];
       if (ptCmd) {
-        const i1 = labels.findIndex((v) => v.label === ptCmd.sideSpec[0]);
-        const i2 = labels.findIndex((v) => v.label === ptCmd.sideSpec[1]);
-        const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
-        const sdx = positions[i2].x - positions[i1].x;
-        const sdy = positions[i2].y - positions[i1].y;
+        const sp1 = lookupPt(ptCmd.sideSpec[0]);
+        const sp2 = lookupPt(ptCmd.sideSpec[1]);
+        const sdx = sp2.x - sp1.x;
+        const sdy = sp2.y - sp1.y;
         const slen = Math.hypot(sdx, sdy);
         const px = -sdy / slen,
           py = sdx / slen;
-        const sign =
-          px * (pt.x - positions[i3].x) + py * (pt.y - positions[i3].y) >= 0
-            ? 1
-            : -1;
+        const i1 = labels.findIndex((v) => v.label === ptCmd.sideSpec[0]);
+        const i2 = labels.findIndex((v) => v.label === ptCmd.sideSpec[1]);
+        const i3 = [0, 1, 2].find((i) => i !== i1 && i !== i2);
+        const refX = i3 !== undefined ? positions[i3].x : centX;
+        const refY = i3 !== undefined ? positions[i3].y : centY;
+        const sign = px * (pt.x - refX) + py * (pt.y - refY) >= 0 ? 1 : -1;
         lx = pt.x + ptCmdLblOff * sign * px;
         ly = pt.y + ptCmdLblOff * sign * py;
       } else {
@@ -1848,8 +1877,10 @@ function compile(content, size) {
         lx = pt.x + (len > 0 ? (ptLblOff * dx) / len : 0);
         ly = pt.y + (len > 0 ? (ptLblOff * dy) / len : ptLblOff);
       }
+      const adx = lx - pt.x, ady = ly - pt.y;
+      const anchor = dirToAnchor(adx, ady);
       lines.push(
-        `\\node[scale=1.5] at (${f(lx)},${f(ly)}) {$${text ?? spec}$};`,
+        `\\node[scale=1.5, anchor=${anchor}] at (${f(lx)},${f(ly)}) {$${text ?? spec}$};`,
       );
     }
   }
@@ -2000,6 +2031,36 @@ function compile(content, size) {
       lines.push(
         `\\node[scale=1.5${rotateAttr}${anchorAttr}] at (${f(lx)},${f(ly)}) {$${text}$};`,
       );
+    }
+  }
+
+  // Arc labels: placed outside the circle at the arc midpoint.
+  if (arcLabelCmds.length > 0) {
+    lines.push("");
+    for (const { circleName, arcPts, bigger, text } of arcLabelCmds) {
+      const circleCmd = circleCmds.find((c) => c.name === circleName);
+      if (!circleCmd) continue;
+      const ctr = lookupPt(circleCmd.center);
+      if (!ctr) continue;
+      const npPt = circleCmd.northPt ? lookupPt(circleCmd.northPt) : null;
+      const R = npPt ? Math.hypot(npPt.x - ctr.x, npPt.y - ctr.y) : circleR;
+      const pA = lookupPt(arcPts[0]);
+      const pB = lookupPt(arcPts[1]);
+      if (!pA || !pB) continue;
+      const angA = Math.atan2(pA.y - ctr.y, pA.x - ctr.x);
+      let angB = Math.atan2(pB.y - ctr.y, pB.x - ctr.x);
+      // Normalise angB to [angA, angA+2π)
+      while (angB < angA) angB += 2 * Math.PI;
+      const sweep = angB - angA; // CCW sweep from A to B (0..2π)
+      // smaller arc midpoint = angA + sweep/2; bigger = opposite side
+      let midAng = angA + sweep / 2;
+      if (bigger) midAng += Math.PI;
+      const labelR = R + ptLblOff * 0.5;
+      const lx = ctr.x + labelR * Math.cos(midAng);
+      const ly = ctr.y + labelR * Math.sin(midAng);
+      const anchor = dirToAnchor(Math.cos(midAng), Math.sin(midAng));
+      const displayText = text ?? "";
+      lines.push(`\\node[scale=1.5, anchor=${anchor}] at (${f(lx)},${f(ly)}) {$${displayText}$};`);
     }
   }
 
