@@ -974,7 +974,7 @@ function parseContent(content) {
   const lines = content
     .trim()
     .split(
-      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid)\b)/,
+      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid|pyramid)\b)/,
     )
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -1036,6 +1036,7 @@ function parseContent(content) {
   const arcDrawCmds = [];
   const cubeCmds = [];
   const cuboidCmds = [];
+  const pyramidCmds = [];
   const extraErrors = [];
   if (hasQuad && quadResult.unknown.length > 0) {
     const qu = quadResult.unknown;
@@ -1075,7 +1076,12 @@ function parseContent(content) {
     } else if (ws[0] === "circle") {
       const isSpec = ws[1] === "inscribe" || ws[1] === "circumscribe";
       const ni = isSpec ? ws.indexOf("new") : -1;
-      const nm = isSpec ? (ni !== -1 ? (ws[ni + 1] ?? "") : "") : (ws[1] === "new" ? (ws[2] ?? "O-OX") : (ws[2] ?? ""));
+      const isCustomR = !isSpec && /^\d+(?:\.\d+)?$/.test(ws[1] ?? "");
+      const nm = isSpec
+        ? (ni !== -1 ? (ws[ni + 1] ?? "") : "")
+        : isCustomR
+          ? (ws[2] === "new" ? (ws[3] ?? "O-OX") : "")
+          : (ws[1] === "new" ? (ws[2] ?? "O-OX") : (ws[2] ?? ""));
       const d = nm.indexOf("-");
       if (d > 0) {
         const ctr = nm.slice(0, d);
@@ -1094,6 +1100,10 @@ function parseContent(content) {
       const ni = ws.indexOf("new");
       if (ni !== -1)
         splitPointNames(ws[ni + 1] ?? "ABCDA1B1C1D1").forEach((n) => circleNewNames.add(n));
+    } else if (ws[0] === "pyramid") {
+      const ni = ws.indexOf("new");
+      if (ni !== -1)
+        splitPointNames(ws[ni + 1] ?? "SABC").forEach((n) => circleNewNames.add(n));
     }
   }
   const allPointNames = new Set([
@@ -1392,6 +1402,7 @@ function parseContent(content) {
       } else {
         const nm = words[1] ?? "";
         const secDash = nm.indexOf("-");
+        const isCustomRadius = /^\d+(?:\.\d+)?$/.test(nm);
         if (secDash > 0 && secDash < nm.length - 1) {
           // Secondary circle from existing points: circle D-DN
           const center = nm.slice(0, secDash);
@@ -1406,6 +1417,31 @@ function parseContent(content) {
             northPt,
             fromExisting: true,
           });
+        } else if (isCustomRadius) {
+          // circle 5 new O-OX  (custom radius)
+          const customRadius = parseFloat(nm);
+          if (words[2] !== "new") {
+            extraErrors.push(
+              `"circle ${nm}": requires "new" before the name (e.g. "circle ${nm} new O-OX")`,
+            );
+          } else {
+            const name = words[3] ?? "O-OX";
+            const dash = name.indexOf("-");
+            if (dash <= 0 || dash === name.length - 1) {
+              extraErrors.push(
+                `"circle ${nm} new ${name}": invalid format — expected "center-radiusSide" (e.g. "circle ${nm} new O-OX")`,
+              );
+            } else {
+              const center = name.slice(0, dash);
+              const radiusSide = name.slice(dash + 1);
+              const northPt = radiusSide.startsWith(center)
+                ? radiusSide.slice(center.length)
+                : radiusSide;
+              const hWord = words.find((w) => /^>>h\d*\.?\d+$/.test(w));
+              const hScale = hWord ? parseFloat(hWord.slice(3)) : 1;
+              circleCmds.push({ name, center, radiusSide, northPt, hScale, customRadius });
+            }
+          }
         } else if (words[1] !== "new") {
           extraErrors.push(
             `"circle": requires "new" before the name (e.g. "circle new O-OX") or use existing points (e.g. "circle D-DN")`,
@@ -1459,18 +1495,21 @@ function parseContent(content) {
       }
       arcDrawCmds.push({ circleName, arcPts, bigger, style });
     } else if (words[0] === "cube") {
-      if (words[1] !== "new") {
+      const hasSide = /^\d+(?:\.\d+)?$/.test(words[1] ?? "");
+      const sideLen = hasSide ? parseFloat(words[1]) : null;
+      const newIdx = hasSide ? 2 : 1;
+      if (words[newIdx] !== "new") {
         extraErrors.push(
-          `"cube": requires "new" before the name (e.g. "cube new ABCDA1B1C1D1")`,
+          `"cube": requires "new" before the name (e.g. "cube new ABCDA1B1C1D1" or "cube 4 new ABCDA1B1C1D1")`,
         );
       } else {
-        const pts = splitPointNames(words[2] ?? "ABCDA1B1C1D1");
+        const pts = splitPointNames(words[newIdx + 1] ?? "ABCDA1B1C1D1");
         if (pts.length !== 8) {
           extraErrors.push(
             `"cube": requires exactly 8 point names (e.g. "cube new ABCDA1B1C1D1")`,
           );
         } else {
-          cubeCmds.push({ pts });
+          cubeCmds.push({ pts, sideLen });
         }
       }
     } else if (words[0] === "cuboid") {
@@ -1494,6 +1533,36 @@ function parseContent(content) {
             W: parseFloat(dimMatch[2]),
             H: parseFloat(dimMatch[3]),
           });
+        }
+      }
+    } else if (words[0] === "pyramid") {
+      // pyramid quad [L H] new SABC
+      if (words[1] !== "quad") {
+        extraErrors.push(
+          `"pyramid": only "quad" base is supported (e.g. "pyramid quad new SABC" or "pyramid quad 4 4 new SABC")`,
+        );
+      } else {
+        let i = 2;
+        let baseLen = null, height = null;
+        if (/^\d+(?:\.\d+)?$/.test(words[i] ?? "")) {
+          baseLen = parseFloat(words[i++]);
+          if (/^\d+(?:\.\d+)?$/.test(words[i] ?? ""))
+            height = parseFloat(words[i++]);
+        }
+        if (words[i] !== "new") {
+          extraErrors.push(
+            `"pyramid quad": requires "new" before the name (e.g. "pyramid quad new SABC" or "pyramid quad 4 4 new SABC")`,
+          );
+        } else {
+          const pts = splitPointNames(words[i + 1] ?? "SABC");
+          if (pts.length !== 4) {
+            extraErrors.push(
+              `"pyramid quad": requires exactly 4 point names — apex then 3 base vertices (e.g. "pyramid quad new SABC")`,
+            );
+          } else {
+            const internalD = `__pyD_${pyramidCmds.length}__`;
+            pyramidCmds.push({ pts, internalD, baseLen, height });
+          }
         }
       }
     } else {
@@ -1524,6 +1593,7 @@ function parseContent(content) {
     arcDrawCmds,
     cubeCmds,
     cuboidCmds,
+    pyramidCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1559,6 +1629,7 @@ function syntaxCheck(content) {
     arcDrawCmds,
     cubeCmds,
     cuboidCmds,
+    pyramidCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1571,12 +1642,13 @@ function syntaxCheck(content) {
     firstCmd !== "circle" &&
     firstCmd !== "quadrilateral" &&
     firstCmd !== "cube" &&
-    firstCmd !== "cuboid"
+    firstCmd !== "cuboid" &&
+    firstCmd !== "pyramid"
   ) {
     return {
       valid: false,
       errors: [
-        `Unknown shape. Only "triangle", "quadrilateral", "circle", "cube", and "cuboid" are supported.`,
+        `Unknown shape. Only "triangle", "quadrilateral", "circle", "cube", "cuboid", and "pyramid" are supported.`,
       ],
     };
   }
@@ -1740,6 +1812,7 @@ function syntaxCheck(content) {
     ...tangentLineCmds.map((c) => c.newName),
     ...cubeCmds.flatMap((c) => c.pts),
     ...cuboidCmds.flatMap((c) => c.pts),
+    ...pyramidCmds.flatMap((c) => c.pts),
   ]);
 
   for (const { spec } of angleLabelCmds) {
@@ -1970,6 +2043,11 @@ function syntaxCheck(content) {
       errors.push(`"cuboid": all 8 point names must be distinct`);
   }
 
+  for (const { pts } of pyramidCmds) {
+    if (new Set(pts).size !== 4)
+      errors.push(`"pyramid quad": all 4 point names must be distinct`);
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -2002,6 +2080,7 @@ function compile(content, size) {
     arcDrawCmds,
     cubeCmds,
     cuboidCmds,
+    pyramidCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -2271,7 +2350,7 @@ function compile(content, size) {
 
   // Circle point positions must be in newPtsMap before draw commands run.
   const circleR = { small: 1.5, medium: 2.0, large: 3.8 }[size];
-  for (const { center, northPt, fromExisting } of circleCmds) {
+  for (const { center, northPt, fromExisting, customRadius } of circleCmds) {
     if (fromExisting) {
       // Points already exist; tag northPt with originX/originY for arc detection.
       const cp = lookupPt(center);
@@ -2285,10 +2364,11 @@ function compile(content, size) {
           originY: cp.y,
         };
     } else {
+      const R = customRadius ?? circleR;
       newPtsMap[center] = { x: 0, y: 0, pos: "below" };
       if (northPt)
         newPtsMap[northPt] = {
-          x: circleR,
+          x: R,
           y: 0,
           originX: 0,
           originY: 0,
@@ -2298,7 +2378,7 @@ function compile(content, size) {
   }
 
   const getCircleR = (circleCmd) => {
-    if (!circleCmd.fromExisting) return circleR;
+    if (!circleCmd.fromExisting) return circleCmd.customRadius ?? circleR;
     const cp = lookupPt(circleCmd.center),
       np = circleCmd.northPt ? lookupPt(circleCmd.northPt) : null;
     return cp && np ? Math.hypot(cp.x - np.x, cp.y - np.y) : circleR;
@@ -2323,10 +2403,11 @@ function compile(content, size) {
 
   // Register cube vertex positions.
   if (cubeCmds.length > 0) {
-    const cubeS  = { small: 2.46, medium: 4,    large: 6.15 }[size];
-    const cubeDX = { small: 1.23, medium: 2,    large: 3.08 }[size];
-    const cubeDY = { small: 0.8,  medium: 1.3,  large: 2.0  }[size];
-    for (const { pts } of cubeCmds) {
+    const defaultS = { small: 2.46, medium: 4, large: 6.15 }[size];
+    for (const { pts, sideLen } of cubeCmds) {
+      const cubeS  = sideLen ?? defaultS;
+      const cubeDX = cubeS * 0.5;
+      const cubeDY = cubeS * 0.325;
       const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
       // Bottom face ABCD, top face A1B1C1D1 (each directly above its partner)
       newPtsMap[pA]  = { x: 0,                 y: 0,                pos: "below left"  };
@@ -2337,6 +2418,25 @@ function compile(content, size) {
       newPtsMap[pB1] = { x: cubeDX,            y: cubeS + cubeDY,   pos: "above left"  };
       newPtsMap[pC1] = { x: cubeS + cubeDX,    y: cubeS + cubeDY,   pos: "above right" };
       newPtsMap[pD1] = { x: cubeS,             y: cubeS,            pos: "above"       };
+    }
+  }
+
+  // Register pyramid quad vertex positions. Base: A=front-left, B=back-left, C=front-right.
+  // D (back-right) is auto-computed as C+(B-A) and stored under internalD.
+  if (pyramidCmds.length > 0) {
+    const defaultL = { small: 2.46, medium: 4, large: 6.15 }[size];
+    const defaultH = defaultL;
+    for (const { pts, internalD, baseLen, height } of pyramidCmds) {
+      const [pS, pA, pB, pC] = pts;
+      const L = baseLen ?? defaultL;
+      const H = height ?? defaultH;
+      const dX = L * 0.5;
+      const dY = L * 0.325;
+      newPtsMap[pA]       = { x: 0,      y: 0,          pos: "below left"  };
+      newPtsMap[pB]       = { x: dX,     y: dY,         pos: "left"        };
+      newPtsMap[pC]       = { x: L,      y: 0,          pos: "below right" };
+      newPtsMap[internalD]= { x: L + dX, y: dY                             };
+      newPtsMap[pS]       = { x: (L + dX) / 2, y: dY / 2 + H, pos: "above" };
     }
   }
 
@@ -2874,7 +2974,7 @@ function compile(content, size) {
       } else {
         ccx = 0;
         ccy = 0;
-        R = circleR;
+        R = circleCmd.customRadius ?? circleR;
         // center and northPt already registered in early-init; don't re-overwrite
         // so that circlePointCmds overrides (e.g. "point O-OX 180 new X") are preserved.
       }
@@ -2986,6 +3086,30 @@ function compile(content, size) {
       lines.push(e(w,  pA1, pB1));
       lines.push(e(w,  pD1, pC1));
       lines.push(e(w,  pD,  pC));
+    }
+  }
+
+  // Pyramid quad: draw 8 edges with hidden-line dashing (B=back-left hidden).
+  if (pyramidCmds.length > 0) {
+    lines.push("");
+    for (const { pts, internalD } of pyramidCmds) {
+      const [pS, pA, pB, pC] = pts;
+      const pD = internalD;
+      const w  = "line width=1.5pt";
+      const wd = "line width=1.5pt, dashed";
+      const e = (s, a, b) => `\\draw[${s}] (${f(newPtsMap[a].x)},${f(newPtsMap[a].y)}) -- (${f(newPtsMap[b].x)},${f(newPtsMap[b].y)});`;
+      // Front face: A-S-C-A (all solid)
+      lines.push(e(w,  pA, pS));
+      lines.push(e(w,  pS, pC));
+      lines.push(e(w,  pC, pA));
+      // Back/hidden lateral edges from B (dashed)
+      lines.push(e(wd, pB, pS));
+      // Right visible lateral edge and base edge
+      lines.push(e(w,  pS, pD));
+      lines.push(e(w,  pC, pD));
+      // Hidden base edges touching B
+      lines.push(e(wd, pD, pB));
+      lines.push(e(wd, pA, pB));
     }
   }
 

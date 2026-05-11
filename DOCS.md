@@ -216,6 +216,12 @@ circle new O-OX
 
 (if name not mentioned - defaults to `O-OX`)
 
+default is radius 2, but can be changed with:
+
+```
+circle 5 new
+```
+
 ### Triangle as basis
 
 ```
@@ -311,10 +317,19 @@ Free form (D-diagonal):
 ```
 geometry:
 cube new ABCDA1B1C1D1
-cuboid 3x4x5 new ABCDA1B1C1D1
+cube 4 new
+cuboid 3x4x5 new
 ```
 
 3x4x5: length x width x height: AD x AB x AA1
+
+```
+geometry:
+pyramid quad 4 4 new SABC
+pyramid quad new
+```
+
+first number - basis, second number - height.
 
 ### Naming
 
