@@ -205,9 +205,11 @@ Start with `geometry` and then add components.
 
 _Note: only one basis can be chosen._
 
+_Note: after the keyword "new" the point names can be not mentioned, defaults to ABC, O-OX, ABCDA1B1C1D1, SABC, SABCD etc._
+
 ```
 geometry:
-circle new A-AB
+circle new O-OX
 ```
 
 `circle + new + <name(center, ray to right)>`
@@ -303,6 +305,16 @@ Free form (D-diagonal):
 - SSSDD
 - SSAAA (adjacent S)
 - SSSAA (included A)
+
+### 3d as basis
+
+```
+geometry:
+cube new ABCDA1B1C1D1
+cuboid 3x4x5 new ABCDA1B1C1D1
+```
+
+3x4x5: length x width x height: AD x AB x AA1
 
 ### Naming
 
@@ -503,18 +515,12 @@ area OAB -- solid light
 
 None, solid, solid light.
 
-## 3d
-
-```
-geometry:
-cube new ABCDA1B1C1D1
-```
-
 ## Shortcuts
 
 Yes, everything is possible with current setup (pretty much). But sometimes it's a bit exhaustive, e.g.:
 
 ```
+
 geometry:
 circle O-OX
 point O-OX 200 new K
@@ -538,6 +544,7 @@ label AB 9
 label BC 10
 label CD x
 label AD 6 -- right
+
 ```
 
 All this just to draw inscribed circle into a quadrilateral.
@@ -547,6 +554,7 @@ All this just to draw inscribed circle into a quadrilateral.
 The `new` keyword was used for triangle, circle, quad - all as basis figures. But we can create these things on already existing graphic.
 
 ```
+
 geometry:
 quadrilateral square new ABCD
 point AB 1:2 new K
@@ -559,6 +567,7 @@ quadrilateral ABMN
 point MN 1:3 new X
 triangle ACX
 circle D-DN
+
 ```
 
 **Inscribing and circumscribing for quad**
@@ -572,6 +581,7 @@ TODO: make everything from points and lines.
 ### Examples
 
 ```
+
 geometry:
 circle new O-OX
 point O-OX 85 new C
@@ -580,20 +590,24 @@ point O-OX -135 new A
 line segment OB line segment OA line segment AC line segment CB
 mark O mark A mark B mark C
 label O label A label B label C
+
 ```
 
 ![alt text](image-6.png)
 
 ```
+
 geometry:
 triangle right new BA[C]
 label a label b label c label angle B \beta
 mark angle B I mark angle C right
+
 ```
 
 ![alt text](image-7.png)
 
 ```
+
 geometry:
 circle new O-OX
 point O-OX 40 new D
@@ -606,6 +620,7 @@ line segment AD line segment CB
 point AD intersect BC new E
 mark E label E -- bottom
 label CE 10 label ED 6 label AE 4
+
 ```
 
 ![alt text](image-8.png)
@@ -638,3 +653,7 @@ interval-arcs[closed-only]: ^{S'(a)}_{S(a)} \_\_ (0) _+_up |1\frac13| _-\_down (
 ```
 
 ![alt text](image-4.png)
+
+```
+
+```

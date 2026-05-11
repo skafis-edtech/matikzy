@@ -115,7 +115,9 @@ function parseTriangle(content) {
     let labelStr = null;
     if (newIdx === -1) {
       unknown.push("__missing_new__");
-    } else if (!mainWords[newIdx + 1] || !parseLabels(mainWords[newIdx + 1])) {
+    } else if (!mainWords[newIdx + 1]) {
+      labelStr = "ABC";
+    } else if (!parseLabels(mainWords[newIdx + 1])) {
       unknown.push("__missing_label__");
     } else {
       labelStr = mainWords[newIdx + 1];
@@ -170,7 +172,9 @@ function parseTriangle(content) {
   const newIdx = mainWords.indexOf("new");
   if (newIdx === -1) {
     unknown.push("__missing_new__");
-  } else if (!mainWords[newIdx + 1] || !parseLabels(mainWords[newIdx + 1])) {
+  } else if (!mainWords[newIdx + 1]) {
+    labelStr = "ABC";
+  } else if (!parseLabels(mainWords[newIdx + 1])) {
     unknown.push("__missing_label__");
   } else {
     labelStr = mainWords[newIdx + 1];
@@ -268,10 +272,9 @@ function parseQuadrilateral(content) {
     let labelStr = null;
     if (newIdx === -1) {
       unknown.push("__missing_new__");
-    } else if (
-      !mainWords[newIdx + 1] ||
-      !parseQuadLabels(mainWords[newIdx + 1])
-    ) {
+    } else if (!mainWords[newIdx + 1]) {
+      labelStr = "ABCD";
+    } else if (!parseQuadLabels(mainWords[newIdx + 1])) {
       unknown.push("__missing_label__");
     } else {
       labelStr = mainWords[newIdx + 1];
@@ -312,10 +315,9 @@ function parseQuadrilateral(content) {
   const newIdx = mainWords.indexOf("new");
   if (newIdx === -1) {
     unknown.push("__missing_new__");
-  } else if (
-    !mainWords[newIdx + 1] ||
-    !parseQuadLabels(mainWords[newIdx + 1])
-  ) {
+  } else if (!mainWords[newIdx + 1]) {
+    labelStr = "ABCD";
+  } else if (!parseQuadLabels(mainWords[newIdx + 1])) {
     unknown.push("__missing_label__");
   } else {
     labelStr = mainWords[newIdx + 1];
@@ -972,7 +974,7 @@ function parseContent(content) {
   const lines = content
     .trim()
     .split(
-      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube)\b)/,
+      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid)\b)/,
     )
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -1033,6 +1035,7 @@ function parseContent(content) {
   const secondaryPolyFigureCmds = [];
   const arcDrawCmds = [];
   const cubeCmds = [];
+  const cuboidCmds = [];
   const extraErrors = [];
   if (hasQuad && quadResult.unknown.length > 0) {
     const qu = quadResult.unknown;
@@ -1072,7 +1075,7 @@ function parseContent(content) {
     } else if (ws[0] === "circle") {
       const isSpec = ws[1] === "inscribe" || ws[1] === "circumscribe";
       const ni = isSpec ? ws.indexOf("new") : -1;
-      const nm = isSpec ? (ni !== -1 ? (ws[ni + 1] ?? "") : "") : (ws[2] ?? "");
+      const nm = isSpec ? (ni !== -1 ? (ws[ni + 1] ?? "") : "") : (ws[1] === "new" ? (ws[2] ?? "O-OX") : (ws[2] ?? ""));
       const d = nm.indexOf("-");
       if (d > 0) {
         const ctr = nm.slice(0, d);
@@ -1085,8 +1088,12 @@ function parseContent(content) {
         ws.slice(ni + 2).forEach((n) => circleNewNames.add(n));
     } else if (ws[0] === "cube") {
       const ni = ws.indexOf("new");
-      if (ni !== -1 && ws[ni + 1])
-        splitPointNames(ws[ni + 1]).forEach((n) => circleNewNames.add(n));
+      if (ni !== -1)
+        splitPointNames(ws[ni + 1] ?? "ABCDA1B1C1D1").forEach((n) => circleNewNames.add(n));
+    } else if (ws[0] === "cuboid") {
+      const ni = ws.indexOf("new");
+      if (ni !== -1)
+        splitPointNames(ws[ni + 1] ?? "ABCDA1B1C1D1").forEach((n) => circleNewNames.add(n));
     }
   }
   const allPointNames = new Set([
@@ -1403,12 +1410,8 @@ function parseContent(content) {
           extraErrors.push(
             `"circle": requires "new" before the name (e.g. "circle new O-OX") or use existing points (e.g. "circle D-DN")`,
           );
-        } else if (!words[2]) {
-          extraErrors.push(
-            `"circle new": name required (e.g. "circle new O-OX")`,
-          );
         } else {
-          const name = words[2];
+          const name = words[2] ?? "O-OX";
           const dash = name.indexOf("-");
           if (dash <= 0 || dash === name.length - 1) {
             extraErrors.push(
@@ -1456,18 +1459,41 @@ function parseContent(content) {
       }
       arcDrawCmds.push({ circleName, arcPts, bigger, style });
     } else if (words[0] === "cube") {
-      if (words[1] !== "new" || !words[2]) {
+      if (words[1] !== "new") {
         extraErrors.push(
           `"cube": requires "new" before the name (e.g. "cube new ABCDA1B1C1D1")`,
         );
       } else {
-        const pts = splitPointNames(words[2]);
+        const pts = splitPointNames(words[2] ?? "ABCDA1B1C1D1");
         if (pts.length !== 8) {
           extraErrors.push(
             `"cube": requires exactly 8 point names (e.g. "cube new ABCDA1B1C1D1")`,
           );
         } else {
           cubeCmds.push({ pts });
+        }
+      }
+    } else if (words[0] === "cuboid") {
+      // cuboid LxWxH new ABCDA1B1C1D1
+      const dimStr = words[1] ?? "";
+      const dimMatch = dimStr.match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i);
+      if (!dimMatch || words[2] !== "new") {
+        extraErrors.push(
+          `"cuboid": syntax is "cuboid LxWxH new ABCDA1B1C1D1" (e.g. "cuboid 3x4x5 new ABCDA1B1C1D1")`,
+        );
+      } else {
+        const pts = splitPointNames(words[3] ?? "ABCDA1B1C1D1");
+        if (pts.length !== 8) {
+          extraErrors.push(
+            `"cuboid": requires exactly 8 point names (e.g. "cuboid 3x4x5 new ABCDA1B1C1D1")`,
+          );
+        } else {
+          cuboidCmds.push({
+            pts,
+            L: parseFloat(dimMatch[1]),
+            W: parseFloat(dimMatch[2]),
+            H: parseFloat(dimMatch[3]),
+          });
         }
       }
     } else {
@@ -1497,6 +1523,7 @@ function parseContent(content) {
     secondaryPolyFigureCmds,
     arcDrawCmds,
     cubeCmds,
+    cuboidCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1531,6 +1558,7 @@ function syntaxCheck(content) {
     secondaryPolyFigureCmds,
     arcDrawCmds,
     cubeCmds,
+    cuboidCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1542,12 +1570,13 @@ function syntaxCheck(content) {
     firstCmd !== "triangle" &&
     firstCmd !== "circle" &&
     firstCmd !== "quadrilateral" &&
-    firstCmd !== "cube"
+    firstCmd !== "cube" &&
+    firstCmd !== "cuboid"
   ) {
     return {
       valid: false,
       errors: [
-        `Unknown shape. Only "triangle", "quadrilateral", "circle", and "cube" are supported.`,
+        `Unknown shape. Only "triangle", "quadrilateral", "circle", "cube", and "cuboid" are supported.`,
       ],
     };
   }
@@ -1710,6 +1739,7 @@ function syntaxCheck(content) {
     ...lineCmds.flatMap((c) => c.newNames ?? []),
     ...tangentLineCmds.map((c) => c.newName),
     ...cubeCmds.flatMap((c) => c.pts),
+    ...cuboidCmds.flatMap((c) => c.pts),
   ]);
 
   for (const { spec } of angleLabelCmds) {
@@ -1935,6 +1965,11 @@ function syntaxCheck(content) {
       errors.push(`"cube": all 8 point names must be distinct`);
   }
 
+  for (const { pts } of cuboidCmds) {
+    if (new Set(pts).size !== 8)
+      errors.push(`"cuboid": all 8 point names must be distinct`);
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -1966,6 +2001,7 @@ function compile(content, size) {
     secondaryPolyFigureCmds,
     arcDrawCmds,
     cubeCmds,
+    cuboidCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -2302,6 +2338,22 @@ function compile(content, size) {
       newPtsMap[pC1] = { x: cubeS + cubeDX,    y: cubeS + cubeDY,   pos: "above right" };
       newPtsMap[pD1] = { x: cubeS,             y: cubeS,            pos: "above"       };
     }
+  }
+
+  // Register cuboid vertex positions. L=AD (length), W=AB (width/depth), H=AA1 (height).
+  // Depth offsets scale proportionally with W (base: W=4 → dX=2, dY=1.3).
+  for (const { pts, L, W, H } of cuboidCmds) {
+    const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
+    const dX = W / 2;
+    const dY = 1.3 * W / 4;
+    newPtsMap[pA]  = { x: 0,       y: 0,        pos: "below left"  };
+    newPtsMap[pB]  = { x: dX,      y: dY,       pos: "below"       };
+    newPtsMap[pC]  = { x: L + dX,  y: dY,       pos: "below right" };
+    newPtsMap[pD]  = { x: L,       y: 0,        pos: "below right" };
+    newPtsMap[pA1] = { x: 0,       y: H,        pos: "above left"  };
+    newPtsMap[pB1] = { x: dX,      y: H + dY,   pos: "above left"  };
+    newPtsMap[pC1] = { x: L + dX,  y: H + dY,   pos: "above right" };
+    newPtsMap[pD1] = { x: L,       y: H,        pos: "above"       };
   }
 
   // Compute foot-of-perpendicular for "line distance" commands.
@@ -2885,6 +2937,34 @@ function compile(content, size) {
   if (cubeCmds.length > 0) {
     lines.push("");
     for (const { pts } of cubeCmds) {
+      const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
+      const w = "line width=1.5pt";
+      const wd = "line width=1.5pt, dashed";
+      const e = (s, a, b) => `\\draw[${s}] (${f(newPtsMap[a].x)},${f(newPtsMap[a].y)}) -- (${f(newPtsMap[b].x)},${f(newPtsMap[b].y)});`;
+      // Front face A-A1-D1-D (all solid)
+      lines.push(e(w,  pA,  pA1));
+      lines.push(e(w,  pA1, pD1));
+      lines.push(e(w,  pD1, pD));
+      lines.push(e(w,  pD,  pA));
+      lines.push("");
+      // Back face B-B1-C1-C: B-B1 and C-B hidden, rest solid
+      lines.push(e(wd, pB,  pB1));
+      lines.push(e(w,  pB1, pC1));
+      lines.push(e(w,  pC1, pC));
+      lines.push(e(wd, pC,  pB));
+      lines.push("");
+      // Depth edges: A-B hidden; A1-B1, D1-C1, D-C solid
+      lines.push(e(wd, pA,  pB));
+      lines.push(e(w,  pA1, pB1));
+      lines.push(e(w,  pD1, pC1));
+      lines.push(e(w,  pD,  pC));
+    }
+  }
+
+  // Cuboid: same hidden-line convention as cube.
+  if (cuboidCmds.length > 0) {
+    lines.push("");
+    for (const { pts } of cuboidCmds) {
       const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
       const w = "line width=1.5pt";
       const wd = "line width=1.5pt, dashed";
