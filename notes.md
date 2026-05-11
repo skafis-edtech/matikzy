@@ -22,16 +22,41 @@ TODO:
 
 - individual points on line
 - overlapping intervals
+- multi line notation
 
 ## Unit circle
 
 1. Template
-2. Rotable - enum/rad/deg, label, point (hallow, fill, none; label)
+2. Rotable - rad/deg, label, point (hallow, fill, none; label)
 
 TODO:
 
 - spiral rotation
-- x-line y-line, other elements
+
+change syntax:
+
+```
+unit-circle:
+point 240 new M
+point 0 new X    // optional, X at 0° is always implicit
+label M [M(x;y)]
+rotangle X-M 240^\circ
+```
+
+from
+
+```
+unit-circle: rotangle 240{240^\circ} [M(x;y)]
+```
+
+- x-line y-line, solid dashed dotted - default dotted
+
+```
+x-line M -- dashed
+y-line M
+```
+
+- angle
 
 ## Functions
 
@@ -351,3 +376,7 @@ Free form (D-diagonal):
 - SSSDD
 - SSAAA (adjacent S)
 - SSSAA (included A)
+
+### TODO:
+
+- shortcuts...
