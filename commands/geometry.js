@@ -1102,8 +1102,10 @@ function parseContent(content) {
         splitPointNames(ws[ni + 1] ?? "ABCDA1B1C1D1").forEach((n) => circleNewNames.add(n));
     } else if (ws[0] === "pyramid") {
       const ni = ws.indexOf("new");
-      if (ni !== -1)
-        splitPointNames(ws[ni + 1] ?? "SABC").forEach((n) => circleNewNames.add(n));
+      if (ni !== -1) {
+        const nw = ws[ni + 1] ?? "";
+        splitPointNames((nw === "" || nw.startsWith(">>")) ? "SABC" : nw).forEach((n) => circleNewNames.add(n));
+      }
     }
   }
   const allPointNames = new Set([
@@ -1536,13 +1538,15 @@ function parseContent(content) {
         }
       }
     } else if (words[0] === "pyramid") {
-      // pyramid quad [L H] new SABC
-      if (words[1] !== "quad") {
+      // pyramid quad [right] [L H] new SABC  |  pyramid tri [L H] new SABC
+      if (words[1] !== "quad" && words[1] !== "tri") {
         extraErrors.push(
-          `"pyramid": only "quad" base is supported (e.g. "pyramid quad new SABC" or "pyramid quad 4 4 new SABC")`,
+          `"pyramid": base type must be "quad" or "tri" (e.g. "pyramid quad new SABC" or "pyramid tri new SABC")`,
         );
       } else {
+        const triBase = words[1] === "tri";
         let i = 2;
+        const isRight = !triBase && words[i] === "right" ? (i++, true) : false;
         let baseLen = null, height = null;
         if (/^\d+(?:\.\d+)?$/.test(words[i] ?? "")) {
           baseLen = parseFloat(words[i++]);
@@ -1551,17 +1555,20 @@ function parseContent(content) {
         }
         if (words[i] !== "new") {
           extraErrors.push(
-            `"pyramid quad": requires "new" before the name (e.g. "pyramid quad new SABC" or "pyramid quad 4 4 new SABC")`,
+            `"pyramid ${words[1]}": requires "new" before the name (e.g. "pyramid ${words[1]} new SABC")`,
           );
         } else {
-          const pts = splitPointNames(words[i + 1] ?? "SABC");
+          const nameWord = words[i + 1] ?? "";
+          const hasName = nameWord !== "" && !nameWord.startsWith(">>");
+          const pts = splitPointNames(hasName ? nameWord : "SABC");
           if (pts.length !== 4) {
             extraErrors.push(
-              `"pyramid quad": requires exactly 4 point names — apex then 3 base vertices (e.g. "pyramid quad new SABC")`,
+              `"pyramid ${words[1]}": requires exactly 4 point names — apex then 3 base vertices (e.g. "pyramid ${words[1]} new SABC")`,
             );
           } else {
-            const internalD = `__pyD_${pyramidCmds.length}__`;
-            pyramidCmds.push({ pts, internalD, baseLen, height });
+            const internalD = triBase ? null : `__pyD_${pyramidCmds.length}__`;
+            const rotCount = words.slice(i + (hasName ? 2 : 1)).filter(w => w === ">>rot").length;
+            pyramidCmds.push({ pts, internalD, baseLen, height, isRight, triBase, rotCount });
           }
         }
       }
@@ -2421,22 +2428,50 @@ function compile(content, size) {
     }
   }
 
-  // Register pyramid quad vertex positions. Base: A=front-left, B=back-left, C=front-right.
-  // D (back-right) is auto-computed as C+(B-A) and stored under internalD.
+  // Register pyramid vertex positions.
   if (pyramidCmds.length > 0) {
-    const defaultL = { small: 2.46, medium: 4, large: 6.15 }[size];
-    const defaultH = defaultL;
-    for (const { pts, internalD, baseLen, height } of pyramidCmds) {
+    const cubeScale = { small: 2.46, medium: 4, large: 6.15 }[size];
+    for (const { pts, internalD, baseLen, height, isRight, triBase, rotCount } of pyramidCmds) {
       const [pS, pA, pB, pC] = pts;
-      const L = baseLen ?? defaultL;
-      const H = height ?? defaultH;
-      const dX = L * 0.5;
-      const dY = L * 0.325;
-      newPtsMap[pA]       = { x: 0,      y: 0,          pos: "below left"  };
-      newPtsMap[pB]       = { x: dX,     y: dY,         pos: "left"        };
-      newPtsMap[pC]       = { x: L,      y: 0,          pos: "below right" };
-      newPtsMap[internalD]= { x: L + dX, y: dY                             };
-      newPtsMap[pS]       = { x: (L + dX) / 2, y: dY / 2 + H, pos: "above" };
+      if (triBase) {
+        const L = baseLen ?? cubeScale * 1.75;
+        const H = height ?? cubeScale * 1.5;
+        const bY = L * 2.25 / 7;
+        if (rotCount === 1) {
+          // Rotated view 1: A-C is the solid front-bottom edge; B is the hidden back vertex.
+          const rotW = L * 6 / 7;
+          newPtsMap[pA] = { x: 0,             y: 0,            pos: "below left"  };
+          newPtsMap[pB] = { x: rotW * 11/18,  y: L * 2.609/7,  pos: "left"        };
+          newPtsMap[pC] = { x: rotW,          y: 0,            pos: "below right" };
+          newPtsMap[pS] = { x: rotW / 2,      y: H,            pos: "above"       };
+        } else if (rotCount >= 2) {
+          // Rotated view 2: B-C dashed (same topology as no-rot), different positions.
+          newPtsMap[pA] = { x: L * 4/7,  y: -L / 14,  pos: "below"  };
+          newPtsMap[pB] = { x: 0,        y: bY,        pos: "left"   };
+          newPtsMap[pC] = { x: L * 6/7,  y: bY,        pos: "right"  };
+          newPtsMap[pS] = { x: L * 3/7,  y: H,         pos: "above"  };
+        } else {
+          // Default: A=front-bottom, B=left, C=right; B-C is the hidden base edge.
+          const aX = L * 2 / 7;
+          newPtsMap[pA] = { x: aX, y: 0,   pos: "below"  };
+          newPtsMap[pB] = { x: 0,  y: bY,  pos: "left"   };
+          newPtsMap[pC] = { x: L,  y: bY,  pos: "right"  };
+          newPtsMap[pS] = { x: (aX + L) / 3, y: H, pos: "above" };
+        }
+      } else {
+        // Quad pyramid: A=front-left, B=back-left, C=front-right; D auto-computed.
+        const L = baseLen ?? cubeScale;
+        const H = height ?? cubeScale;
+        const dX = L * 0.5;
+        const dY = L * 0.325;
+        newPtsMap[pA]        = { x: 0,      y: 0,   pos: "below left"  };
+        newPtsMap[pB]        = { x: dX,     y: dY,  pos: "left"        };
+        newPtsMap[pC]        = { x: L,      y: 0,   pos: "below right" };
+        newPtsMap[internalD] = { x: L + dX, y: dY                      };
+        newPtsMap[pS]        = isRight
+          ? { x: dX,              y: dY + H,     pos: "above left" }
+          : { x: (L + dX) / 2,   y: dY / 2 + H, pos: "above"      };
+      }
     }
   }
 
@@ -3089,27 +3124,44 @@ function compile(content, size) {
     }
   }
 
-  // Pyramid quad: draw 8 edges with hidden-line dashing (B=back-left hidden).
+  // Pyramid: draw edges with hidden-line dashing.
   if (pyramidCmds.length > 0) {
     lines.push("");
-    for (const { pts, internalD } of pyramidCmds) {
+    for (const { pts, internalD, triBase, rotCount } of pyramidCmds) {
       const [pS, pA, pB, pC] = pts;
-      const pD = internalD;
       const w  = "line width=1.5pt";
       const wd = "line width=1.5pt, dashed";
       const e = (s, a, b) => `\\draw[${s}] (${f(newPtsMap[a].x)},${f(newPtsMap[a].y)}) -- (${f(newPtsMap[b].x)},${f(newPtsMap[b].y)});`;
-      // Front face: A-S-C-A (all solid)
-      lines.push(e(w,  pA, pS));
-      lines.push(e(w,  pS, pC));
-      lines.push(e(w,  pC, pA));
-      // Back/hidden lateral edges from B (dashed)
-      lines.push(e(wd, pB, pS));
-      // Right visible lateral edge and base edge
-      lines.push(e(w,  pS, pD));
-      lines.push(e(w,  pC, pD));
-      // Hidden base edges touching B
-      lines.push(e(wd, pD, pB));
-      lines.push(e(wd, pA, pB));
+      if (triBase) {
+        if (rotCount === 1) {
+          // Rot 1: C-A solid (front), A-B and B-C dashed, B-S dashed.
+          lines.push(e(wd, pA, pB));
+          lines.push(e(wd, pB, pC));
+          lines.push(e(w,  pC, pA));
+          lines.push(e(w,  pC, pS));
+          lines.push(e(w,  pA, pS));
+          lines.push(e(wd, pB, pS));
+        } else {
+          // Default and rot 2: B-C dashed, all lateral solid.
+          lines.push(e(w,  pC, pA));
+          lines.push(e(w,  pA, pB));
+          lines.push(e(wd, pB, pC));
+          lines.push(e(w,  pC, pS));
+          lines.push(e(w,  pA, pS));
+          lines.push(e(w,  pB, pS));
+        }
+      } else {
+        const pD = internalD;
+        // Quad pyramid: B and its edges are hidden.
+        lines.push(e(w,  pA, pS));
+        lines.push(e(w,  pS, pC));
+        lines.push(e(w,  pC, pA));
+        lines.push(e(wd, pB, pS));
+        lines.push(e(w,  pS, pD));
+        lines.push(e(w,  pC, pD));
+        lines.push(e(wd, pD, pB));
+        lines.push(e(wd, pA, pB));
+      }
     }
   }
 

@@ -326,10 +326,19 @@ cuboid 3x4x5 new
 ```
 geometry:
 pyramid quad 4 4 new SABC
-pyramid quad new
+pyramid quad right 2 3 new
 ```
 
-first number - basis, second number - height.
+first number - basis, second number - height. If omitted - both 4.
+
+right - the BS is the height.
+
+```
+geometry:
+pyramid tri 3 4 new >>rot
+```
+
+first number - basis, second number - height. If omitted, default 7 6. >>rot is just making variations of pyramid base, no possibility of free rotation. Only discrete.
 
 ### Naming
 
