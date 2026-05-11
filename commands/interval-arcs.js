@@ -57,9 +57,17 @@ function parseIntervalArcsTokens(content) {
     const ch = content[i++];
 
     if (ch === "[") {
-      tokens.push({ type: "point", dot: "solid", label: readBalanced("[", "]") });
+      const label = readBalanced("[", "]");
+      skipWS();
+      let arrowLabel = null;
+      if (i < content.length && content[i] === "{") { i++; arrowLabel = readBalanced("{", "}"); }
+      tokens.push({ type: "point", dot: "solid", label, arrowLabel });
     } else if (ch === "(") {
-      tokens.push({ type: "point", dot: "hollow", label: readBalanced("(", ")") });
+      const label = readBalanced("(", ")");
+      skipWS();
+      let arrowLabel = null;
+      if (i < content.length && content[i] === "{") { i++; arrowLabel = readBalanced("{", "}"); }
+      tokens.push({ type: "point", dot: "hollow", label, arrowLabel });
     } else if (ch === "|") {
       tokens.push({ type: "mark", label: readUntil("|") });
     } else if (ch === "=") {
@@ -295,6 +303,12 @@ function compile(content, noLeft = false, noRight = false, noArcs = false) {
       lines.push(`\\draw[line width=1pt] (${fromX},-1.5) -- (${toX},-0.7);`);
       lines.push(`\\fill (${toX},-0.7) -- (${toX},-0.9) -- (${toX - 0.2},-0.7) -- cycle;`);
     }
+  }
+
+  const pointsWithArrowLabels = points.filter((p) => p.arrowLabel);
+  if (pointsWithArrowLabels.length > 0) {
+    for (const p of pointsWithArrowLabels)
+      lines.push(`\\node[scale=1.5] at (${p.x},-2) {$${p.arrowLabel}$};`);
   }
 
   lines.push(`% Hatching`);

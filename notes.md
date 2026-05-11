@@ -9,10 +9,16 @@
 5. below - up down arrows.
 6. left labels - above, below.
 7. axis arrow and label.
+8. mark min
+
+mark min:
+
+```
+interval-arcs[closed-only]: ^{V'(\alpha)}_{V(\alpha)} __ (0) _+_up [^{\arcsin \frac{\sqrt3}{3}}]{x_{max}} _-_down (\frac{\pi}{2}) __ >\alpha
+```
 
 TODO:
 
-- mark the min
 - individual points on line
 - overlapping intervals
 
