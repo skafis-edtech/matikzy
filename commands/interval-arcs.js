@@ -69,7 +69,11 @@ function parseIntervalArcsTokens(content) {
       if (i < content.length && content[i] === "{") { i++; arrowLabel = readBalanced("{", "}"); }
       tokens.push({ type: "point", dot: "hollow", label, arrowLabel });
     } else if (ch === "|") {
-      tokens.push({ type: "mark", label: readUntil("|") });
+      const label = readUntil("|");
+      skipWS();
+      let arrowLabel = null;
+      if (i < content.length && content[i] === "{") { i++; arrowLabel = readBalanced("{", "}"); }
+      tokens.push({ type: "mark", label, arrowLabel });
     } else if (ch === "=") {
       const label = readUntil("=");
       tokens.push({ type: "hatch", label, direction: tryDirection() });
@@ -160,7 +164,18 @@ function syntaxCheck(content) {
   return { valid: errors.length === 0, errors };
 }
 
-function compile(content, noLeft = false, noRight = false, noArcs = false) {
+function syntaxCheckParabola(content) {
+  const base = syntaxCheck(content);
+  const { rest } = extractLeftLabels(content);
+  const { tokens } = parseIntervalArcsTokens(rest);
+  const points = tokens.filter((t) => t.type === "point" || t.type === "mark");
+  const errors = [...base.errors];
+  if (points.length !== 2)
+    errors.push("interval-parabola requires exactly 2 points");
+  return { valid: errors.length === 0, errors };
+}
+
+function compile(content, noLeft = false, noRight = false, noArcs = false, parabolaDir = null) {
   const { topLabel, bottomLabel, rest } = extractLeftLabels(content);
   const { tokens } = parseIntervalArcsTokens(rest);
 
@@ -220,7 +235,7 @@ function compile(content, noLeft = false, noRight = false, noArcs = false) {
   }
 
   lines.push(`% Points`);
-  points.forEach((p) => {
+  points.forEach((p, idx) => {
     if (p.type === "mark") {
       lines.push(`\\draw[line width=1pt] (${p.x},-0.12) -- (${p.x},0.12);`);
     } else {
@@ -230,7 +245,11 @@ function compile(content, noLeft = false, noRight = false, noArcs = false) {
           : `\\draw[line width=1.5pt, fill=white] (${p.x},0) circle (3.5pt);`,
       );
     }
-    lines.push(`\\node[below, scale=1.5] at (${p.x},0) {$${p.label}$};`);
+    const labelX = parabolaDir === "up"
+      ? p.x + (idx === 0 ? -0.3 : idx === points.length - 1 ? 0.3 : 0)
+      : p.x;
+    const labelY = parabolaDir !== null ? -0.4 : 0;
+    lines.push(`\\node[below, scale=1.5] at (${labelX},${labelY}) {$${p.label}$};`);
   });
 
   lines.push(`% Arcs and signs`);
@@ -260,7 +279,15 @@ function compile(content, noLeft = false, noRight = false, noArcs = false) {
     if (sign)
       lines.push(`\\node[above, scale=1.5] at (${signX},0) {$${sign}$};`);
 
-    if (!noArcs) {
+    if (parabolaDir !== null) {
+      if (!isFirst && !isLast) {
+        const a = parabolaDir === "up" ? 1 : -1;
+        const legExt = 0.6;
+        lines.push(
+          `\\draw[thick, smooth, domain=${fromX - legExt}:${toX + legExt}, samples=60] plot (\\x, {${a}*(\\x - ${fromX})*(\\x - ${toX})});`,
+        );
+      }
+    } else if (!noArcs) {
       if (!isFirst && !isLast)
         lines.push(
           `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
@@ -334,4 +361,7 @@ export default [
   { prefix: "interval-arcs[closed-only]: ",    syntaxCheck, compile: (c) => compile(c, true, true) },
   { prefix: "interval: ",                      syntaxCheck, compile: (c) => compile(c, false, false, true) },
   { prefix: "interval[closed-only]: ",         syntaxCheck, compile: (c) => compile(c, true, true, true) },
+  { prefix: "interval-parabola: ",             syntaxCheck: syntaxCheckParabola, compile: (c) => compile(c, true, true, false, "up") },
+  { prefix: "interval-parabola[up]: ",         syntaxCheck: syntaxCheckParabola, compile: (c) => compile(c, true, true, false, "up") },
+  { prefix: "interval-parabola[down]: ",       syntaxCheck: syntaxCheckParabola, compile: (c) => compile(c, true, true, false, "down") },
 ];

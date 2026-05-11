@@ -10,6 +10,7 @@
 6. left labels - above, below.
 7. axis arrow and label.
 8. mark min
+9. parabola: `interval-parabola[down]: ...`
 
 mark min:
 
