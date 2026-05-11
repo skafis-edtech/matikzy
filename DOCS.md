@@ -310,28 +310,24 @@ _To be extended, more accurate for lines, rays, segments; triangle angle_
 
 Points, line segments, angles, triangles, circles - have their own notation for naming, but by default they are not labeled on the image. They can have different labels than names (tho it would be a bit consufing).
 
-**Point**: single uppercase english alphabet letter, e.g. A
+**Point**: single uppercase english alphabet letter with optional following single digit, e.g. A, C, A1, K9.
 
-**Line segment**:
-
-- two uppercase letters, e.g. AB
-- single lowercase letter **only** for triangle sides, e.g. a, that means BC in triangle ABC, meaning the lowercase letter of that vertex is opposite.
+**Line**: two points, ray and arrow direction matters, e.g. AB, B2C, C2D4.
 
 **Angle**:
 
-- tree uppercase letters, e.g. ABC
-- `angle` + one uppercase letter, e.g. angle A, that means XAY or YAX for some points X and Y.
-- can have amended word `bigger` that means taking the >180 degree angle, not the smaller <180 angle, e.g. angle A bigger.
+- three points, e.g. A1BC
+- `angle` + one point, e.g. angle A, that means XAY or YAX for some points X and Y.
+- can have amended word `bigger` that means taking the >180 degree angle, not the smaller <180 angle, e.g. angle A1 bigger.
 
 **Triangle**:
 
 - used for now only in triangle segments drawing section.
-- tree uppercase letters, e.g. ABC.
+- three points, e.g. ABC.
 
 **Circle**:
 
-- 3 uppercase letters, dash between first and two others. one of those two others should be the same as the single one, e.g. A-AB, or K-MK. the single letter marks center, the two letters marks a ray to the right, B is a point on circle to the right from the center (0 degrees).
-- TODO: differentiate between new and existing.
+- 3 points, dash between first and two others. one of those two others should be the same as the single one, e.g. A-AB, or K-M1K. the single letter marks center, the two letters marks a ray to the right, B is a point on circle to the right from the center (0 degrees).
 
 ### Triangle segments
 
@@ -430,6 +426,17 @@ line AB -- dashed
 line AB -- dotted
 ```
 
+### Arc and circle transform
+
+```
+geometry:
+circle new O-OX >>h0.5 // becomes an oval, the Y axis is shrunk by 0.5
+point O-OX 90 new K
+point O-OX -90 new L
+arc O-OX KL bigger -- dotted
+arc O-OX KL -- none
+```
+
 ### Label
 
 ```
@@ -496,16 +503,11 @@ area OAB -- solid light
 
 None, solid, solid light.
 
-## Misc - hide circle sector (arc)
-
-Can hide part of the circle, logic like with area. Can hide a sector of circle with at least 3 points - 2 are the boundary, another one says the direction.
+## 3d
 
 ```
 geometry:
-circle new O-OX
-point O-OX 90 new K
-point O-OX -90 new L
-hide O-OX KLX
+cube new ABCDA1B1C1D1
 ```
 
 ## Shortcuts
@@ -559,7 +561,7 @@ triangle ACX
 circle D-DN
 ```
 
-**Inscribing circumscribing for quad**
+**Inscribing and circumscribing for quad**
 
 TODO...
 
