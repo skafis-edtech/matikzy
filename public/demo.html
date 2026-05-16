@@ -1,490 +1,705 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
+    <head>
+        <meta charset="utf-8" />
 
-    <!-- SEO -->
-    <title>Šimtukas Tikz – Matikzy to TikZ Renderer</title>
-    <meta
-      name="description"
-      content="Šimtukas Tikz is an open-source tool to convert Matikzy syntax into TikZ and render it instantly in your browser."
-    />
-    <link rel="canonical" href="https://github.com/skafis-edtech/matikzy" />
-    <meta
-      name="keywords"
-      content="TikZ, LaTeX, math diagrams, Matikzy, renderer, open source, math visualization"
-    />
-    <meta name="author" content="Šimtukas Tikz" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <!-- SEO -->
+        <title>Šimtukas Tikz – Matikzy to TikZ Renderer</title>
+        <meta
+            name="description"
+            content="Šimtukas Tikz is an open-source tool to convert Matikzy syntax into TikZ and render it instantly in your browser."
+        />
+        <link rel="canonical" href="https://github.com/skafis-edtech/matikzy" />
+        <meta
+            name="keywords"
+            content="TikZ, LaTeX, math diagrams, Matikzy, renderer, open source, math visualization"
+        />
+        <meta name="author" content="Šimtukas Tikz" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Open Graph -->
-    <meta property="og:title" content="Šimtukas Tikz" />
-    <meta property="og:description" content="Convert Matikzy syntax into TikZ and render diagrams instantly." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://github.com/skafis-edtech/matikzy" />
+        <!-- Open Graph -->
+        <meta property="og:title" content="Šimtukas Tikz" />
+        <meta
+            property="og:description"
+            content="Convert Matikzy syntax into TikZ and render diagrams instantly."
+        />
+        <meta property="og:type" content="website" />
+        <meta
+            property="og:url"
+            content="https://github.com/skafis-edtech/matikzy"
+        />
 
-    <meta name="theme-color" content="#3b6fd4" />
+        <meta name="theme-color" content="#3b6fd4" />
 
-    <style>
-      :root {
-        --bg: #f8f8f8;
-        --surface: #ffffff;
-        --border: #d0d0d0;
-        --text: #1a1a1a;
-        --text-muted: #555;
-        --accent: #3b6fd4;
-        --accent-hover: #2d57b0;
-        --btn-text: #ffffff;
-        --error: #c0392b;
-        --output-bg: #ffffff;
-        --stats-val: #111;
-      }
+        <style>
+            :root {
+                --bg: #f8f8f8;
+                --surface: #ffffff;
+                --border: #d0d0d0;
+                --text: #1a1a1a;
+                --text-muted: #555;
+                --accent: #3b6fd4;
+                --accent-hover: #2d57b0;
+                --btn-text: #ffffff;
+                --error: #c0392b;
+                --output-bg: #ffffff;
+                --stats-val: #111;
+            }
 
-      [data-theme="dark"] {
-        --bg: #111318;
-        --surface: #1e2128;
-        --border: #2e3240;
-        --text: #e2e4ea;
-        --text-muted: #8a8f9e;
-        --accent: #5c8cf5;
-        --accent-hover: #7aa3ff;
-        --btn-text: #ffffff;
-        --error: #e05252;
-        --output-bg: #1e2128;
-        --stats-val: #e2e4ea;
-      }
+            [data-theme="dark"] {
+                --bg: #111318;
+                --surface: #1e2128;
+                --border: #2e3240;
+                --text: #e2e4ea;
+                --text-muted: #8a8f9e;
+                --accent: #5c8cf5;
+                --accent-hover: #7aa3ff;
+                --btn-text: #ffffff;
+                --error: #e05252;
+                --output-bg: #1e2128;
+                --stats-val: #e2e4ea;
+            }
 
-      * { box-sizing: border-box; }
+            * {
+                box-sizing: border-box;
+            }
 
-      body {
-        font-family: monospace;
-        max-width: 900px;
-        margin: 2rem auto;
-        padding: 0 1.5rem 3rem;
-        background: var(--bg);
-        color: var(--text);
-        transition: background 0.2s, color 0.2s;
-      }
+            body {
+                font-family: monospace;
+                max-width: 900px;
+                margin: 2rem auto;
+                padding: 0 1.5rem 3rem;
+                background: var(--bg);
+                color: var(--text);
+                transition:
+                    background 0.2s,
+                    color 0.2s;
+            }
 
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 1.25rem;
-      }
+            header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 1.25rem;
+            }
 
-      h2 {
-        margin: 0;
-        font-size: 1.4rem;
-        letter-spacing: 0.03em;
-      }
+            h2 {
+                margin: 0;
+                font-size: 1.4rem;
+                letter-spacing: 0.03em;
+            }
 
-      #theme-toggle {
-        background: none;
-        border: 1px solid var(--border);
-        color: var(--text-muted);
-        border-radius: 6px;
-        padding: 0.3rem 0.75rem;
-        font-size: 13px;
-        font-family: monospace;
-        cursor: pointer;
-        transition: border-color 0.15s, color 0.15s;
-      }
-      #theme-toggle:hover {
-        border-color: var(--accent);
-        color: var(--accent);
-      }
+            #theme-toggle {
+                background: none;
+                border: 1px solid var(--border);
+                color: var(--text-muted);
+                border-radius: 6px;
+                padding: 0.3rem 0.75rem;
+                font-size: 13px;
+                font-family: monospace;
+                cursor: pointer;
+                transition:
+                    border-color 0.15s,
+                    color 0.15s;
+            }
+            #theme-toggle:hover {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
 
-      /* CodeMirror editor wrapper */
-      .editor-wrap {
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        overflow: hidden;
-        transition: border-color 0.15s;
-      }
-      .editor-wrap:focus-within {
-        border-color: var(--accent);
-      }
+            /* CodeMirror editor wrapper */
+            .editor-wrap {
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                overflow: hidden;
+                transition: border-color 0.15s;
+                cursor: text;
+            }
+            .editor-wrap:focus-within {
+                border-color: var(--accent);
+            }
 
-      /* Override CodeMirror internals to match site font */
-      .cm-editor,
-      .cm-editor .cm-content,
-      .cm-editor .cm-scroller,
-      .cm-editor .cm-line {
-        font-family: monospace !important;
-        font-size: 13px !important;
-      }
+            /* Override CodeMirror internals to match site font */
+            .cm-editor,
+            .cm-editor .cm-content,
+            .cm-editor .cm-scroller,
+            .cm-editor .cm-line {
+                font-family: monospace !important;
+                font-size: 13px !important;
+            }
 
-      .cm-editor .cm-content {
-        padding: 0.5rem 0.75rem !important;
-      }
+            .cm-editor .cm-content {
+                padding: 0.5rem 0.75rem !important;
+            }
 
-      /* Matikzy editor: grows but caps at 300px */
-      #matikzy-editor .cm-editor { min-height: 80px; }
-      #matikzy-editor .cm-scroller { max-height: 300px; overflow-y: auto; }
+            /* Matikzy editor: grows but caps at 300px */
+            #matikzy-editor .cm-editor {
+                min-height: 80px;
+            }
+            #matikzy-editor .cm-scroller {
+                min-height: 80px;
+                max-height: 300px;
+                overflow-y: auto;
+            }
 
-      /* TikZ editor: fixed 180px */
-      #tikz-editor .cm-editor { height: 180px; }
-      #tikz-editor .cm-scroller { overflow-y: auto; }
+            /* TikZ editor: fixed 180px */
+            #tikz-editor .cm-editor {
+                height: 180px;
+            }
+            #tikz-editor .cm-scroller {
+                height: 100%;
+                overflow-y: auto;
+            }
 
-      /* Autocomplete tooltip */
-      .cm-tooltip.cm-tooltip-autocomplete {
-        border: 1px solid var(--border) !important;
-        border-radius: 4px !important;
-        background: var(--surface) !important;
-        font-family: monospace !important;
-        font-size: 13px !important;
-      }
-      .cm-tooltip-autocomplete > ul > li {
-        padding: 2px 10px !important;
-        color: var(--text) !important;
-      }
-      .cm-tooltip-autocomplete > ul > li[aria-selected] {
-        background: var(--accent) !important;
-        color: var(--btn-text) !important;
-      }
+            /* Autocomplete tooltip */
+            .cm-tooltip.cm-tooltip-autocomplete {
+                border: 1px solid var(--border) !important;
+                border-radius: 4px !important;
+                background: var(--surface) !important;
+                font-family: monospace !important;
+                font-size: 13px !important;
+            }
+            .cm-tooltip-autocomplete > ul > li {
+                padding: 2px 10px !important;
+                color: var(--text) !important;
+            }
+            .cm-tooltip-autocomplete > ul > li[aria-selected] {
+                background: var(--accent) !important;
+                color: var(--btn-text) !important;
+            }
 
-      button.action-btn {
-        margin-top: 0.5rem;
-        padding: 0.45rem 1.3rem;
-        font-size: 13px;
-        font-family: monospace;
-        cursor: pointer;
-        background: var(--accent);
-        color: var(--btn-text);
-        border: none;
-        border-radius: 6px;
-        transition: background 0.15s;
-      }
-      button.action-btn:hover { background: var(--accent-hover); }
+            button.action-btn {
+                margin-top: 0.5rem;
+                padding: 0.45rem 1.3rem;
+                font-size: 13px;
+                font-family: monospace;
+                cursor: pointer;
+                background: var(--accent);
+                color: var(--btn-text);
+                border: none;
+                border-radius: 6px;
+                transition: background 0.15s;
+            }
+            button.action-btn:hover {
+                background: var(--accent-hover);
+            }
 
-      [data-theme="dark"] #output svg { filter: invert(1); }
+            [data-theme="dark"] #output svg {
+                filter: invert(1);
+            }
 
-      #output {
-        margin-top: 1.5rem;
-        min-height: 100px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 1rem;
-        background: var(--output-bg);
-        position: relative;
-        transition: background 0.2s, border-color 0.2s;
-      }
+            #output {
+                margin-top: 1.5rem;
+                min-height: 100px;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 1rem;
+                background: var(--output-bg);
+                position: relative;
+                transition:
+                    background 0.2s,
+                    border-color 0.2s;
+            }
 
-      .error-msg {
-        color: var(--error);
-        margin-top: 0.35rem;
-        font-size: 13px;
-        min-height: 1em;
-      }
+            .error-msg {
+                color: var(--error);
+                margin-top: 0.35rem;
+                font-size: 13px;
+                min-height: 1em;
+            }
 
-      label {
-        font-size: 12px;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        display: block;
-        margin-top: 1.25rem;
-        margin-bottom: 0.35rem;
-      }
+            label {
+                font-size: 12px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--text-muted);
+                display: block;
+                margin-top: 1.25rem;
+                margin-bottom: 0.35rem;
+            }
 
-      #stats {
-        display: flex;
-        gap: 0;
-        flex-wrap: wrap;
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-bottom: 1.25rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        overflow: hidden;
-        background: var(--surface);
-        transition: background 0.2s, border-color 0.2s;
-      }
-      #stats span {
-        white-space: nowrap;
-        padding: 0.45rem 1rem;
-        border-right: 1px solid var(--border);
-      }
-      #stats span:last-child { border-right: none; }
-      #stats b { color: var(--stats-val); }
-      #stats.loading { padding: 0.45rem 1rem; }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h2>Šimtukas Tikz</h2>
-      <button id="theme-toggle">dark mode</button>
-    </header>
+            #stats {
+                display: flex;
+                gap: 0;
+                flex-wrap: wrap;
+                font-size: 12px;
+                color: var(--text-muted);
+                margin-bottom: 1.25rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                overflow: hidden;
+                background: var(--surface);
+                transition:
+                    background 0.2s,
+                    border-color 0.2s;
+            }
+            #stats span {
+                white-space: nowrap;
+                padding: 0.45rem 1rem;
+                border-right: 1px solid var(--border);
+            }
+            #stats span:last-child {
+                border-right: none;
+            }
+            #stats b {
+                color: var(--stats-val);
+            }
+            #stats.loading {
+                padding: 0.45rem 1rem;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <h2>Šimtukas Tikz</h2>
+            <button id="theme-toggle">dark mode</button>
+        </header>
 
-    <p style="font-size: 13px; color: var(--text-muted); margin-top: -0.5rem">
-      Open source on
-      <a href="https://github.com/skafis-edtech/matikzy" target="_blank"
-         style="color: var(--accent); text-decoration: none">GitHub</a>
-    </p>
-    <p style="font-size: 13px; color: var(--text-muted); margin-top: -0.5rem">
-      Read documentation
-      <a href="https://github.com/skafis-edtech/matikzy/blob/main/DOCS.md" target="_blank"
-         style="color: var(--accent); text-decoration: none">here</a>.
-    </p>
-    <div id="stats" class="loading">Loading stats...</div>
+        <p
+            style="
+                font-size: 13px;
+                color: var(--text-muted);
+                margin-top: -0.5rem;
+            "
+        >
+            Open source on
+            <a
+                href="https://github.com/skafis-edtech/matikzy"
+                target="_blank"
+                style="color: var(--accent); text-decoration: none"
+                >GitHub</a
+            >
+        </p>
+        <p
+            style="
+                font-size: 13px;
+                color: var(--text-muted);
+                margin-top: -0.5rem;
+            "
+        >
+            Read documentation
+            <a
+                href="https://github.com/skafis-edtech/matikzy/blob/main/DOCS.md"
+                target="_blank"
+                style="color: var(--accent); text-decoration: none"
+                >here</a
+            >.
+        </p>
+        <div id="stats" class="loading">Loading stats...</div>
 
-    <label>Matikzy (by Šimtukas) (beta)</label>
-    <div id="matikzy-editor" class="editor-wrap"></div>
-    <button id="compile-btn" class="action-btn">Compile &amp; Render</button>
-    <div id="compile-error" class="error-msg"></div>
+        <label>Matikzy (by Šimtukas) (beta)</label>
+        <div id="matikzy-editor" class="editor-wrap"></div>
+        <button id="compile-btn" class="action-btn">
+            Compile &amp; Render
+        </button>
+        <div id="compile-error" class="error-msg"></div>
 
-    <div id="error" class="error-msg"></div>
-    <div id="output"></div>
-    <div id="render-status" style="font-size:13px;color:var(--text-muted);min-height:1em;margin-top:0.35rem"></div>
-    <button id="download-btn" class="action-btn" style="display:none;margin-top:0.5rem">Download SVG</button>
+        <div id="error" class="error-msg"></div>
+        <div id="output"></div>
+        <div
+            id="render-status"
+            style="
+                font-size: 13px;
+                color: var(--text-muted);
+                min-height: 1em;
+                margin-top: 0.35rem;
+            "
+        ></div>
+        <button
+            id="download-btn"
+            class="action-btn"
+            style="display: none; margin-top: 0.5rem"
+        >
+            Download SVG
+        </button>
 
-    <label>TikZ</label>
-    <div id="tikz-editor" class="editor-wrap"></div>
-    <button id="render-btn" class="action-btn">Render</button>
+        <label>TikZ</label>
+        <div id="tikz-editor" class="editor-wrap"></div>
+        <button id="render-btn" class="action-btn">Render</button>
 
-    <script type="module">
-      import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@6";
-      import { EditorView, keymap, highlightActiveLine, placeholder } from "https://esm.sh/@codemirror/view@6";
-      import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6";
-      import { StreamLanguage, HighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6";
-      import { autocompletion, completionKeymap } from "https://esm.sh/@codemirror/autocomplete@6";
-      import { tags } from "https://esm.sh/@lezer/highlight@1";
-      import { compile } from "/matikzy.js";
+        <script type="module">
+            import {
+                EditorState,
+                Compartment,
+            } from "https://esm.sh/@codemirror/state@6";
+            import {
+                EditorView,
+                keymap,
+                highlightActiveLine,
+                placeholder,
+            } from "https://esm.sh/@codemirror/view@6";
+            import {
+                defaultKeymap,
+                history,
+                historyKeymap,
+            } from "https://esm.sh/@codemirror/commands@6";
+            import {
+                StreamLanguage,
+                HighlightStyle,
+                syntaxHighlighting,
+            } from "https://esm.sh/@codemirror/language@6";
+            import {
+                autocompletion,
+                completionKeymap,
+            } from "https://esm.sh/@codemirror/autocomplete@6";
+            import { tags } from "https://esm.sh/@lezer/highlight@1";
+            import { compile } from "/matikzy.js";
 
-      // ── Matikzy language (StreamLanguage tokenizer) ───────────────────────
-      const matikzyLang = StreamLanguage.define({
-        token(stream) {
-          // Comments
-          if (stream.match("//")) {
-            stream.skipToEnd();
-            return "comment";
-          }
-          // Command prefixes only at start of line
-          if (stream.sol() && stream.match(/(?:function|geometry|interval-arcs|unit-circle|cuboid)(?:\[[^\]]*\])?:/)) {
-            return "keyword";
-          }
-          // Skip whitespace
-          if (stream.eatSpace()) return null;
-          // Main commands
-          if (stream.match(/(?:graph|axes|point|line|triangle|circle|quadrilateral|area|label|mark|angle|new|segment|ray|arrow|inscribe|circumscribe|bisector|median|altitude|midsegment|tangent|perpendicular|rotangle|x-line|y-line|cube|pyramid)(?=\s|$)/)) {
-            return "atom";
-          }
-          // Shape/function subtypes and modifiers
-          if (stream.match(/(?:parabola|hyperbola|sin|cos|tan|tg|cot|ctg|sqrt|cbrt|log|exp|linear|cubic|square|rectangle|parallelogram|rhombus|trapezoid|acute|right|obtuse|scalene|isosceles|equilateral)(?=\s|$|[^a-zA-Z])/)) {
-            return "typeName";
-          }
-          stream.next();
-          return null;
-        },
-      });
+            // ── Matikzy language (StreamLanguage tokenizer) ───────────────────────
+            const matikzyLang = StreamLanguage.define({
+                token(stream) {
+                    // Comments
+                    if (stream.match("//")) {
+                        stream.skipToEnd();
+                        return "comment";
+                    }
+                    // Command prefixes only at start of line
+                    if (
+                        stream.sol() &&
+                        stream.match(
+                            /(?:function|geometry|interval-arcs|unit-circle|cuboid)(?:\[[^\]]*\])?:/,
+                        )
+                    ) {
+                        return "keyword";
+                    }
+                    // Skip whitespace
+                    if (stream.eatSpace()) return null;
+                    // Main commands
+                    if (
+                        stream.match(
+                            /(?:graph|axes|point|line|triangle|circle|quadrilateral|area|label|mark|angle|new|segment|ray|arrow|inscribe|circumscribe|bisector|median|altitude|midsegment|tangent|perpendicular|rotangle|x-line|y-line|cube|pyramid)(?=\s|$)/,
+                        )
+                    ) {
+                        return "atom";
+                    }
+                    stream.next();
+                    return null;
+                },
+            });
 
-      // ── Autocomplete ──────────────────────────────────────────────────────
-      const COMPLETIONS = [
-        ...["function:", "geometry:", "interval-arcs:", "unit-circle:", "cuboid:"]
-          .map(label => ({ label, type: "keyword", boost: 10 })),
-        ...["graph", "axes", "point", "line", "triangle", "circle", "quadrilateral",
-            "area", "label", "mark", "angle", "new", "segment", "ray", "arrow",
-            "inscribe", "circumscribe", "bisector", "median", "altitude",
-            "midsegment", "tangent", "perpendicular", "rotangle", "x-line", "y-line",
-            "cube", "pyramid"]
-          .map(label => ({ label, type: "function" })),
-        ...["parabola", "hyperbola", "sin", "cos", "tan", "tg", "cot", "ctg",
-            "sqrt", "cbrt", "log", "exp", "linear", "cubic",
-            "square", "rectangle", "parallelogram", "rhombus", "trapezoid",
-            "acute", "right", "obtuse", "scalene", "isosceles", "equilateral"]
-          .map(label => ({ label, type: "type" })),
-      ];
+            // ── Autocomplete ──────────────────────────────────────────────────────
+            const COMPLETIONS = [
+                ...[
+                    "function:",
+                    "geometry:",
+                    "interval-arcs:",
+                    "unit-circle:",
+                    "cuboid:",
+                ].map((label) => ({ label, type: "keyword", boost: 10 })),
+                ...[
+                    "graph",
+                    "axes",
+                    "point",
+                    "line",
+                    "triangle",
+                    "circle",
+                    "quadrilateral",
+                    "area",
+                    "label",
+                    "mark",
+                    "angle",
+                    "new",
+                    "segment",
+                    "ray",
+                    "arrow",
+                    "inscribe",
+                    "circumscribe",
+                    "bisector",
+                    "median",
+                    "altitude",
+                    "midsegment",
+                    "tangent",
+                    "perpendicular",
+                    "rotangle",
+                    "x-line",
+                    "y-line",
+                    "cube",
+                    "pyramid",
+                ].map((label) => ({ label, type: "function" })),
+                ...[
+                    "parabola",
+                    "hyperbola",
+                    "sin",
+                    "cos",
+                    "tan",
+                    "tg",
+                    "cot",
+                    "ctg",
+                    "sqrt",
+                    "cbrt",
+                    "log",
+                    "exp",
+                    "linear",
+                    "cubic",
+                    "square",
+                    "rectangle",
+                    "parallelogram",
+                    "rhombus",
+                    "trapezoid",
+                    "acute",
+                    "right",
+                    "obtuse",
+                    "scalene",
+                    "isosceles",
+                    "equilateral",
+                ].map((label) => ({ label, type: "type" })),
+            ];
 
-      function matikzyComplete(context) {
-        const word = context.matchBefore(/[\w:/-]+/);
-        if (!context.explicit && (!word || word.from === word.to)) return null;
-        const text = (word?.text ?? "").toLowerCase();
-        return {
-          from: word?.from ?? context.pos,
-          options: text
-            ? COMPLETIONS.filter(c => c.label.startsWith(text))
-            : COMPLETIONS,
-        };
-      }
+            function matikzyComplete(context) {
+                const word = context.matchBefore(/[\w:/-]+/);
+                if (!context.explicit && (!word || word.from === word.to))
+                    return null;
+                const text = (word?.text ?? "").toLowerCase();
+                return {
+                    from: word?.from ?? context.pos,
+                    options: text
+                        ? COMPLETIONS.filter((c) => c.label.startsWith(text))
+                        : COMPLETIONS,
+                };
+            }
 
-      // ── Theme (compartments for live switching) ───────────────────────────
-      const matikzyThemeComp = new Compartment();
-      const tikzThemeComp = new Compartment();
+            // ── Theme (compartments for live switching) ───────────────────────────
+            const matikzyThemeComp = new Compartment();
+            const tikzThemeComp = new Compartment();
 
-      function makeTheme(dark) {
-        return [
-          EditorView.theme({
-            "&": {
-              backgroundColor: dark ? "#161920" : "#ffffff",
-              color: dark ? "#e2e4ea" : "#1a1a1a",
-            },
-            ".cm-content": { caretColor: dark ? "#e2e4ea" : "#1a1a1a" },
-            ".cm-cursor": { borderLeftColor: dark ? "#e2e4ea" : "#1a1a1a" },
-            "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-              backgroundColor: dark ? "#264f78" : "#add6ff",
-            },
-            ".cm-activeLine": {
-              backgroundColor: dark ? "#1e253580" : "#f0f4ff",
-            },
-            ".cm-placeholder": { color: dark ? "#555e72" : "#999" },
-          }, { dark }),
-          syntaxHighlighting(HighlightStyle.define([
-            { tag: tags.keyword,  color: dark ? "#569cd6" : "#0070c1", fontWeight: "bold" },
-            { tag: tags.atom,     color: dark ? "#4ec9b0" : "#267f99" },
-            { tag: tags.typeName, color: dark ? "#ce9178" : "#a31515" },
-            { tag: tags.comment,  color: dark ? "#6a9955" : "#008000", fontStyle: "italic" },
-          ])),
-        ];
-      }
+            function makeTheme(dark) {
+                return [
+                    EditorView.theme(
+                        {
+                            "&": {
+                                backgroundColor: dark ? "#161920" : "#ffffff",
+                                color: dark ? "#e2e4ea" : "#1a1a1a",
+                            },
+                            ".cm-content": {
+                                caretColor: dark ? "#e2e4ea" : "#1a1a1a",
+                            },
+                            ".cm-cursor": {
+                                borderLeftColor: dark ? "#e2e4ea" : "#1a1a1a",
+                            },
+                            "&.cm-focused .cm-selectionBackground, .cm-selectionBackground":
+                                {
+                                    backgroundColor: dark
+                                        ? "#264f78"
+                                        : "#add6ff",
+                                },
+                            ".cm-activeLine": {
+                                backgroundColor: dark ? "#1e253580" : "#f0f4ff",
+                            },
+                            ".cm-placeholder": {
+                                color: dark ? "#555e72" : "#999",
+                            },
+                        },
+                        { dark },
+                    ),
+                    syntaxHighlighting(
+                        HighlightStyle.define([
+                            {
+                                tag: tags.keyword,
+                                color: dark ? "#569cd6" : "#0070c1",
+                                fontWeight: "bold",
+                            },
+                            {
+                                tag: tags.atom,
+                                color: dark ? "#4ec9b0" : "#267f99",
+                            },
+                            {
+                                tag: tags.comment,
+                                color: dark ? "#6a9955" : "#008000",
+                                fontStyle: "italic",
+                            },
+                        ]),
+                    ),
+                ];
+            }
 
-      // ── Create editors ────────────────────────────────────────────────────
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
-      let currentDark = prefersDark.matches;
+            // ── Create editors ────────────────────────────────────────────────────
+            const prefersDark = window.matchMedia(
+                "(prefers-color-scheme: dark)",
+            );
+            let currentDark = prefersDark.matches;
 
-      let debounceTimer;
+            let debounceTimer;
 
-      const matikzyEditor = new EditorView({
-        state: EditorState.create({
-          doc: "function: graph parabola y=x^2+2x-1",
-          extensions: [
-            history(),
-            keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
-            matikzyLang,
-            autocompletion({ override: [matikzyComplete] }),
-            highlightActiveLine(),
-            placeholder("function: graph parabola y=x^2+2x-1"),
-            EditorView.lineWrapping,
-            matikzyThemeComp.of(makeTheme(currentDark)),
-            EditorView.updateListener.of(update => {
-              if (update.docChanged) {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(compileMatikzy, 600);
-              }
-            }),
-          ],
-        }),
-        parent: document.getElementById("matikzy-editor"),
-      });
+            const matikzyEditor = new EditorView({
+                state: EditorState.create({
+                    doc: "function: graph parabola y=x^2+2x-1",
+                    extensions: [
+                        history(),
+                        keymap.of([
+                            ...completionKeymap,
+                            ...defaultKeymap,
+                            ...historyKeymap,
+                        ]),
+                        matikzyLang,
+                        autocompletion({
+                            override: [matikzyComplete],
+                            activateOnTypingDelay: 1000,
+                        }),
+                        highlightActiveLine(),
+                        placeholder("function: graph parabola y=x^2+2x-1"),
+                        EditorView.lineWrapping,
+                        matikzyThemeComp.of(makeTheme(currentDark)),
+                        EditorView.updateListener.of((update) => {
+                            if (update.docChanged) {
+                                clearTimeout(debounceTimer);
+                                debounceTimer = setTimeout(compileMatikzy, 600);
+                            }
+                        }),
+                    ],
+                }),
+                parent: document.getElementById("matikzy-editor"),
+            });
 
-      const tikzEditor = new EditorView({
-        state: EditorState.create({
-          doc: "",
-          extensions: [
-            history(),
-            keymap.of([...defaultKeymap, ...historyKeymap]),
-            highlightActiveLine(),
-            EditorView.lineWrapping,
-            tikzThemeComp.of(makeTheme(currentDark)),
-          ],
-        }),
-        parent: document.getElementById("tikz-editor"),
-      });
+            const tikzEditor = new EditorView({
+                state: EditorState.create({
+                    doc: "",
+                    extensions: [
+                        history(),
+                        keymap.of([...defaultKeymap, ...historyKeymap]),
+                        highlightActiveLine(),
+                        EditorView.lineWrapping,
+                        tikzThemeComp.of(makeTheme(currentDark)),
+                    ],
+                }),
+                parent: document.getElementById("tikz-editor"),
+            });
 
-      function setTikz(text) {
-        tikzEditor.dispatch({
-          changes: { from: 0, to: tikzEditor.state.doc.length, insert: text },
-        });
-      }
+            document.getElementById("matikzy-editor").addEventListener("click", (e) => {
+                if (!e.target.closest(".cm-content")) matikzyEditor.focus();
+            });
+            document.getElementById("tikz-editor").addEventListener("click", (e) => {
+                if (!e.target.closest(".cm-content")) tikzEditor.focus();
+            });
 
-      // ── App logic ─────────────────────────────────────────────────────────
-      document.getElementById("compile-btn").addEventListener("click", compileMatikzy);
-      document.getElementById("render-btn").addEventListener("click", render);
+            function setTikz(text) {
+                tikzEditor.dispatch({
+                    changes: {
+                        from: 0,
+                        to: tikzEditor.state.doc.length,
+                        insert: text,
+                    },
+                });
+            }
 
-      document.getElementById("download-btn").addEventListener("click", () => {
-        const svg = document.getElementById("output").innerHTML;
-        const blob = new Blob([svg], { type: "image/svg+xml" });
-        const a = Object.assign(document.createElement("a"), {
-          href: URL.createObjectURL(blob),
-          download: "diagram.svg",
-        });
-        a.click();
-        URL.revokeObjectURL(a.href);
-      });
+            // ── App logic ─────────────────────────────────────────────────────────
+            document
+                .getElementById("compile-btn")
+                .addEventListener("click", compileMatikzy);
+            document
+                .getElementById("render-btn")
+                .addEventListener("click", render);
 
-      async function compileMatikzy() {
-        const matikzy = matikzyEditor.state.doc.toString().trim();
-        const compileError = document.getElementById("compile-error");
-        compileError.textContent = "";
-        try {
-          setTikz(compile(matikzy));
-        } catch (e) {
-          compileError.textContent = e.message;
-          return;
-        }
-        await render();
-      }
+            document
+                .getElementById("download-btn")
+                .addEventListener("click", () => {
+                    const svg = document.getElementById("output").innerHTML;
+                    const blob = new Blob([svg], { type: "image/svg+xml" });
+                    const a = Object.assign(document.createElement("a"), {
+                        href: URL.createObjectURL(blob),
+                        download: "diagram.svg",
+                    });
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                });
 
-      let renderSeq = 0;
-      async function render() {
-        const tikz = tikzEditor.state.doc.toString();
-        const error = document.getElementById("error");
-        const output = document.getElementById("output");
-        const status = document.getElementById("render-status");
-        const downloadBtn = document.getElementById("download-btn");
-        error.textContent = "";
-        status.textContent = "Rendering...";
-        const seq = ++renderSeq;
-        try {
-          const res = await fetch("/render", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lang: "tikz", content: tikz }),
-          });
-          if (!res.ok) throw new Error(await res.text());
-          const svg = await res.text();
-          if (seq !== renderSeq) return;
-          output.innerHTML = svg;
-          status.textContent = "";
-          downloadBtn.style.display = "";
-          loadStats();
-        } catch (e) {
-          if (seq !== renderSeq) return;
-          status.textContent = "";
-          error.textContent = e.message;
-        }
-      }
+            async function compileMatikzy() {
+                const matikzy = matikzyEditor.state.doc.toString().trim();
+                const compileError = document.getElementById("compile-error");
+                compileError.textContent = "";
+                try {
+                    setTikz(compile(matikzy));
+                } catch (e) {
+                    compileError.textContent = e.message;
+                    return;
+                }
+                await render();
+            }
 
-      async function loadStats() {
-        const el = document.getElementById("stats");
-        try {
-          const res = await fetch("/stats");
-          if (!res.ok) throw new Error();
-          const s = await res.json();
-          const cacheRate = s.requests > 0 ? Math.round((s.cache_hits / s.requests) * 100) : 0;
-          el.classList.remove("loading");
-          el.innerHTML = [
-            `<span>requests <b>${s.requests}</b></span>`,
-            `<span>renders <b>${s.renders}</b></span>`,
-            `<span>cache hits <b>${s.cache_hits}</b> (${cacheRate}%)</span>`,
-            `<span>errors <b>${s.errors}</b></span>`,
-            `<span>queue full <b>${s.queue_full}</b></span>`,
-          ].join("");
-        } catch {
-          el.textContent = "Stats unavailable";
-        }
-      }
+            let renderSeq = 0;
+            async function render() {
+                const tikz = tikzEditor.state.doc.toString();
+                const error = document.getElementById("error");
+                const output = document.getElementById("output");
+                const status = document.getElementById("render-status");
+                const downloadBtn = document.getElementById("download-btn");
+                error.textContent = "";
+                status.textContent = "Rendering...";
+                const seq = ++renderSeq;
+                try {
+                    const res = await fetch("/render", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ lang: "tikz", content: tikz }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const svg = await res.text();
+                    if (seq !== renderSeq) return;
+                    output.innerHTML = svg;
+                    status.textContent = "";
+                    downloadBtn.style.display = "";
+                    loadStats();
+                } catch (e) {
+                    if (seq !== renderSeq) return;
+                    status.textContent = "";
+                    error.textContent = e.message;
+                }
+            }
 
-      loadStats();
+            async function loadStats() {
+                const el = document.getElementById("stats");
+                try {
+                    const res = await fetch("/stats");
+                    if (!res.ok) throw new Error();
+                    const s = await res.json();
+                    const cacheRate =
+                        s.requests > 0
+                            ? Math.round((s.cache_hits / s.requests) * 100)
+                            : 0;
+                    el.classList.remove("loading");
+                    el.innerHTML = [
+                        `<span>requests <b>${s.requests}</b></span>`,
+                        `<span>renders <b>${s.renders}</b></span>`,
+                        `<span>cache hits <b>${s.cache_hits}</b> (${cacheRate}%)</span>`,
+                        `<span>errors <b>${s.errors}</b></span>`,
+                        `<span>queue full <b>${s.queue_full}</b></span>`,
+                    ].join("");
+                } catch {
+                    el.textContent = "Stats unavailable";
+                }
+            }
 
-      // ── Theme switching ───────────────────────────────────────────────────
-      const toggle = document.getElementById("theme-toggle");
+            loadStats();
 
-      function applyTheme(dark) {
-        currentDark = dark;
-        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-        toggle.textContent = dark ? "light mode" : "dark mode";
-        const theme = makeTheme(dark);
-        matikzyEditor.dispatch({ effects: matikzyThemeComp.reconfigure(theme) });
-        tikzEditor.dispatch({ effects: tikzThemeComp.reconfigure(theme) });
-      }
+            // ── Theme switching ───────────────────────────────────────────────────
+            const toggle = document.getElementById("theme-toggle");
 
-      applyTheme(prefersDark.matches);
-      prefersDark.addEventListener("change", e => applyTheme(e.matches));
-      toggle.addEventListener("click", () => {
-        applyTheme(document.documentElement.getAttribute("data-theme") !== "dark");
-      });
-    </script>
-  </body>
+            function applyTheme(dark) {
+                currentDark = dark;
+                document.documentElement.setAttribute(
+                    "data-theme",
+                    dark ? "dark" : "light",
+                );
+                toggle.textContent = dark ? "light mode" : "dark mode";
+                const theme = makeTheme(dark);
+                matikzyEditor.dispatch({
+                    effects: matikzyThemeComp.reconfigure(theme),
+                });
+                tikzEditor.dispatch({
+                    effects: tikzThemeComp.reconfigure(theme),
+                });
+            }
+
+            applyTheme(prefersDark.matches);
+            prefersDark.addEventListener("change", (e) =>
+                applyTheme(e.matches),
+            );
+            toggle.addEventListener("click", () => {
+                applyTheme(
+                    document.documentElement.getAttribute("data-theme") !==
+                        "dark",
+                );
+            });
+        </script>
+    </body>
 </html>
