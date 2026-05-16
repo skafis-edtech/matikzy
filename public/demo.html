@@ -17,19 +17,12 @@
     <meta name="author" content="Šimtukas Tikz" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Open Graph (for social sharing) -->
+    <!-- Open Graph -->
     <meta property="og:title" content="Šimtukas Tikz" />
-    <meta
-      property="og:description"
-      content="Convert Matikzy syntax into TikZ and render diagrams instantly."
-    />
+    <meta property="og:description" content="Convert Matikzy syntax into TikZ and render diagrams instantly." />
     <meta property="og:type" content="website" />
-    <meta
-      property="og:url"
-      content="https://github.com/skafis-edtech/matikzy"
-    />
+    <meta property="og:url" content="https://github.com/skafis-edtech/matikzy" />
 
-    <!-- Theme color -->
     <meta name="theme-color" content="#3b6fd4" />
 
     <style>
@@ -44,7 +37,6 @@
         --btn-text: #ffffff;
         --error: #c0392b;
         --output-bg: #ffffff;
-        --textarea-bg: #ffffff;
         --stats-val: #111;
       }
 
@@ -59,13 +51,10 @@
         --btn-text: #ffffff;
         --error: #e05252;
         --output-bg: #1e2128;
-        --textarea-bg: #161920;
         --stats-val: #e2e4ea;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         font-family: monospace;
@@ -74,9 +63,7 @@
         padding: 0 1.5rem 3rem;
         background: var(--bg);
         color: var(--text);
-        transition:
-          background 0.2s,
-          color 0.2s;
+        transition: background 0.2s, color 0.2s;
       }
 
       header {
@@ -101,33 +88,60 @@
         font-size: 13px;
         font-family: monospace;
         cursor: pointer;
-        transition:
-          border-color 0.15s,
-          color 0.15s;
+        transition: border-color 0.15s, color 0.15s;
       }
       #theme-toggle:hover {
         border-color: var(--accent);
         color: var(--accent);
       }
 
-      textarea {
-        width: 100%;
-        font-family: monospace;
-        font-size: 13px;
-        background: var(--textarea-bg);
-        color: var(--text);
+      /* CodeMirror editor wrapper */
+      .editor-wrap {
         border: 1px solid var(--border);
         border-radius: 6px;
-        padding: 0.6rem 0.75rem;
-        resize: vertical;
-        transition:
-          border-color 0.15s,
-          background 0.2s,
-          color 0.2s;
-        outline: none;
+        overflow: hidden;
+        transition: border-color 0.15s;
       }
-      textarea:focus {
+      .editor-wrap:focus-within {
         border-color: var(--accent);
+      }
+
+      /* Override CodeMirror internals to match site font */
+      .cm-editor,
+      .cm-editor .cm-content,
+      .cm-editor .cm-scroller,
+      .cm-editor .cm-line {
+        font-family: monospace !important;
+        font-size: 13px !important;
+      }
+
+      .cm-editor .cm-content {
+        padding: 0.5rem 0.75rem !important;
+      }
+
+      /* Matikzy editor: grows but caps at 300px */
+      #matikzy-editor .cm-editor { min-height: 80px; }
+      #matikzy-editor .cm-scroller { max-height: 300px; overflow-y: auto; }
+
+      /* TikZ editor: fixed 180px */
+      #tikz-editor .cm-editor { height: 180px; }
+      #tikz-editor .cm-scroller { overflow-y: auto; }
+
+      /* Autocomplete tooltip */
+      .cm-tooltip.cm-tooltip-autocomplete {
+        border: 1px solid var(--border) !important;
+        border-radius: 4px !important;
+        background: var(--surface) !important;
+        font-family: monospace !important;
+        font-size: 13px !important;
+      }
+      .cm-tooltip-autocomplete > ul > li {
+        padding: 2px 10px !important;
+        color: var(--text) !important;
+      }
+      .cm-tooltip-autocomplete > ul > li[aria-selected] {
+        background: var(--accent) !important;
+        color: var(--btn-text) !important;
       }
 
       button.action-btn {
@@ -142,13 +156,9 @@
         border-radius: 6px;
         transition: background 0.15s;
       }
-      button.action-btn:hover {
-        background: var(--accent-hover);
-      }
+      button.action-btn:hover { background: var(--accent-hover); }
 
-      [data-theme="dark"] #output svg {
-        filter: invert(1);
-      }
+      [data-theme="dark"] #output svg { filter: invert(1); }
 
       #output {
         margin-top: 1.5rem;
@@ -158,9 +168,7 @@
         padding: 1rem;
         background: var(--output-bg);
         position: relative;
-        transition:
-          background 0.2s,
-          border-color 0.2s;
+        transition: background 0.2s, border-color 0.2s;
       }
 
       .error-msg {
@@ -192,25 +200,16 @@
         border-radius: 6px;
         overflow: hidden;
         background: var(--surface);
-        transition:
-          background 0.2s,
-          border-color 0.2s;
+        transition: background 0.2s, border-color 0.2s;
       }
       #stats span {
         white-space: nowrap;
         padding: 0.45rem 1rem;
         border-right: 1px solid var(--border);
       }
-      #stats span:last-child {
-        border-right: none;
-      }
-      #stats b {
-        color: var(--stats-val);
-      }
-      #stats.loading {
-        padding: 0.45rem 1rem;
-        border: 1px solid var(--border);
-      }
+      #stats span:last-child { border-right: none; }
+      #stats b { color: var(--stats-val); }
+      #stats.loading { padding: 0.45rem 1rem; }
     </style>
   </head>
   <body>
@@ -221,34 +220,18 @@
 
     <p style="font-size: 13px; color: var(--text-muted); margin-top: -0.5rem">
       Open source on
-      <a
-        href="https://github.com/skafis-edtech/matikzy"
-        target="_blank"
-        style="color: var(--accent); text-decoration: none"
-      >
-        GitHub
-      </a>
+      <a href="https://github.com/skafis-edtech/matikzy" target="_blank"
+         style="color: var(--accent); text-decoration: none">GitHub</a>
     </p>
     <p style="font-size: 13px; color: var(--text-muted); margin-top: -0.5rem">
       Read documentation
-      <a
-        href="https://github.com/skafis-edtech/matikzy/blob/main/DOCS.md"
-        target="_blank"
-        style="color: var(--accent); text-decoration: none"
-      >
-        here </a
-      >.
+      <a href="https://github.com/skafis-edtech/matikzy/blob/main/DOCS.md" target="_blank"
+         style="color: var(--accent); text-decoration: none">here</a>.
     </p>
     <div id="stats" class="loading">Loading stats...</div>
 
-    <label for="matikzy">Matikzy (by Šimtukas) (beta)</label>
-    <textarea
-      id="matikzy"
-      style="height: 80px"
-      placeholder="function: graph parabola y=x^2+2x-1"
-    >
-function: graph parabola y=x^2+2x-1</textarea
-    >
+    <label>Matikzy (by Šimtukas) (beta)</label>
+    <div id="matikzy-editor" class="editor-wrap"></div>
     <button id="compile-btn" class="action-btn">Compile &amp; Render</button>
     <div id="compile-error" class="error-msg"></div>
 
@@ -257,21 +240,158 @@ function: graph parabola y=x^2+2x-1</textarea
     <div id="render-status" style="font-size:13px;color:var(--text-muted);min-height:1em;margin-top:0.35rem"></div>
     <button id="download-btn" class="action-btn" style="display:none;margin-top:0.5rem">Download SVG</button>
 
-    <label for="tikz">TikZ</label>
-    <textarea id="tikz" style="height: 180px"> </textarea>
+    <label>TikZ</label>
+    <div id="tikz-editor" class="editor-wrap"></div>
     <button id="render-btn" class="action-btn">Render</button>
 
     <script type="module">
+      import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@6";
+      import { EditorView, keymap, highlightActiveLine, placeholder } from "https://esm.sh/@codemirror/view@6";
+      import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6";
+      import { StreamLanguage, HighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6";
+      import { autocompletion, completionKeymap } from "https://esm.sh/@codemirror/autocomplete@6";
+      import { tags } from "https://esm.sh/@lezer/highlight@1";
       import { compile } from "/matikzy.js";
 
+      // ── Matikzy language (StreamLanguage tokenizer) ───────────────────────
+      const matikzyLang = StreamLanguage.define({
+        token(stream) {
+          // Comments
+          if (stream.match("//")) {
+            stream.skipToEnd();
+            return "comment";
+          }
+          // Command prefixes only at start of line
+          if (stream.sol() && stream.match(/(?:function|geometry|interval-arcs|unit-circle|cuboid)(?:\[[^\]]*\])?:/)) {
+            return "keyword";
+          }
+          // Skip whitespace
+          if (stream.eatSpace()) return null;
+          // Main commands
+          if (stream.match(/(?:graph|axes|point|line|triangle|circle|quadrilateral|area|label|mark|angle|new|segment|ray|arrow|inscribe|circumscribe|bisector|median|altitude|midsegment|tangent|perpendicular|rotangle|x-line|y-line|cube|pyramid)(?=\s|$)/)) {
+            return "atom";
+          }
+          // Shape/function subtypes and modifiers
+          if (stream.match(/(?:parabola|hyperbola|sin|cos|tan|tg|cot|ctg|sqrt|cbrt|log|exp|linear|cubic|square|rectangle|parallelogram|rhombus|trapezoid|acute|right|obtuse|scalene|isosceles|equilateral)(?=\s|$|[^a-zA-Z])/)) {
+            return "typeName";
+          }
+          stream.next();
+          return null;
+        },
+      });
+
+      // ── Autocomplete ──────────────────────────────────────────────────────
+      const COMPLETIONS = [
+        ...["function:", "geometry:", "interval-arcs:", "unit-circle:", "cuboid:"]
+          .map(label => ({ label, type: "keyword", boost: 10 })),
+        ...["graph", "axes", "point", "line", "triangle", "circle", "quadrilateral",
+            "area", "label", "mark", "angle", "new", "segment", "ray", "arrow",
+            "inscribe", "circumscribe", "bisector", "median", "altitude",
+            "midsegment", "tangent", "perpendicular", "rotangle", "x-line", "y-line",
+            "cube", "pyramid"]
+          .map(label => ({ label, type: "function" })),
+        ...["parabola", "hyperbola", "sin", "cos", "tan", "tg", "cot", "ctg",
+            "sqrt", "cbrt", "log", "exp", "linear", "cubic",
+            "square", "rectangle", "parallelogram", "rhombus", "trapezoid",
+            "acute", "right", "obtuse", "scalene", "isosceles", "equilateral"]
+          .map(label => ({ label, type: "type" })),
+      ];
+
+      function matikzyComplete(context) {
+        const word = context.matchBefore(/[\w:/-]+/);
+        if (!context.explicit && (!word || word.from === word.to)) return null;
+        const text = (word?.text ?? "").toLowerCase();
+        return {
+          from: word?.from ?? context.pos,
+          options: text
+            ? COMPLETIONS.filter(c => c.label.startsWith(text))
+            : COMPLETIONS,
+        };
+      }
+
+      // ── Theme (compartments for live switching) ───────────────────────────
+      const matikzyThemeComp = new Compartment();
+      const tikzThemeComp = new Compartment();
+
+      function makeTheme(dark) {
+        return [
+          EditorView.theme({
+            "&": {
+              backgroundColor: dark ? "#161920" : "#ffffff",
+              color: dark ? "#e2e4ea" : "#1a1a1a",
+            },
+            ".cm-content": { caretColor: dark ? "#e2e4ea" : "#1a1a1a" },
+            ".cm-cursor": { borderLeftColor: dark ? "#e2e4ea" : "#1a1a1a" },
+            "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+              backgroundColor: dark ? "#264f78" : "#add6ff",
+            },
+            ".cm-activeLine": {
+              backgroundColor: dark ? "#1e253580" : "#f0f4ff",
+            },
+            ".cm-placeholder": { color: dark ? "#555e72" : "#999" },
+          }, { dark }),
+          syntaxHighlighting(HighlightStyle.define([
+            { tag: tags.keyword,  color: dark ? "#569cd6" : "#0070c1", fontWeight: "bold" },
+            { tag: tags.atom,     color: dark ? "#4ec9b0" : "#267f99" },
+            { tag: tags.typeName, color: dark ? "#ce9178" : "#a31515" },
+            { tag: tags.comment,  color: dark ? "#6a9955" : "#008000", fontStyle: "italic" },
+          ])),
+        ];
+      }
+
+      // ── Create editors ────────────────────────────────────────────────────
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+      let currentDark = prefersDark.matches;
+
+      let debounceTimer;
+
+      const matikzyEditor = new EditorView({
+        state: EditorState.create({
+          doc: "function: graph parabola y=x^2+2x-1",
+          extensions: [
+            history(),
+            keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
+            matikzyLang,
+            autocompletion({ override: [matikzyComplete] }),
+            highlightActiveLine(),
+            placeholder("function: graph parabola y=x^2+2x-1"),
+            EditorView.lineWrapping,
+            matikzyThemeComp.of(makeTheme(currentDark)),
+            EditorView.updateListener.of(update => {
+              if (update.docChanged) {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(compileMatikzy, 600);
+              }
+            }),
+          ],
+        }),
+        parent: document.getElementById("matikzy-editor"),
+      });
+
+      const tikzEditor = new EditorView({
+        state: EditorState.create({
+          doc: "",
+          extensions: [
+            history(),
+            keymap.of([...defaultKeymap, ...historyKeymap]),
+            highlightActiveLine(),
+            EditorView.lineWrapping,
+            tikzThemeComp.of(makeTheme(currentDark)),
+          ],
+        }),
+        parent: document.getElementById("tikz-editor"),
+      });
+
+      function setTikz(text) {
+        tikzEditor.dispatch({
+          changes: { from: 0, to: tikzEditor.state.doc.length, insert: text },
+        });
+      }
+
+      // ── App logic ─────────────────────────────────────────────────────────
       document.getElementById("compile-btn").addEventListener("click", compileMatikzy);
       document.getElementById("render-btn").addEventListener("click", render);
 
-      let debounceTimer;
-      document.getElementById("matikzy").addEventListener("input", () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(compileMatikzy, 600);
-      });
       document.getElementById("download-btn").addEventListener("click", () => {
         const svg = document.getElementById("output").innerHTML;
         const blob = new Blob([svg], { type: "image/svg+xml" });
@@ -284,11 +404,11 @@ function: graph parabola y=x^2+2x-1</textarea
       });
 
       async function compileMatikzy() {
-        const matikzy = document.getElementById("matikzy").value.trim();
+        const matikzy = matikzyEditor.state.doc.toString().trim();
         const compileError = document.getElementById("compile-error");
         compileError.textContent = "";
         try {
-          document.getElementById("tikz").value = compile(matikzy);
+          setTikz(compile(matikzy));
         } catch (e) {
           compileError.textContent = e.message;
           return;
@@ -298,7 +418,7 @@ function: graph parabola y=x^2+2x-1</textarea
 
       let renderSeq = 0;
       async function render() {
-        const tikz = document.getElementById("tikz").value;
+        const tikz = tikzEditor.state.doc.toString();
         const error = document.getElementById("error");
         const output = document.getElementById("output");
         const status = document.getElementById("render-status");
@@ -314,7 +434,7 @@ function: graph parabola y=x^2+2x-1</textarea
           });
           if (!res.ok) throw new Error(await res.text());
           const svg = await res.text();
-          if (seq !== renderSeq) return; // superseded by a newer render
+          if (seq !== renderSeq) return;
           output.innerHTML = svg;
           status.textContent = "";
           downloadBtn.style.display = "";
@@ -332,8 +452,7 @@ function: graph parabola y=x^2+2x-1</textarea
           const res = await fetch("/stats");
           if (!res.ok) throw new Error();
           const s = await res.json();
-          const cacheRate =
-            s.requests > 0 ? Math.round((s.cache_hits / s.requests) * 100) : 0;
+          const cacheRate = s.requests > 0 ? Math.round((s.cache_hits / s.requests) * 100) : 0;
           el.classList.remove("loading");
           el.innerHTML = [
             `<span>requests <b>${s.requests}</b></span>`,
@@ -349,23 +468,22 @@ function: graph parabola y=x^2+2x-1</textarea
 
       loadStats();
 
+      // ── Theme switching ───────────────────────────────────────────────────
       const toggle = document.getElementById("theme-toggle");
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
 
       function applyTheme(dark) {
-        document.documentElement.setAttribute(
-          "data-theme",
-          dark ? "dark" : "light",
-        );
+        currentDark = dark;
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
         toggle.textContent = dark ? "light mode" : "dark mode";
+        const theme = makeTheme(dark);
+        matikzyEditor.dispatch({ effects: matikzyThemeComp.reconfigure(theme) });
+        tikzEditor.dispatch({ effects: tikzThemeComp.reconfigure(theme) });
       }
 
       applyTheme(prefersDark.matches);
-      prefersDark.addEventListener("change", (e) => applyTheme(e.matches));
+      prefersDark.addEventListener("change", e => applyTheme(e.matches));
       toggle.addEventListener("click", () => {
-        applyTheme(
-          document.documentElement.getAttribute("data-theme") !== "dark",
-        );
+        applyTheme(document.documentElement.getAttribute("data-theme") !== "dark");
       });
     </script>
   </body>
