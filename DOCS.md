@@ -61,13 +61,13 @@ axes Ox [-2;3] {1=A; 2=x_B} x2 Ox [-2;3] {all} x0.5
 function:
 axes Ox [-3;3] {all} Oy [-1;4] {all}
 graph line y=2x+1/2
-graph line (-1;2) (2;3)
+graph line (-1;2) (2;3) -- dotted
 graph parabola y=-x^2+3x+2
 graph hyperbola k=-3 x[-1;] >>f(x-1) >>f(x)+3
 graph generic smooth (1;0) ^(2;7) v(3;-1) (4;0)
 ```
 
-`graph` + `<type>` + `<specification>` + `<x and y ranges>` + `<transformations>`
+`graph` + `<type>` + `<specification>` + `<x and y ranges>` + `<transformations>` + `-- dotted or dashed or solid`
 
 Types:
 

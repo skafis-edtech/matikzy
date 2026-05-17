@@ -209,6 +209,16 @@ function parseOneTransform(s) {
   return null;
 }
 
+function extractStyle(seg) {
+  const m = seg.match(/\s+--\s+(dotted|dashed|solid)\s*$/);
+  if (!m) return { seg, dotted: false, dashed: false };
+  return {
+    seg: seg.slice(0, seg.length - m[0].length),
+    dotted: m[1] === "dotted",
+    dashed: m[1] === "dashed",
+  };
+}
+
 function extractTransforms(line) {
   const parts = line.split(">>");
   const clean = parts[0].trim();
@@ -598,9 +608,10 @@ function parseContent(content, defaultExtent = 3) {
     ].flatMap((fn) =>
       segments
         .map((seg) => {
-          const { clean, transforms, postRanges } = extractTransforms(seg);
+          const { seg: cleanSeg, dotted, dashed } = extractStyle(seg);
+          const { clean, transforms, postRanges } = extractTransforms(cleanSeg);
           const g = fn(clean);
-          return g ? { ...g, transforms, postRanges } : null;
+          return g ? { ...g, transforms, postRanges, dotted, dashed } : null;
         })
         .filter(Boolean),
     ),
@@ -1126,6 +1137,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       const tr = g.transforms || [];
       const pr = g.postRanges || {};
       const f = (n) => parseFloat(n.toFixed(6));
+      const drawOpts = g.dotted ? "thick, dotted" : g.dashed ? "thick, dashed" : "thick";
       // x[a;b] before >> = pre-transform domain → convert to screen coords via invXTr
       // x[a;b] after  >> = post-transform screen coords → use directly
       const xLoEff = pr.xFrom ?? (g.xFrom != null ? invXTr(g.xFrom, tr) : null);
@@ -1149,7 +1161,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         const yA = applyYTr(g.yFrom ?? yStart, tr);
         const yB = applyYTr(g.yTo ?? yEnd, tr);
         lines.push(
-          `\\draw[thick] (${f(x)},${f(Math.min(yA, yB))}) -- (${f(x)},${f(Math.max(yA, yB))});`,
+          `\\draw[${drawOpts}] (${f(x)},${f(Math.min(yA, yB))}) -- (${f(x)},${f(Math.max(yA, yB))});`,
         );
         continue;
       }
@@ -1176,7 +1188,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         if (xLo >= xHi) continue;
         const base = `(${f(g.a)}*\\x + ${f(g.b)})*\\x + ${f(g.c)}`;
         lines.push(
-          `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base, tr)}});`,
+          `\\draw[${drawOpts}] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base, tr)}});`,
         );
         continue;
       }
@@ -1219,7 +1231,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
           );
         }
         lines.push(
-          `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base, tr)}});`,
+          `\\draw[${drawOpts}] plot[domain=${f(xLo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr(base, tr)}});`,
         );
         if (hasYClip) lines.push(`\\end{scope}`);
         continue;
@@ -1233,7 +1245,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         const drawHBranch = (lo, hi) => {
           if (lo < hi)
             lines.push(
-              `\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${trExpr(base, tr)}});`,
+              `\\draw[${drawOpts}] plot[domain=${f(lo)}:${f(hi)}, samples=80, smooth] (\\x, {${trExpr(base, tr)}});`,
             );
         };
         if (singScreen > xLo && singScreen < xHi) {
@@ -1261,10 +1273,6 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
               if (sx > xLo && sx < xHi) asyms.push(sx);
             }
           asyms.sort((a, b) => a - b);
-          for (const a of asyms)
-            lines.push(
-              `\\draw[darkgray, dashed, line width=0.8pt] (${f(a)},${f(yStart)}) -- (${f(a)},${f(yEnd)});`,
-            );
           let prev = xLo;
           for (const a of asyms) {
             if (a - eps <= prev) {
@@ -1274,24 +1282,24 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             const hi = Math.min(a - eps, xHi);
             if (prev < hi)
               lines.push(
-                `\\draw[thick] plot[domain=${f(prev)}:${f(hi)}, samples=60, smooth] (\\x, {${expr}});`,
+                `\\draw[${drawOpts}] plot[domain=${f(prev)}:${f(hi)}, samples=60, smooth] (\\x, {${expr}});`,
               );
             prev = a + eps;
           }
           if (prev < xHi)
             lines.push(
-              `\\draw[thick] plot[domain=${f(prev)}:${f(xHi)}, samples=60, smooth] (\\x, {${expr}});`,
+              `\\draw[${drawOpts}] plot[domain=${f(prev)}:${f(xHi)}, samples=60, smooth] (\\x, {${expr}});`,
             );
         };
         const sinExpr = trExpr("sin(\\x * 90)", tr);
         const cosExpr = trExpr("cos(\\x * 90)", tr);
         if (g.trig === "sin")
           lines.push(
-            `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {${sinExpr}});`,
+            `\\draw[${drawOpts}] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {${sinExpr}});`,
           );
         else if (g.trig === "cos")
           lines.push(
-            `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {${cosExpr}});`,
+            `\\draw[${drawOpts}] plot[domain=${f(xLo)}:${f(xHi)}, samples=100, smooth] (\\x, {${cosExpr}});`,
           );
         else if (g.trig === "tan")
           drawBranches("tan(\\x * 90)", (n) => n % 2 !== 0);
@@ -1305,10 +1313,35 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         if (g.expr) {
           const [xLo, xHi] = domX();
           const expr = trExpr(g.expr.replace(/\bx\b/g, "\\x"), tr);
-
-          lines.push(
-            `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=80, smooth] (\\x, {${expr}});`,
-          );
+          const N = 300;
+          const step = (xHi - xLo) / N;
+          const jsExpr = g.expr.replace(/\^/g, "**");
+          const evalY = (screenX) => {
+            try {
+              const mathX = applyXTr(screenX, tr);
+              const y = Function("x", `return ${jsExpr}`)(mathX);
+              return isFinite(y) ? applyYTr(y, tr) : NaN;
+            } catch { return NaN; }
+          };
+          const jumpThreshold = Math.abs((yHiEff ?? yEnd) - (yLoEff ?? yStart)) * 4;
+          const breaks = [];
+          let prevY = evalY(xLo);
+          for (let i = 1; i <= N; i++) {
+            const sx = xLo + i * step;
+            const y = evalY(sx);
+            if (isFinite(prevY) !== isFinite(y) || (isFinite(prevY) && isFinite(y) && Math.abs(y - prevY) > jumpThreshold))
+              breaks.push(xLo + (i - 0.5) * step);
+            prevY = y;
+          }
+          const eps = step * 0.6;
+          let seg = xLo;
+          for (const br of breaks) {
+            if (seg < br - eps)
+              lines.push(`\\draw[${drawOpts}] plot[domain=${f(seg)}:${f(br - eps)}, samples=80, smooth] (\\x, {${expr}});`);
+            seg = br + eps;
+          }
+          if (seg < xHi)
+            lines.push(`\\draw[${drawOpts}] plot[domain=${f(seg)}:${f(xHi)}, samples=80, smooth] (\\x, {${expr}});`);
           continue;
         }
 
@@ -1326,7 +1359,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
         if (!g.smooth) {
           lines.push(
-            `\\draw[thick] ${pts
+            `\\draw[${drawOpts}] ${pts
               .map((p) => `(${fv(p.x)},${fv(p.y)})`)
               .join(" -- ")};`,
           );
@@ -1365,14 +1398,14 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
             )},${fv(y1)})`;
           }
 
-          lines.push(`\\draw[thick] ${path};`);
+          lines.push(`\\draw[${drawOpts}] ${path};`);
         }
 
         continue;
       }
 
       if (g.circle) {
-        lines.push(`\\draw[thick] (${f(g.cx)},${f(g.cy)}) circle (${f(g.r)});`);
+        lines.push(`\\draw[${drawOpts}] (${f(g.cx)},${f(g.cy)}) circle (${f(g.r)});`);
         continue;
       }
 
@@ -1403,7 +1436,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         }
         if (lo < hi)
           lines.push(
-            `\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("sqrt(\\x)", tr)}});`,
+            `\\draw[${drawOpts}] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("sqrt(\\x)", tr)}});`,
           );
         continue;
       }
@@ -1431,11 +1464,11 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         }
         if (nLo < nHi)
           lines.push(
-            `\\draw[thick] plot[domain=${f(nLo)}:${f(nHi)}, samples=60, smooth] (\\x, {${trExpr("-((-\\x)^(1/3))", tr)}});`,
+            `\\draw[${drawOpts}] plot[domain=${f(nLo)}:${f(nHi)}, samples=60, smooth] (\\x, {${trExpr("-((-\\x)^(1/3))", tr)}});`,
           );
         if (pLo < pHi)
           lines.push(
-            `\\draw[thick] plot[domain=${f(pLo)}:${f(pHi)}, samples=60, smooth] (\\x, {${trExpr("\\x^(1/3)", tr)}});`,
+            `\\draw[${drawOpts}] plot[domain=${f(pLo)}:${f(pHi)}, samples=60, smooth] (\\x, {${trExpr("\\x^(1/3)", tr)}});`,
           );
         continue;
       }
@@ -1468,7 +1501,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         }
         if (lo < hi)
           lines.push(
-            `\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`ln(\\x)/ln(${f(g.a)})`, tr)}});`,
+            `\\draw[${drawOpts}] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`ln(\\x)/ln(${f(g.a)})`, tr)}});`,
           );
         continue;
       }
@@ -1476,7 +1509,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
       if (g.exp) {
         const [lo, hi] = domX();
         lines.push(
-          `\\draw[thick] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`exp(\\x*ln(${f(g.a)}))`, tr)}});`,
+          `\\draw[${drawOpts}] plot[domain=${f(lo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr(`exp(\\x*ln(${f(g.a)}))`, tr)}});`,
         );
         continue;
       }
@@ -1498,7 +1531,7 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
         const base = `${f(g.m)}*\\x+(${f(g.b)})`;
         const expr = trExpr(base, tr);
         lines.push(
-          `\\draw[thick] plot[domain=${f(xLo)}:${f(xHi)}, samples=2] (\\x, {${expr}});`,
+          `\\draw[${drawOpts}] plot[domain=${f(xLo)}:${f(xHi)}, samples=2] (\\x, {${expr}});`,
         );
       }
     }
