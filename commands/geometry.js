@@ -1081,7 +1081,7 @@ function parseContent(content) {
         ? (ni !== -1 ? (ws[ni + 1] ?? "") : "")
         : isCustomR
           ? (ws[2] === "new" ? (ws[3] ?? "O-OX") : "")
-          : (ws[1] === "new" ? (ws[2] ?? "O-OX") : (ws[2] ?? ""));
+          : (ws[1] === "new" ? (ws[2] ?? "O-OX") : (ws[1] ?? ""));
       const d = nm.indexOf("-");
       if (d > 0) {
         const ctr = nm.slice(0, d);
