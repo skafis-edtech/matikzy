@@ -159,7 +159,7 @@ app.post("/render", async (req, res) => {
     try {
       tikzSource = compileMatikzy(content);
     } catch (err) {
-      res.status(400).send(`Matikzy compile error: ${err.message}`);
+      res.status(400).send(err.message);
       return;
     }
   } else if (lang === "tikz") {
@@ -172,7 +172,7 @@ app.post("/render", async (req, res) => {
   const tikz = normalize(tikzSource);
   const syntaxError = checkTikzSyntax(tikz);
   if (syntaxError) {
-    res.status(400).send(`Syntax error: ${syntaxError}`);
+    res.status(400).send(syntaxError);
     return;
   }
   const key = "tikz:" + hashTikz(tikz);

@@ -1410,20 +1410,33 @@ function compile(content, grid = false, defaultExtent = 3, tikzScale = 1) {
 
       if (g.cbrt) {
         const [xLo, xHi] = domX();
-        if (xLo < 0) {
-          const hi = Math.min(xHi, 0);
-          if (xLo <= hi)
-            lines.push(
-              `\\draw[thick] plot[domain=${f(xLo)}:${f(hi)}, samples=60, smooth] (\\x, {${trExpr("-((-\\x)^(1/3))", tr)}});`,
-            );
+        // Track the linear argument of cbrt: T(x) = a*x + b, zero at x = -b/a
+        let a = 1, b = 0;
+        for (const t of tr) {
+          if (t.type === "hshift") b += t.value;
+          else if (t.type === "hscale") { a *= t.value; b *= t.value; }
+          else if (t.type === "hflip") { a = -a; b = -b; }
         }
-        if (xHi > 0) {
-          const lo = Math.max(xLo, 0);
-          if (lo <= xHi)
-            lines.push(
-              `\\draw[thick] plot[domain=${f(lo)}:${f(xHi)}, samples=60, smooth] (\\x, {${trExpr("\\x^(1/3)", tr)}});`,
-            );
+        // nLo..nHi: domain where T(x)<0 (use negative-safe formula)
+        // pLo..pHi: domain where T(x)>0
+        let [nLo, nHi, pLo, pHi] = [xLo, xHi, xLo, xHi];
+        if (Math.abs(a) < 1e-9) {
+          if (b > 0) nLo = nHi;       // constant positive: no negative branch
+          else if (b < 0) pHi = pLo;  // constant negative: no positive branch
+          else { nLo = nHi; pHi = pLo; } // constant zero
+        } else {
+          const split = -b / a;
+          if (a > 0) { nHi = Math.min(nHi, split); pLo = Math.max(pLo, split); }
+          else       { nLo = Math.max(nLo, split);  pHi = Math.min(pHi, split); }
         }
+        if (nLo < nHi)
+          lines.push(
+            `\\draw[thick] plot[domain=${f(nLo)}:${f(nHi)}, samples=60, smooth] (\\x, {${trExpr("-((-\\x)^(1/3))", tr)}});`,
+          );
+        if (pLo < pHi)
+          lines.push(
+            `\\draw[thick] plot[domain=${f(pLo)}:${f(pHi)}, samples=60, smooth] (\\x, {${trExpr("\\x^(1/3)", tr)}});`,
+          );
         continue;
       }
 
