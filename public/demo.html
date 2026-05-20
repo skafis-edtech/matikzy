@@ -2,7 +2,11 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-
+        <script
+            defer
+            src="https://analitika.simtukas.lt/script.js"
+            data-website-id="4480c330-1256-45c7-9a73-0b87f38944c4"
+        ></script>
         <!-- SEO -->
         <title>Šimtukas Tikz – Matikzy to TikZ Renderer</title>
         <meta
@@ -565,12 +569,16 @@
                 parent: document.getElementById("tikz-editor"),
             });
 
-            document.getElementById("matikzy-editor").addEventListener("click", (e) => {
-                if (!e.target.closest(".cm-content")) matikzyEditor.focus();
-            });
-            document.getElementById("tikz-editor").addEventListener("click", (e) => {
-                if (!e.target.closest(".cm-content")) tikzEditor.focus();
-            });
+            document
+                .getElementById("matikzy-editor")
+                .addEventListener("click", (e) => {
+                    if (!e.target.closest(".cm-content")) matikzyEditor.focus();
+                });
+            document
+                .getElementById("tikz-editor")
+                .addEventListener("click", (e) => {
+                    if (!e.target.closest(".cm-content")) tikzEditor.focus();
+                });
 
             function setTikz(text) {
                 tikzEditor.dispatch({

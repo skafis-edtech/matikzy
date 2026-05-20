@@ -1,6 +1,6 @@
 # MaTikZy - markup language for highschool math tikz
 
-Demo page: https://tikz.simtukas.lt
+Demo page: https://www.matikzy.org
 
 License: [GPLv3](./LICENSE.txt) - if you modify, you have to open source it.
 
@@ -49,7 +49,7 @@ becomes
 60 requests per minute per IP.
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"lang":"matikzy", "content": "interval-arcs: =-=[0]_+_[\frac12]=-=>x"}' https://tikz.simtukas.lt/render
+curl -X POST -H "Content-Type: application/json" -d '{"lang":"matikzy", "content": "interval-arcs: =-=[0]_+_[\frac12]=-=>x"}' https://www.matikzy.org/render
 ```
 
 returns
