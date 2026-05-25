@@ -3,16 +3,28 @@ function extractLeftLabels(content) {
   let topLabel = null;
   let bottomLabel = null;
 
-  for (let i = 0; i < 2; i++) {
-    const top = rest.match(/^\^{([^}]*)}\s*/);
-    const bot = rest.match(/^_{([^}]*)}\s*/);
-    if (top && topLabel === null) {
-      topLabel = top[1];
-      rest = rest.slice(top[0].length);
-    } else if (bot && bottomLabel === null) {
-      bottomLabel = bot[1];
-      rest = rest.slice(bot[0].length);
-    } else break;
+  // Read a balanced-brace label starting with prefix + "{...}"
+  function readBracedLabel(str, prefix) {
+    if (!str.startsWith(prefix + "{")) return null;
+    let i = prefix.length + 1; // position after the opening "{"
+    let depth = 1;
+    while (i < str.length) {
+      if (str[i] === "{") depth++;
+      else if (str[i] === "}") { depth--; if (depth === 0) { i++; break; } }
+      i++;
+    }
+    if (depth !== 0) return null; // unbalanced
+    const label = str.slice(prefix.length + 1, i - 1);
+    while (i < str.length && /\s/.test(str[i])) i++; // skip trailing whitespace
+    return { label, rest: str.slice(i) };
+  }
+
+  for (let iter = 0; iter < 2; iter++) {
+    const top = topLabel    === null ? readBracedLabel(rest, "^") : null;
+    const bot = bottomLabel === null ? readBracedLabel(rest, "_") : null;
+    if      (top) { topLabel    = top.label; rest = top.rest; }
+    else if (bot) { bottomLabel = bot.label; rest = bot.rest; }
+    else break;
   }
 
   return { topLabel, bottomLabel, rest };
@@ -114,17 +126,87 @@ function parseIntervalArcsTokens(content) {
   return { tokens, parseErrors };
 }
 
-// Parse the multi-line block content (everything after "interval:\n")
+// Insert newlines before bare "arcs"/"parabola" keywords that appear on the same
+// line as "inline", so the line-splitter treats them as separate sub-commands.
+// "bare" means not inside {…}, […], (…), |…|, _…_, =…=  (or ^{…} / _{…} left labels).
+function insertKeywordNewlines(content) {
+  let out = "";
+  let i = 0;
+  let curly = 0;
+  let inBracket = false, inParen = false, inPipe = false, inSign = false, inHatch = false;
+
+  const atTop = () =>
+    curly === 0 && !inBracket && !inParen && !inPipe && !inSign && !inHatch;
+
+  while (i < content.length) {
+    const ch = content[i];
+
+    if (atTop()) {
+      if (ch === "{") {
+        curly++; out += ch; i++;
+      } else if ((ch === "^" || ch === "_") && content[i + 1] === "{") {
+        // ^{…} or _{…} left-label — track as curly, not as sign token
+        curly++;
+        out += ch + "{";
+        i += 2;
+      } else if (ch === "_") {
+        inSign = true; out += ch; i++;
+      } else if (ch === "[") {
+        inBracket = true; out += ch; i++;
+      } else if (ch === "(") {
+        inParen = true; out += ch; i++;
+      } else if (ch === "|") {
+        inPipe = true; out += ch; i++;
+      } else if (ch === "=") {
+        inHatch = true; out += ch; i++;
+      } else if (/[ \t]/.test(ch)) {
+        // Skip all horizontal whitespace, then check for a keyword
+        let j = i;
+        while (j < content.length && /[ \t]/.test(content[j])) j++;
+        const ahead = content.slice(j);
+        if (/^(arcs|parabola|hatch)(?=\s|--|$)/.test(ahead)) {
+          out += "\n"; // replace whitespace with newline before keyword
+          i = j;      // position cursor at keyword (whitespace already consumed)
+        } else {
+          out += ch; i++;
+        }
+      } else {
+        out += ch; i++;
+      }
+    } else {
+      // Inside a delimiter — just track closes, no keyword detection
+      if      (curly > 0 && ch === "{") curly++;
+      else if (curly > 0 && ch === "}") curly--;
+      else if (inBracket && ch === "]") inBracket = false;
+      else if (inParen   && ch === ")") inParen   = false;
+      else if (inPipe    && ch === "|") inPipe    = false;
+      else if (inSign    && ch === "_") inSign    = false;
+      else if (inHatch   && ch === "=") inHatch   = false;
+      out += ch; i++;
+    }
+  }
+
+  return out;
+}
+
+// Parse the multi-line block content (everything after "interval:")
 function parseBlock(content) {
-  const lines = content
+  const lines = insertKeywordNewlines(content)
     .split("\n")
     .map((l) => l.replace(/\/\/.*$/, "").trim())
     .filter((l) => l !== "");
 
   let inlineContent = null;
-  let arcsLine = null;
+  let arcsEnabled = false;
+  let noLeft = false, noRight = false;
+  const arcRanges = [];   // {from: ref|null, to: ref|null}[]  — range-mode arcs
+  const hatchRanges = []; // {from: ref|null, to: ref|null, direction: string}[]
   const parabolaLines = [];
   const errors = [];
+
+  // Default hatch direction cycles: 1st→top right, 2nd→bottom right, 3rd→top left, 4th→bottom left
+  const HATCH_DEFAULTS = ["top right", "bottom right", "top left", "bottom left"];
+  let hatchCommandIdx = 0;
 
   for (const line of lines) {
     if (/^inline(\s|$)/.test(line)) {
@@ -133,12 +215,56 @@ function parseBlock(content) {
         continue;
       }
       inlineContent = line.slice("inline".length).trimStart();
+
     } else if (/^arcs(\s|$)/.test(line)) {
-      if (arcsLine !== null) {
-        errors.push("Duplicate 'arcs' command");
-        continue;
+      arcsEnabled = true;
+      const arg = line.slice("arcs".length).trimStart();
+      if (!arg || arg.startsWith("--")) {
+        // Old-style: bare or with flag
+        const flagMatch = arg.match(/^--\s*(\S+)/);
+        if (flagMatch) {
+          const flag = flagMatch[1];
+          if      (flag === "closed-only") { noLeft = true; noRight = true; }
+          else if (flag === "no-left")     { noLeft = true; }
+          else if (flag === "no-right")    { noRight = true; }
+          else if (flag === "all")         { /* defaults */ }
+          else errors.push(`Unknown arcs flag: "${flag}". Use -- closed-only, -- no-left, -- no-right, or -- all`);
+        }
+        // bare "arcs" → both end arcs (noLeft=false, noRight=false)
+      } else {
+        // New-style: range spec like "<1>-<2>" or "-<1>-<2>-"
+        const ranges = parseRangeStr(arg);
+        if (ranges.length === 0) {
+          errors.push(`Invalid arcs range: "${arg}"`);
+        } else {
+          arcRanges.push(...ranges);
+        }
       }
-      arcsLine = line;
+
+    } else if (/^hatch(\s|$)/.test(line)) {
+      const rest = line.slice("hatch".length).trimStart();
+      // Strip optional " -- top/bottom left/right" direction flag
+      const dirMatch = rest.match(/^(.*?)\s*--\s*(top|bottom)\s+(left|right)\s*$/);
+      let rangeStr, direction;
+      if (dirMatch) {
+        rangeStr  = dirMatch[1].trim();
+        direction = `${dirMatch[2]} ${dirMatch[3]}`;
+      } else {
+        rangeStr  = rest;
+        direction = HATCH_DEFAULTS[hatchCommandIdx % 4]; // auto-cycle
+      }
+      hatchCommandIdx++;
+      if (!rangeStr) {
+        errors.push('hatch requires a range, e.g. "hatch -<1>"');
+      } else {
+        const ranges = parseRangeStr(rangeStr);
+        if (ranges.length === 0) {
+          errors.push(`Invalid hatch range: "${rangeStr}"`);
+        } else {
+          hatchRanges.push(...ranges.map((r) => ({ ...r, direction })));
+        }
+      }
+
     } else if (/^parabola(\s|$)/.test(line)) {
       parabolaLines.push(line);
     } else {
@@ -151,33 +277,7 @@ function parseBlock(content) {
     inlineContent = "";
   }
 
-  // Parse arcs options — absent means no arcs at all
-  let noLeft = false,
-    noRight = false,
-    noArcs = true;
-  if (arcsLine !== null) {
-    noArcs = false;
-    const flagMatch = arcsLine.match(/--\s*(\S+)/);
-    if (flagMatch) {
-      const flag = flagMatch[1];
-      if (flag === "closed-only") {
-        noLeft = true;
-        noRight = true;
-      } else if (flag === "no-left") {
-        noLeft = true;
-        noRight = false;
-      } else if (flag === "no-right") {
-        noLeft = false;
-        noRight = true;
-      } else if (flag === "all") {
-        /* defaults already false */
-      } else
-        errors.push(
-          `Unknown arcs flag: "${flag}". Use -- closed-only, -- no-left, -- no-right, or -- all`,
-        );
-    }
-    // bare "arcs" → both end arcs (noLeft=false, noRight=false)
-  }
+  const noArcs = !arcsEnabled;
 
   // Parse parabola commands
   const parabolaSegments = [];
@@ -202,7 +302,7 @@ function parseBlock(content) {
     }
   }
 
-  return { inlineContent, noLeft, noRight, noArcs, parabolaSegments, errors };
+  return { inlineContent, noLeft, noRight, noArcs, arcRanges, hatchRanges, parabolaSegments, errors };
 }
 
 // Resolve a point reference: "<N>" = 1-based index, otherwise match by label.
@@ -215,9 +315,35 @@ function resolvePointRef(ref, points) {
   return points.findIndex((p) => p.label === ref);
 }
 
+// Parse a range string like "-<1>-<2>-" into [{from, to}] pairs.
+// Each part separated by "-" (not inside "<>"). Empty part = infinity end.
+function parseRangeStr(str) {
+  const parts = [];
+  let cur = "";
+  let inAngle = false;
+  for (const ch of str) {
+    if      (ch === "<") { inAngle = true;  cur += ch; }
+    else if (ch === ">") { inAngle = false; cur += ch; }
+    else if (ch === "-" && !inAngle) { parts.push(cur.trim()); cur = ""; }
+    else cur += ch;
+  }
+  parts.push(cur.trim());
+
+  const ranges = [];
+  for (let i = 0; i + 1 < parts.length; i++) {
+    ranges.push({
+      from: parts[i]     === "" ? null : parts[i],
+      to:   parts[i + 1] === "" ? null : parts[i + 1],
+    });
+  }
+  return ranges;
+}
+
 function syntaxCheck(content) {
   const {
     inlineContent,
+    arcRanges,
+    hatchRanges,
     parabolaSegments,
     errors: blockErrors,
   } = parseBlock(content);
@@ -305,6 +431,30 @@ function syntaxCheck(content) {
           errors.push(`parabola: "${seg.to}" must come after "${seg.from}"`);
       }
     }
+
+    // Validate arc ranges
+    for (const r of arcRanges) {
+      if (r.from !== null) {
+        if (resolvePointRef(r.from, points) === -1)
+          errors.push(`arcs: cannot resolve point "${r.from}"`);
+      }
+      if (r.to !== null) {
+        if (resolvePointRef(r.to, points) === -1)
+          errors.push(`arcs: cannot resolve point "${r.to}"`);
+      }
+    }
+
+    // Validate hatch ranges
+    for (const r of hatchRanges) {
+      if (r.from !== null) {
+        if (resolvePointRef(r.from, points) === -1)
+          errors.push(`hatch: cannot resolve point "${r.from}"`);
+      }
+      if (r.to !== null) {
+        if (resolvePointRef(r.to, points) === -1)
+          errors.push(`hatch: cannot resolve point "${r.to}"`);
+      }
+    }
   }
 
   return { valid: errors.length === 0, errors };
@@ -316,6 +466,8 @@ function compile(content) {
     noLeft,
     noRight,
     noArcs,
+    arcRanges,
+    hatchRanges,
     parabolaSegments: rawParabolaSegments,
   } = parseBlock(content);
 
@@ -357,6 +509,20 @@ function compile(content) {
   const lastPointX = points[points.length - 1].x;
   const axisStart = points[0].x - 1.0;
   const axisEnd = lastPointX + 1.0;
+  const numSegments = points.length + 1;
+
+  // Helper: resolve a point ref to a 0-based segment index.
+  // from=null → seg 0; to=null → seg numSegments-1.
+  function refToFromSeg(ref) {
+    if (ref === null) return 0;
+    const i = resolvePointRef(ref, points);
+    return i === -1 ? null : i + 1;
+  }
+  function refToToSeg(ref) {
+    if (ref === null) return numSegments - 1;
+    const i = resolvePointRef(ref, points);
+    return i === -1 ? null : i;
+  }
 
   const hatchSegments = [];
   let inHatch = false;
@@ -366,13 +532,23 @@ function compile(content) {
       inHatch = true;
     } else if (tok.type === "point" || tok.type === "mark") {
       if (inHatch) {
-        hatchSegments.push({ from: prevX, to: tok.x });
+        hatchSegments.push({ from: prevX, to: tok.x }); // direction defaults to "top right"
         inHatch = false;
       }
       prevX = tok.x;
     }
   }
   if (inHatch) hatchSegments.push({ from: prevX, to: axisEnd });
+
+  // Add hatch segments from hatch sub-commands
+  for (const r of hatchRanges) {
+    const fromSegIdx = refToFromSeg(r.from);
+    const toSegIdx   = refToToSeg(r.to);
+    if (fromSegIdx === null || toSegIdx === null || fromSegIdx > toSegIdx) continue;
+    const fromX = fromSegIdx === 0              ? axisStart             : points[fromSegIdx - 1].x;
+    const toX   = toSegIdx   === numSegments - 1 ? axisEnd              : points[toSegIdx].x;
+    hatchSegments.push({ from: fromX, to: toX, direction: r.direction });
+  }
 
   const orderedSegments = tokens
     .filter((t) => t.type === "hatch" || t.type === "sign")
@@ -421,11 +597,14 @@ function compile(content) {
     let ptLabelX = p.x;
     let ptLabelY = 0;
     if (spanFrom || spanTo || spanMid) {
-      ptLabelY = -0.4;
       const span = spanFrom ?? spanTo;
-      if (span?.dir === "up") {
-        if (spanFrom) ptLabelX = p.x - 0.3;
-        if (spanTo) ptLabelX = p.x + 0.3;
+      const isAdjacent = span && span.toIdx - span.fromIdx === 1;
+      if (isAdjacent) {
+        ptLabelY = -0.4;
+        if (span.dir === "up") {
+          if (spanFrom) ptLabelX = p.x - 0.3;
+          if (spanTo) ptLabelX = p.x + 0.3;
+        }
       }
     }
     lines.push(
@@ -433,51 +612,83 @@ function compile(content) {
     );
   });
 
-  lines.push(`% Arcs and signs`);
-  const numSegments = points.length + 1;
+  lines.push(`% Signs`);
   for (let i = 0; i < numSegments; i++) {
     const sign = orderedSegments[i]?.label ?? "";
     const isFirst = i === 0;
     const isLast = i === numSegments - 1;
-
     let fromX, toX;
-    if (isFirst) {
-      fromX = axisStart;
-      toX = points[0].x;
-    } else if (isLast) {
-      fromX = lastPointX;
-      toX = axisEnd;
-    } else {
-      fromX = points[i - 1].x;
-      toX = points[i].x;
-    }
-
-    const signX = isFirst
-      ? axisStart + 0.3
-      : isLast
-        ? axisEnd - 0.3
-        : (fromX + toX) / 2;
+    if (isFirst)     { fromX = axisStart; toX = points[0].x; }
+    else if (isLast) { fromX = lastPointX; toX = axisEnd; }
+    else             { fromX = points[i - 1].x; toX = points[i].x; }
+    const signX = isFirst ? axisStart + 0.3 : isLast ? axisEnd - 0.3 : (fromX + toX) / 2;
     if (sign)
       lines.push(`\\node[above, scale=1.5] at (${signX},0) {$${sign}$};`);
+  }
 
-    // Suppress arc for intermediate segments that fall inside a parabola span
-    const inParabola =
-      !isFirst &&
-      !isLast &&
-      parabolaSpans.some((ps) => i > ps.fromIdx && i <= ps.toIdx);
+  lines.push(`% Arcs`);
+  if (!noArcs) {
+    if (arcRanges.length > 0) {
+      // Range mode — one spanning arc per declared range.
+      // from=null → left open end (quarter-arc); to=null → right open end (quarter-arc).
+      // Both present → full semicircle from fromX to toX (x radius scales with span).
+      for (const r of arcRanges) {
+        const fromSeg = refToFromSeg(r.from);
+        const toSeg   = refToToSeg(r.to);
+        if (fromSeg === null || toSeg === null || fromSeg > toSeg) continue;
 
-    if (!isFirst && !isLast && !inParabola && !noArcs) {
-      lines.push(
-        `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
-      );
-    } else if (isFirst && !noArcs && !noLeft) {
-      lines.push(
-        `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
-      );
-    } else if (isLast && !noArcs && !noRight) {
-      lines.push(
-        `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
-      );
+        if (r.from === null) {
+          // Left quarter-arc: ends at the first (to) point
+          const toX = points[toSeg].x;
+          lines.push(
+            `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+          );
+        } else if (r.to === null) {
+          // Right quarter-arc: starts at the last (from) point
+          const fromX = points[fromSeg - 1].x;
+          lines.push(
+            `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+          );
+        } else {
+          // Full semicircle spanning from one point to another (possibly non-adjacent)
+          const fromX = points[fromSeg - 1].x;
+          const toX   = points[toSeg].x;
+          const arcXR = (toX - fromX) / 2;
+          lines.push(
+            `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${arcXR}, y radius=${arcH}];`,
+          );
+        }
+      }
+    } else {
+      // Old mode — individual arc per segment, with parabola suppression + noLeft/noRight flags.
+      for (let i = 0; i < numSegments; i++) {
+        const isFirst = i === 0;
+        const isLast  = i === numSegments - 1;
+        let fromX, toX;
+        if (isFirst)     { fromX = axisStart; toX = points[0].x; }
+        else if (isLast) { fromX = lastPointX; toX = axisEnd; }
+        else             { fromX = points[i - 1].x; toX = points[i].x; }
+
+        const inParabola =
+          !isFirst && !isLast &&
+          parabolaSpans.some((ps) => i > ps.fromIdx && i <= ps.toIdx);
+
+        if (inParabola) continue;
+
+        if (!isFirst && !isLast) {
+          lines.push(
+            `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=0, x radius=${xRadius}, y radius=${arcH}];`,
+          );
+        } else if (isFirst && !noLeft) {
+          lines.push(
+            `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+          );
+        } else if (isLast && !noRight) {
+          lines.push(
+            `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+          );
+        }
+      }
     }
   }
 
@@ -534,13 +745,16 @@ function compile(content) {
 
   lines.push(`% Hatching`);
   const step = 0.15;
+  const ext = (step + 0.05).toFixed(2);
   hatchSegments.forEach((seg) => {
+    const dir = seg.direction ?? "top right";
+    const [vert, horiz] = dir.split(" ");
+    const dy = vert  === "top"   ? ext : `-${ext}`;
+    const dx = horiz === "right" ? ext : `-${ext}`;
     lines.push(
       `\\foreach \\x in {${seg.from},${(seg.from + step).toFixed(2)},...,${seg.to}} {`,
     );
-    lines.push(
-      `    \\draw[line width=1pt] (\\x,0) -- (\\x+${(step + 0.05).toFixed(2)},${(step + 0.05).toFixed(2)});`,
-    );
+    lines.push(`    \\draw[line width=1pt] (\\x,0) -- (\\x+${dx},${dy});`);
     lines.push(`}`);
   });
 

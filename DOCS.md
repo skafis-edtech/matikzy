@@ -701,6 +701,46 @@ can be:
 
 default is all.
 
+Can also specify exacly which ponts to connect with the arc:
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+arcs -<1>
+arcs <1>-<2>
+arcs <2>-
+```
+
+and can also specify multiple, to avoid the boilerplate code:
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+arcs -<1>-<2>-
+```
+
+## hatch
+
+Also, similarly to the arcs, can specify exact hatching between points. For the same interval max 4 hatches (top lean left, top lean right, bottom lean left, bottom lean right).
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+hatch -<1>
+hatch <1>-<3>
+hatch <2>-
+```
+
+Can also specify leaning direction of hatching explicitly:
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+hatch -<1>
+hatch <1>-<3> -- top right
+hatch <2>- -- bottom left
+```
+
 ## parabola
 
 ```
