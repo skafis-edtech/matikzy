@@ -1,7 +1,6 @@
-import intervalArcsCommands from "./commands/interval-arcs.js";
+import intervalCommands from "./commands/interval.js";
 import functionCommands from "./commands/function.js";
 import unitCircleCommands from "./commands/unit-circle.js";
-import cuboidCommands from "./commands/cuboid.js";
 import geometryCommands from "./commands/geometry.js";
 
 // ─── Command registry ─────────────────────────────────────────────────────────
@@ -13,10 +12,9 @@ function register(prefix, syntaxCheck, compile) {
 }
 
 const allCommands = [
-  ...intervalArcsCommands,
+  ...intervalCommands,
   ...functionCommands,
   ...unitCircleCommands,
-  ...cuboidCommands,
   ...geometryCommands,
 ];
 
@@ -27,10 +25,13 @@ allCommands.forEach(({ prefix, syntaxCheck, compile }) =>
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 function stripComments(src) {
-  return src.split("\n").map(line => {
-    const i = line.indexOf("//");
-    return i === -1 ? line : line.slice(0, i);
-  }).join("\n");
+  return src
+    .split("\n")
+    .map((line) => {
+      const i = line.indexOf("//");
+      return i === -1 ? line : line.slice(0, i);
+    })
+    .join("\n");
 }
 
 export function syntaxCheck(matikzy) {

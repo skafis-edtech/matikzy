@@ -9,10 +9,16 @@ _Keep in mind that most of this is vibe coded. But the language itself is not - 
 ## Example
 
 ```
-interval-arcs: =-=[0]_+_[\frac12]=-=>x
+interval:
+inline =-=[0]_+_[\frac12]=-=>x
+arcs
 ```
 
-becomes
+makes
+
+![image](img/example.png)
+
+by turning it into this tikz code:
 
 ```
 \begin{document}
@@ -49,18 +55,14 @@ becomes
 60 requests per minute per IP.
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"lang":"matikzy", "content": "interval-arcs: =-=[0]_+_[\frac12]=-=>x"}' https://www.matikzy.org/render
+curl -X POST -H "Content-Type: application/json" -d '{"lang":"matikzy", "content": "interval: \ninline =-=[0]_+_[\frac12]=-=>x\narcs"}' https://www.matikzy.org/render
 ```
 
 returns
 
 ```svg
-<svg xmlns="http://www.w3.org/2000/svg" width="163.398" height="53.71" viewBox="-72 -72 122.548 40.282"><defs><style>@import url(https://cdn.jsdelivr.net/npm/node-tikzjax@latest/css/fonts.css);</style></defs><g stroke="#000" stroke-miterlimit="10" stroke-width=".4"><path fill="none" stroke-width="1" d="M-69.973-51.953h113.81"/><path stroke="none" d="m43.838-51.953-5.69-2.846v5.691Z"/><text x="43.838" y="-51.953" stroke="none" font-family="cmmi10" font-size="10" transform="matrix(1.5 0 0 1.5 -29.05 37.734)">x</text><path stroke="none" d="M-38.52-51.953a3 3 0 1 0-6 0 3 3 0 0 0 6 0m-3 0"/><text x="43.838" y="-51.953" stroke="none" font-family="cmr10" font-size="10" transform="matrix(1.5 0 0 1.5 -111.027 40.943)">0</text><path stroke="none" d="M18.385-51.953a3 3 0 1 0-6 0 3 3 0 0 0 6 0m-3 0"/><g stroke="none"><text x="43.838" y="-51.953" font-family="cmmi10" font-size="10" transform="matrix(1.5 0 0 1.5 -68.674 40.943)">r</text><text x="48.627" y="-51.953" font-family="cmmi10" font-size="10" transform="matrix(1.5 0 0 1.5 -68.674 40.943)">ac</text><text x="58.241" y="-51.953" font-family="cmr10" font-size="10" transform="matrix(1.5 0 0 1.5 -68.674 40.943)">12</text></g><text x="43.838" y="-51.953" stroke="none" font-family="cmsy10" font-size="10" transform="matrix(1.5 0 0 1.5 -133.027 19.427)">¡</text><path fill="none" stroke-width=".8" d="M-41.52-51.953c0-11-12.739-19.917-28.453-19.917"/><text x="43.838" y="-51.953" stroke="none" font-family="cmr10" font-size="10" transform="matrix(1.5 0 0 1.5 -84.658 19.427)">+</text><path fill="none" stroke-width=".8" d="M-41.52-51.953c0-11 12.738-19.917 28.452-19.917s28.453 8.917 28.453 19.917"/><text x="43.838" y="-51.953" stroke="none" font-family="cmsy10" font-size="10" transform="matrix(1.5 0 0 1.5 -36.288 19.427)">¡</text><path fill="none" stroke-width=".8" d="M15.385-51.953c0-11 12.739-19.917 28.453-19.917"/><path fill="none" stroke-width="1" d="m-69.973-51.953 5.69-5.69M-65.705-51.953l5.69-5.69M-61.438-51.953l5.69-5.69M-57.17-51.953l5.69-5.69M-52.902-51.953l5.69-5.69M-48.634-51.953l5.69-5.69M-44.367-51.953l5.69-5.69M15.385-51.953l5.69-5.69M19.653-51.953l5.69-5.69M23.92-51.953l5.691-5.69M28.188-51.953l5.69-5.69M32.456-51.953l5.69-5.69M36.724-51.953l5.69-5.69M40.992-51.953l5.69-5.69"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="163.398" height="53.71" viewBox="-72 -72 122.548 40.282"><defs><style>@import url(https://cdn.jsdelivr.net/npm/node-tikzjax@latest/css/fonts.css);</style></defs><g stroke="#000" stroke-miterlimit="10" stroke-width=".4"><path fill="none" stroke-width="1" d="M-69.973-51.953h113.81"/><path stroke="none" d="m43.838-51.953-5.69-2.846v5.691Z"/><text x="43.838" y="-51.953" stroke="none" font-family="cmmi10" font-size="10" transform="matrix(1.5 0 0 1.5 -29.05 37.734)">x</text> ...</svg>
 ```
-
-which displays (with LaTeX fonts)
-
-![image](./example.png)
 
 ## Setup
 

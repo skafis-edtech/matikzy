@@ -158,7 +158,7 @@ point (4;1) []
 area (2;1)
 ```
 
-![alt text](image.png)
+![alt text](img/image.png)
 
 ```
 function[large]:
@@ -168,7 +168,7 @@ point (0;0) []
 graph sqrt >>f(x)+2
 ```
 
-![alt text](image-1.png)
+![alt text](img/image-1.png)
 
 ```
 function:
@@ -179,7 +179,7 @@ point (0.3333;0.5) [] x-line
 point (1.6666;0.5) [] x-line
 ```
 
-![alt text](image-2.png)
+![alt text](img/image-2.png)
 
 ### Issues
 
@@ -617,7 +617,7 @@ label O label A label B label C
 
 ```
 
-![alt text](image-6.png)
+![alt text](img/image-6.png)
 
 ```
 
@@ -628,7 +628,7 @@ mark angle B I mark angle C right
 
 ```
 
-![alt text](image-7.png)
+![alt text](img/image-7.png)
 
 ```
 
@@ -647,7 +647,7 @@ label CE 10 label ED 6 label AE 4
 
 ```
 
-![alt text](image-8.png)
+![alt text](img/image-8.png)
 
 ### Issues
 
@@ -656,28 +656,97 @@ label CE 10 label ED 6 label AE 4
 - should be clear separation between new or old namings for elements. Clear separation between "basis" figure, like triangle or circle, and additional "in-drawn" figures.
 - make shortcuts for circle, the same way as is for triangle.
 
-## `interval-arcs`
+## `interval`
 
-In progress...
+Start with `interval` and then add components.
+
+## inline
+
+This is the main section, everything can be written into one line (except for arcs and parabolas).
+
+TODO: make it possible to write in multiline syntax the inline thing.
+
+```
+interval:
+inline ^{V'(\alpha)}_{V(\alpha)} __ (0) _+_up [^{\arcsin \frac{\sqrt3}{3}}]{x_{max}} _-_down (\frac{\pi}{2}) __ >\alpha
+```
+
+The inline specification has elements, they can have spaces between, but can only have no spaces.
+
+`^{V'(\alpha)}_{V(\alpha)}` - shows above and below line labels at the beginning (left side),
+
+then goes elements:
+
+- hatched/plain line segment: `==` or `__`,
+- mark above line segment, between hatched/plain symbols, e.g.: `_+_`,
+- point: hallow `(label)`, full `[label]`, spike `|label|`,
+- arrows below, indicated after the line segment element, can be up or down: `_+_up` or `=-=down`,
+- label below even the arrows, indicated after the point: `[label]{x_{max}}`
+
+then the arrow: `> x`. Optional, can be no arrow, can be no arrow label.
+
+## arcs
+
+```
+interval:
+inline ^{f'(x)}_{f(x)} __ [\frac1e] _+_up |e| _-_down [e^3] __ >x
+arcs -- closed-only
+```
+
+can be:
+- all
+- closed-only
+- no-left
+- no-right
+
+default is all.
+
+## parabola
+
+```
+interval:
+inline _-_ |n_1| =+= |n_2| _-_ >x
+parabola n_1 n_2 -- down
+```
+
+Adds a parabola, going through 2 points. The line should have at least 2 points. Points can also be specified with indexes (especially when labels are doubling):
+
+```
+interval:
+inline _-_ |n_1| =+= |n_2| _-_ >x
+parabola <1> <2> -- down
+```
+
+Need to specify 2 points. If not specified - defaults to the first 2.
+
+Can be:
+- down
+- up
+
+default is up.
 
 ### Examples
 
 ```
-
-interval-arcs: _-_ (0) =+= (4) _-_ >x
-
+interval:
+inline _-_ (0) =+= (4) _-_ >x
+arcs
 ```
 
-![alt text](image-3.png)
+![alt text](img/image-3.png)
 
 ```
-
-interval-arcs[closed-only]: ^{S'(a)}_{S(a)} \_\_ (0) _+_up |1\frac13| _-\_down (4) \_\_ >a
-
+interval:
+^{S'(a)}_{S(a)} __ (0) _+_up |1\frac13| _-_down (4) __ >a
+arcs -- closed-only
 ```
 
-![alt text](image-4.png)
+![alt text](img/image-4.png)
 
 ```
-
+interval:
+inline _-_ |n_1| =+= |n_2| _-_ (4) __ >x
+parabola n_1 n_2 -- down
 ```
+
+![alt text](img/image-9.png)

@@ -1,6 +1,6 @@
 # Matikzy — LLM Reference
 
-Matikzy generates LaTeX/TikZ diagrams from a short DSL. Commands: `function`, `geometry`, `interval-arcs` / `interval`, `unit-circle`.
+Matikzy generates LaTeX/TikZ diagrams from a short DSL. Commands: `function`, `geometry`, `interval`, `unit-circle`.
 
 Comments: use `//` to add a comment (to end of line).
 
@@ -393,80 +393,141 @@ label OM 12\;\mathrm{cm}
 
 ---
 
-## `interval-arcs` — sign / monotonicity diagrams
+## `interval` — sign / monotonicity diagrams
 
-### Prefixes
-```
-interval-arcs:                      ← arcs on both ends
-interval-arcs[no-left]:             ← no arc on left end
-interval-arcs[no-right]:            ← no arc on right end
-interval-arcs[no-left][no-right]:   ← arcs only between points (same as closed-only)
-interval-arcs[closed-only]:         ← same as no-left + no-right
-interval:                           ← no arcs at all (just signs / line)
-interval[closed-only]:              ← no arcs, only between points
-interval-parabola:                  ← parabola arcs opening up  (requires exactly 2 points)
-interval-parabola[up]:              ← same as interval-parabola:
-interval-parabola[down]:            ← parabola arcs opening down
-```
+### Prefix
 
-### Syntax
+Only `interval:` (multi-line block format).
 
-Everything goes on **one line** (after the prefix):
+### Structure
 
 ```
-interval-arcs: _-_ (0) =+= (4) _-_ >x
+interval:
+inline <tokens>
+arcs [-- all | -- closed-only | -- no-left | -- no-right]
+parabola [<p1> <p2>] [-- up | -- down]
 ```
 
-**Optional left labels** (come first, before any tokens):
+- `inline` — **required**. All diagram tokens on one line.
+- `arcs` — **optional**. If absent: no arcs drawn anywhere. If present with no flag (`arcs` alone): all arcs (between points + both end half-arcs). Flags restrict which arcs appear.
+- `parabola` — **optional, repeatable**. Draws a parabola arc spanning from `p1` to `p2` (replacing any arcs in that span). Can span non-adjacent points.
+
+---
+
+### `inline` tokens
+
+Everything on one line after `inline`. **Optional left labels** come first, then tokens alternate strictly: sign/hatch → point → sign/hatch → … → sign/hatch.
+
+**Optional left labels** (must come before all other tokens):
 ```
-^{S'(\alpha)}    ← top axis label
-_{S(\alpha)}     ← bottom axis label
+^{V'(\alpha)}    ← top label on left side of axis
+_{V(\alpha)}     ← bottom label on left side of axis
 ```
 
-**Tokens** (must alternate sign/hatch → point → sign/hatch → …):
+**Tokens**:
 
 | Token | Meaning |
 |-------|---------|
-| `_text_` | sign label in a region (e.g. `_+_`, `_-_`, `__`) |
-| `=text=` | hatched (shaded) region with optional label |
-| `[label]` | solid (closed) point |
-| `(label)` | hollow (open) point |
-| `\|label\|` | tick mark (no circle) |
-| `>label` | axis arrow + axis name; **must be last** |
+| `_text_` | plain region label (e.g. `_+_`, `_-_`, `__` for blank) |
+| `=text=` | hatched (shaded) region, optional label |
+| `[label]` | solid (closed) dot point |
+| `(label)` | hollow (open) dot point |
+| `\|label\|` | tick mark (vertical line, no dot) |
+| `>label` | axis arrowhead + label; **must be the very last token** |
 
-**Direction suffix** on a sign token (adds up/down arrow below the axis):
+Labels may be **empty**: `||`, `()`, `[]` are all valid (useful when referencing by index).
+
+**Direction arrow suffix** on any plain/hatch region token:
 ```
-_+_up      ← interval goes up
-_-_down    ← interval goes down
-__         ← no sign, no arrow (neutral region)
+_+_up      ← draws an upward arrow below this region
+_-_down    ← draws a downward arrow below this region
 ```
 
-**Arrow label under a point** (put `{label}` after the point token):
+**Below-point label** — `{text}` immediately after a point token:
 ```
-(x_0){x_{max}}    ← hollow point x_0 with label x_max below
+[x_0]{x_{min}}     ← solid point x_0, label x_{min} shown further below
 ```
+
+---
+
+### `arcs` flags
+
+| Command | Effect |
+|---------|--------|
+| *(absent)* | no arcs anywhere |
+| `arcs` or `arcs -- all` | arcs between every pair of adjacent points + both end half-arcs |
+| `arcs -- closed-only` | arcs between adjacent points only, no end arcs |
+| `arcs -- no-left` | suppress the left end arc only |
+| `arcs -- no-right` | suppress the right end arc only |
+
+---
+
+### `parabola` command
+
+```
+parabola                      ← first two points, opening up (default)
+parabola -- down              ← first two points, opening down
+parabola <p1> <p2>            ← named or indexed points, opening up
+parabola <p1> <p2> -- up
+parabola <p1> <p2> -- down
+```
+
+**Point references** (`<p1>`, `<p2>`):
+- By label: `n_1`, `x_0`, `e` — the label used in the `inline` token
+- By 1-based index: `<1>`, `<2>`, `<3>` — useful when labels are empty or duplicated
+
+`p1` must come before `p2` in the inline sequence; they do **not** need to be adjacent. The parabola spans from the x-position of `p1` to `p2`, suppressing any individual arcs in between. Peak height is constant regardless of how far apart the points are.
+
+Multiple `parabola` lines are allowed.
+
+---
 
 ### Rules
-- Tokens must alternate: sign/hatch, point, sign/hatch, point, …, sign/hatch
-- For N points there must be exactly N+1 sign/hatch tokens (one before first, one after each)
-- `>label` arrow must be the very last token
-- Point labels must be unique
+- `inline` tokens must strictly alternate: sign/hatch, point, sign/hatch, …, sign/hatch
+- For N points there must be exactly N+1 sign/hatch tokens
+- `>label` arrow must be the very last token (omit entirely if no arrow needed)
+- Non-empty labels must be unique; empty labels (`||`, `()`, `[]`) may repeat freely
+- `parabola p1 p2`: both references must resolve and `p1` must come before `p2`
+- `parabola` (no names): inline must have at least 2 points
+
+---
 
 ### Examples
+
 ```
-interval-arcs: _-_ (0) =+= (4) _-_ >x
+interval:
+inline _-_ (0) =+= (4) _-_ >x
+arcs
 ```
 
 ```
-interval-arcs[closed-only]: ^{V'(\alpha)}_{V(\alpha)} __ (0) _+_up [\arcsin\frac{\sqrt3}{3}]{x_{max}} _-_down (\frac{\pi}{2}) __ >\alpha
+interval:
+inline ^{V'(\alpha)}_{V(\alpha)} __ (0) _+_up [^{\arcsin\frac{\sqrt3}{3}}]{x_{max}} _-_down (\frac{\pi}{2}) __ >\alpha
+arcs -- closed-only
 ```
 
 ```
-interval-parabola[down]: __ (0) _-_ (4) __ >x
+interval:
+inline ^{f'(x)}_{f(x)} __ [\frac{1}{e}] _+_up |e| _-_down [e^3] __ >x
+arcs -- closed-only
 ```
 
 ```
-interval: _-_ [0] _+_ [4] _-_ >x
+interval:
+inline _-_ |n_1| =+= |n_2| _-_ >x
+parabola n_1 n_2 -- down
+```
+
+```
+interval:
+inline _-_ |n_1| =+= |n_2| _-_ (4) __ >x
+parabola <1> <3> -- down
+```
+
+```
+interval:
+inline _-_ || =+= || _-_ () __
+parabola <1> <2> -- down
 ```
 
 ---

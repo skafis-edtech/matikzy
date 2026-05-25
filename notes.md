@@ -10,19 +10,20 @@
 6. left labels - above, below.
 7. axis arrow and label.
 8. mark min
-9. parabola: `interval-parabola[down]: ...`
+9. parabola
 
 mark min:
 
 ```
-interval-arcs[closed-only]: ^{V'(\alpha)}_{V(\alpha)} __ (0) _+_up [^{\arcsin \frac{\sqrt3}{3}}]{x_{max}} _-_down (\frac{\pi}{2}) __ >\alpha
+interval:
+inline ^{V'(\alpha)}_{V(\alpha)} __ (0) _+_up [^{\arcsin \frac{\sqrt3}{3}}]{x_{max}} _-_down (\frac{\pi}{2}) __ >\alpha
+arcs -- closed-only
 ```
 
 TODO:
 
 - individual points on line
 - overlapping intervals
-- multi line notation
 
 ## Unit circle
 
