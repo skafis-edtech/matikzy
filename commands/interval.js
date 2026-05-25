@@ -638,17 +638,35 @@ function compile(content) {
         if (fromSeg === null || toSeg === null || fromSeg > toSeg) continue;
 
         if (r.from === null) {
-          // Left quarter-arc: ends at the first (to) point
           const toX = points[toSeg].x;
-          lines.push(
-            `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
-          );
+          if (toSeg === 0) {
+            // First point — nothing skipped, standard left quarter-arc
+            lines.push(
+              `\\draw[thick] (${toX},0) arc[start angle=0, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+            );
+          } else {
+            // Points skipped to the left — quarter-arc ending (90°, vertical tangent)
+            // exactly at axisStart; x radius = full distance from axisStart to toX
+            const arcXR = toX - axisStart;
+            lines.push(
+              `\\draw[thick] (${axisStart},${arcH}) arc[start angle=90, end angle=0, x radius=${arcXR}, y radius=${arcH}];`,
+            );
+          }
         } else if (r.to === null) {
-          // Right quarter-arc: starts at the last (from) point
           const fromX = points[fromSeg - 1].x;
-          lines.push(
-            `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
-          );
+          if (fromSeg - 1 === points.length - 1) {
+            // Last point — nothing skipped, standard right quarter-arc
+            lines.push(
+              `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${xRadius}, y radius=${arcH}];`,
+            );
+          } else {
+            // Points skipped to the right — quarter-arc ending (90°, vertical tangent)
+            // exactly at axisEnd; x radius = full distance from fromX to axisEnd
+            const arcXR = axisEnd - fromX;
+            lines.push(
+              `\\draw[thick] (${fromX},0) arc[start angle=180, end angle=90, x radius=${arcXR}, y radius=${arcH}];`,
+            );
+          }
         } else {
           // Full semicircle spanning from one point to another (possibly non-adjacent)
           const fromX = points[fromSeg - 1].x;

@@ -666,6 +666,8 @@ This is the main section, everything can be written into one line (except for ar
 
 TODO: make it possible to write in multiline syntax the inline thing.
 
+TOOD: allow adjust the line segment lengths.
+
 ```
 interval:
 inline ^{V'(\alpha)}_{V(\alpha)} __ (0) _+_up [^{\arcsin \frac{\sqrt3}{3}}]{x_{max}} _-_down (\frac{\pi}{2}) __ >\alpha

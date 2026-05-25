@@ -405,12 +405,15 @@ Only `interval:` (multi-line block format).
 interval:
 inline <tokens>
 arcs [-- all | -- closed-only | -- no-left | -- no-right]
+arcs <range>
+hatch <range> [-- top right | -- top left | -- bottom right | -- bottom left]
 parabola [<p1> <p2>] [-- up | -- down]
 ```
 
 - `inline` — **required**. All diagram tokens on one line.
-- `arcs` — **optional**. If absent: no arcs drawn anywhere. If present with no flag (`arcs` alone): all arcs (between points + both end half-arcs). Flags restrict which arcs appear.
-- `parabola` — **optional, repeatable**. Draws a parabola arc spanning from `p1` to `p2` (replacing any arcs in that span). Can span non-adjacent points.
+- `arcs` — **optional**. If absent: no arcs drawn. Old-style (`arcs` / `arcs -- flag`) draws per-segment arcs. Range-style draws one spanning arc per declaration.
+- `hatch` — **optional, repeatable**. Draws hatching over a specified range of the axis.
+- `parabola` — **optional, repeatable**. Draws a parabola arc spanning from `p1` to `p2`.
 
 ---
 
@@ -423,6 +426,7 @@ Everything on one line after `inline`. **Optional left labels** come first, then
 ^{V'(\alpha)}    ← top label on left side of axis
 _{V(\alpha)}     ← bottom label on left side of axis
 ```
+Both labels may be present in either order (`^{…}_{…}` or `_{…}^{…}`). Nested braces are supported (e.g. `^{\frac{a}{b}}`).
 
 **Tokens**:
 
@@ -450,15 +454,91 @@ _-_down    ← draws a downward arrow below this region
 
 ---
 
-### `arcs` flags
+### `arcs` — old-style (per-segment)
 
 | Command | Effect |
 |---------|--------|
 | *(absent)* | no arcs anywhere |
-| `arcs` or `arcs -- all` | arcs between every pair of adjacent points + both end half-arcs |
+| `arcs` or `arcs -- all` | arcs between every adjacent pair of points + both end half-arcs |
 | `arcs -- closed-only` | arcs between adjacent points only, no end arcs |
 | `arcs -- no-left` | suppress the left end arc only |
 | `arcs -- no-right` | suppress the right end arc only |
+
+---
+
+### `arcs` — range-style (spanning arcs)
+
+Draws **one arc per declaration** spanning the specified range. Multiple `arcs` lines are allowed and each produces one arc. Can be mixed freely.
+
+**Range syntax**: `FROM-TO` where `-` separates endpoint references. Empty side = open to infinity.
+
+| Declaration | Arc drawn |
+|-------------|-----------|
+| `arcs -<N>` | Quarter-arc from −∞ side ending at point N |
+| `arcs <N>-` | Quarter-arc from point N stretching to +∞ side |
+| `arcs <M>-<N>` | Full semicircle from point M to point N |
+| `arcs -<M>-<N>-` | Three arcs in one line (shorthand for three separate declarations) |
+
+**Endpoint references**: `<N>` = 1-based index; label name (e.g. `n_1`) also works.
+
+**Open-end behaviour**:
+- `-<1>` where `<1>` is the **first** point → standard small quarter-arc (nothing skipped).
+- `<N>-` where `<N>` is the **last** point → standard small quarter-arc (nothing skipped).
+- When points are being skipped (e.g. `<2>-` with 4 points total), the arc is stretched so its 90° cut lands exactly at the axis end, visually spanning over the skipped points.
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+arcs -<1>
+arcs <1>-<2>
+arcs <2>-
+```
+
+Compact equivalent:
+```
+interval:
+inline __[]__[]__[]__[]__>x
+arcs -<1>-<2>-
+```
+
+---
+
+### `hatch` command
+
+Draws diagonal hatching lines over a range of the axis. Repeatable; independent of `=…=` inline hatching.
+
+**Syntax**: `hatch <range> [-- top right | -- top left | -- bottom right | -- bottom left]`
+
+**Default direction cycles** automatically when no `--` flag is given:
+
+| Order | Default direction |
+|-------|------------------|
+| 1st `hatch` | `top right` (`/` above axis) |
+| 2nd `hatch` | `bottom right` (`\` below axis) |
+| 3rd `hatch` | `top left` (`\` above axis) |
+| 4th `hatch` | `bottom left` (`/` below axis) |
+| 5th+ | wraps back to `top right` |
+
+An explicit `-- direction` flag overrides the default but the counter still advances.
+
+**Range syntax** is the same as for `arcs` (`-<N>`, `<M>-<N>`, `<N>-`, compound `-<M>-<N>-`).
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+hatch -<1>
+hatch <1>-<3>
+hatch <2>-
+```
+
+With explicit directions:
+```
+interval:
+inline __[]__[]__[]__[]__>x
+hatch -<1>
+hatch <1>-<3> -- top right
+hatch <2>- -- bottom left
+```
 
 ---
 
@@ -474,9 +554,11 @@ parabola <p1> <p2> -- down
 
 **Point references** (`<p1>`, `<p2>`):
 - By label: `n_1`, `x_0`, `e` — the label used in the `inline` token
-- By 1-based index: `<1>`, `<2>`, `<3>` — useful when labels are empty or duplicated
+- By 1-based index: `<1>`, `<2>`, `<3>` — required when labels are empty or duplicated
 
-`p1` must come before `p2` in the inline sequence; they do **not** need to be adjacent. The parabola spans from the x-position of `p1` to `p2`, suppressing any individual arcs in between. Peak height is constant regardless of how far apart the points are.
+`p1` must come before `p2` in the inline sequence; they do **not** need to be adjacent. The parabola spans from the x-position of `p1` to `p2`, suppressing any individual arcs in between. Peak height is constant regardless of span width (`a = 4/d²`).
+
+For **adjacent** point spans (`p2` immediately follows `p1`), point labels are nudged slightly to avoid overlapping the parabola feet. For **non-adjacent** spans, labels stay at their natural positions.
 
 Multiple `parabola` lines are allowed.
 
@@ -486,7 +568,8 @@ Multiple `parabola` lines are allowed.
 - `inline` tokens must strictly alternate: sign/hatch, point, sign/hatch, …, sign/hatch
 - For N points there must be exactly N+1 sign/hatch tokens
 - `>label` arrow must be the very last token (omit entirely if no arrow needed)
-- Non-empty labels must be unique; empty labels (`||`, `()`, `[]`) may repeat freely
+- Non-empty point labels must be unique; empty labels (`||`, `()`, `[]`) may repeat freely
+- `arcs` range-style and old-style cannot be mixed (range-style takes over if any range is present)
 - `parabola p1 p2`: both references must resolve and `p1` must come before `p2`
 - `parabola` (no names): inline must have at least 2 points
 
@@ -528,6 +611,22 @@ parabola <1> <3> -- down
 interval:
 inline _-_ || =+= || _-_ () __
 parabola <1> <2> -- down
+```
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+arcs -<1>
+arcs <1>-<2>
+arcs <2>-
+```
+
+```
+interval:
+inline __[]__[]__[]__[]__>x
+hatch -<1>
+hatch <1>-<3>
+hatch <2>-
 ```
 
 ---
