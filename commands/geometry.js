@@ -223,7 +223,7 @@ const QUAD_SINGLE_TYPES = new Set([
   "rhombus",
   "trapezoid",
 ]);
-const VALID_QUAD_MODES = new Set(["SSSSD", "SSSDD", "SSAAA", "SSSAA"]);
+const VALID_QUAD_MODES = new Set(["SSSSD", "SSSDD", "ASASA", "SASAS"]);
 
 function parseQuadTransforms(words, unknown) {
   const quadTransforms = [];
@@ -245,7 +245,7 @@ function parseQuadrilateral(content) {
   const words = content.trim().split(/\s+/);
   if (words[0] !== "quadrilateral") return null;
 
-  // Free-form numeric mode: quadrilateral SSSSD/SSSDD/SSAAA/SSSAA v1..v5 [label] [>>transforms]
+  // Free-form numeric mode: quadrilateral SSSSD/SSSDD/ASASA/SASAS v1..v5 [label] [>>transforms]
   if (words.length >= 2 && VALID_QUAD_MODES.has(words[1])) {
     const quadMode = words[1];
     const unknown = [];
@@ -864,100 +864,83 @@ function computeQuadPositions(quadType, quadTransforms, size, quadValues) {
 const QUAD_FREEFORM_TARGET = { small: 3.1, medium: 5.0, large: 7.7 };
 
 function computeRawQuadVerts(mode, values) {
-  const deg2rad = (d) => (d * Math.PI) / 180;
+  const r = (d) => (d * Math.PI) / 180;
   const clamp = (v) => Math.max(-1, Math.min(1, v));
 
   if (mode === "SSSSD") {
-    // AB, BC, CD, DA, diag_AC
-    const [sAB, sBC, sCD, sDA, sAC] = values;
-    const A = { x: 0, y: 0 },
-      B = { x: sAB, y: 0 };
-    const cosBAC = clamp((sAB * sAB + sAC * sAC - sBC * sBC) / (2 * sAB * sAC));
-    const angBAC = Math.acos(cosBAC);
-    const C = { x: sAC * Math.cos(angBAC), y: sAC * Math.sin(angBAC) };
-    // D from triangle ACD on opposite side of AC from B
-    const cosCAD = clamp((sAC * sAC + sDA * sDA - sCD * sCD) / (2 * sAC * sDA));
-    const angCAD = Math.acos(cosCAD);
-    const dirAD = angBAC + angCAD;
-    const D = { x: sDA * Math.cos(dirAD), y: sDA * Math.sin(dirAD) };
+    // side DA, side AB, side BC, side CD, diagonal DB
+    // Listing starts from D going clockwise: D→A→B→C
+    const [sDA, sAB, sBC, sCD, sDiag] = values; // sDiag = |DB|
+    const A = { x: 0, y: 0 }, D = { x: sDA, y: 0 };
+    // Place B from triangle ABD using law of cosines (angle at A)
+    const cosBAD = clamp((sDA * sDA + sAB * sAB - sDiag * sDiag) / (2 * sDA * sAB));
+    const angBAD = Math.acos(cosBAD);
+    const B = { x: sAB * Math.cos(angBAD), y: sAB * Math.sin(angBAD) };
+    // Find C from |BC|=sBC and |DC|=sCD using triangle BDC
+    const dirBD = Math.atan2(D.y - B.y, D.x - B.x);
+    const cosCBD = clamp((sDiag * sDiag + sBC * sBC - sCD * sCD) / (2 * sDiag * sBC));
+    const angCBD = Math.acos(cosCBD);
+    const C1 = { x: B.x + sBC * Math.cos(dirBD + angCBD), y: B.y + sBC * Math.sin(dirBD + angCBD) };
+    const C2 = { x: B.x + sBC * Math.cos(dirBD - angCBD), y: B.y + sBC * Math.sin(dirBD - angCBD) };
+    // Pick C on opposite side of diagonal BD from A
+    const crossA = (D.x - B.x) * (A.y - B.y) - (D.y - B.y) * (A.x - B.x);
+    const cross1 = (D.x - B.x) * (C1.y - B.y) - (D.y - B.y) * (C1.x - B.x);
+    const C = crossA * cross1 < 0 ? C1 : C2;
     return [A, B, C, D];
   }
 
   if (mode === "SSSDD") {
-    // AB, BC, CD, diag_AC, diag_BD
-    const [sAB, sBC, sCD, sAC, sBD] = values;
-    const A = { x: 0, y: 0 },
-      B = { x: sAB, y: 0 };
-    const cosBAC = clamp((sAB * sAB + sAC * sAC - sBC * sBC) / (2 * sAB * sAC));
-    const angBAC = Math.acos(cosBAC);
-    const C = { x: sAC * Math.cos(angBAC), y: sAC * Math.sin(angBAC) };
-    // D from circles: |BD|=sBD, |CD|=sCD; pick side opposite to B relative to AC
-    const dirBC = Math.atan2(C.y - B.y, C.x - B.x);
-    const dirCB = dirBC + Math.PI;
-    const cosBCD = clamp((sBC * sBC + sCD * sCD - sBD * sBD) / (2 * sBC * sCD));
-    const angBCD = Math.acos(cosBCD);
-    const D1 = {
-      x: C.x + sCD * Math.cos(dirCB + angBCD),
-      y: C.y + sCD * Math.sin(dirCB + angBCD),
-    };
-    const D2 = {
-      x: C.x + sCD * Math.cos(dirCB - angBCD),
-      y: C.y + sCD * Math.sin(dirCB - angBCD),
-    };
-    // Pick D on opposite side of AC from B
-    const nx = C.y,
-      ny = -C.x; // normal to AC direction (perpendicular, rotated CW)
-    const signB = B.x * nx + B.y * ny;
-    const sign1 = D1.x * nx + D1.y * ny;
-    const D = signB * sign1 < 0 ? D1 : D2;
+    // side DA, side AB, side BC, diagonal DB, diagonal AC
+    const [sDA, sAB, sBC, sDiag_DB, sDiag_AC] = values;
+    const A = { x: 0, y: 0 }, D = { x: sDA, y: 0 };
+    // Place B from triangle ABD (diagonal DB)
+    const cosBAD = clamp((sDA * sDA + sAB * sAB - sDiag_DB * sDiag_DB) / (2 * sDA * sAB));
+    const angBAD = Math.acos(cosBAD);
+    const B = { x: sAB * Math.cos(angBAD), y: sAB * Math.sin(angBAD) };
+    // Find C from circles at A (radius sDiag_AC) and B (radius sBC)
+    const dirAB = Math.atan2(B.y - A.y, B.x - A.x);
+    const cosCAB = clamp((sAB * sAB + sDiag_AC * sDiag_AC - sBC * sBC) / (2 * sAB * sDiag_AC));
+    const angCAB = Math.acos(cosCAB);
+    const C1 = { x: sDiag_AC * Math.cos(dirAB + angCAB), y: sDiag_AC * Math.sin(dirAB + angCAB) };
+    const C2 = { x: sDiag_AC * Math.cos(dirAB - angCAB), y: sDiag_AC * Math.sin(dirAB - angCAB) };
+    // Pick C on opposite side of diagonal BD from A
+    const crossA = (D.x - B.x) * (A.y - B.y) - (D.y - B.y) * (A.x - B.x);
+    const cross1 = (D.x - B.x) * (C1.y - B.y) - (D.y - B.y) * (C1.x - B.x);
+    const C = crossA * cross1 < 0 ? C1 : C2;
     return [A, B, C, D];
   }
 
-  if (mode === "SSAAA") {
-    // AB, BC, angleA, angleB, angleC (interior angles; polygon above x-axis, CCW traversal)
-    const [sAB, sBC, angA, angB, angC] = values;
-    const rA = deg2rad(angA),
-      rB = deg2rad(angB),
-      rC = deg2rad(angC);
-    const A = { x: 0, y: 0 },
-      B = { x: sAB, y: 0 };
-    const dirBC = Math.PI - rB;
-    const C = {
-      x: B.x + sBC * Math.cos(dirBC),
-      y: B.y + sBC * Math.sin(dirBC),
-    };
-    const dirCD = 2 * Math.PI - rB - rC;
-    const dirAD = rA;
-    // D = intersection of ray from A (dirAD) and ray from C (dirCD)
-    const cAD = Math.cos(dirAD),
-      sAD = Math.sin(dirAD);
-    const cCD = Math.cos(dirCD),
-      sCD_val = Math.sin(dirCD);
-    const det = cAD * -sCD_val - sAD * -cCD;
+  if (mode === "ASASA") {
+    // angle D, side DA, angle A, side AB, angle B  (listing starts from D, clockwise)
+    // Remaining sides BC and CD are solved by the closure constraint.
+    const [angD, sDA, angA, sAB, angB] = values;
+    // Build path D→A→B using headings: D→A goes west (h=π), turn at each vertex.
+    const h_AB = r(angA);               // heading A→B
+    const h_BC = r(angA) + r(angB) - Math.PI; // heading B→C
+    const h_CD = -r(angD);             // heading C→D (derived from angle sum)
+    const D = { x: 0, y: 0 };
+    const A = { x: -sDA, y: 0 };
+    const B = { x: A.x + sAB * Math.cos(h_AB), y: A.y + sAB * Math.sin(h_AB) };
+    // Solve: B + sBC*(cos h_BC, sin h_BC) + sCD*(cos h_CD, sin h_CD) = D
+    const det = Math.cos(h_BC) * Math.sin(h_CD) - Math.cos(h_CD) * Math.sin(h_BC);
     if (Math.abs(det) < 1e-10) return null;
-    const t = ((C.x - A.x) * -sCD_val - (C.y - A.y) * -cCD) / det;
-    if (t <= 0) return null;
-    const D = { x: A.x + t * cAD, y: A.y + t * sAD };
+    const sBC = (-B.x * Math.sin(h_CD) + B.y * Math.cos(h_CD)) / det;
+    const sCD = (-B.y * Math.cos(h_BC) + B.x * Math.sin(h_BC)) / det;
+    if (sBC <= 0 || sCD <= 0) return null;
+    const C = { x: B.x + sBC * Math.cos(h_BC), y: B.y + sBC * Math.sin(h_BC) };
     return [A, B, C, D];
   }
 
-  if (mode === "SSSAA") {
-    // AB, BC, CD, angleB, angleC (included interior angles at B and C)
-    const [sAB, sBC, sCD, angB, angC] = values;
-    const rB = deg2rad(angB),
-      rC = deg2rad(angC);
-    const A = { x: 0, y: 0 },
-      B = { x: sAB, y: 0 };
-    const dirBC = Math.PI - rB;
-    const C = {
-      x: B.x + sBC * Math.cos(dirBC),
-      y: B.y + sBC * Math.sin(dirBC),
-    };
-    const dirCD = 2 * Math.PI - rB - rC;
-    const D = {
-      x: C.x + sCD * Math.cos(dirCD),
-      y: C.y + sCD * Math.sin(dirCD),
-    };
+  if (mode === "SASAS") {
+    // side DA, angle A, side AB, angle B, side BC  (listing starts from D, clockwise)
+    // Remaining sides CD and angles at C,D close naturally.
+    const [sDA, angA, sAB, angB, sBC] = values;
+    const h_AB = r(angA);
+    const h_BC = r(angA) + r(angB) - Math.PI;
+    const D = { x: 0, y: 0 };
+    const A = { x: -sDA, y: 0 };
+    const B = { x: A.x + sAB * Math.cos(h_AB), y: A.y + sAB * Math.sin(h_AB) };
+    const C = { x: B.x + sBC * Math.cos(h_BC), y: B.y + sBC * Math.sin(h_BC) };
     return [A, B, C, D];
   }
 
@@ -1789,7 +1772,7 @@ function syntaxCheck(content) {
   if (hasQuad) {
     if (!quadResult.quadType && !quadResult.quadMode) {
       errors.push(
-        `"quadrilateral": shape type required (e.g., "square", "rectangle", "SSSSD", "SSSDD", "SSAAA", "SSSAA")`,
+        `"quadrilateral": shape type required (e.g., "square", "rectangle", "SSSSD", "SSSDD", "ASASA", "SASAS")`,
       );
     }
     if (quadResult.quadMode) {
@@ -1803,21 +1786,21 @@ function syntaxCheck(content) {
         );
       } else {
         const [v1, v2, v3, v4, v5] = quadResult.quadValues;
-        if (quadResult.quadMode === "SSAAA" && v3 + v4 + v5 >= 360)
+        if (quadResult.quadMode === "ASASA" && v1 + v3 + v5 >= 360)
           errors.push(
-            `"quadrilateral SSAAA": angles must sum to less than 360°`,
+            `"quadrilateral ASASA": angles must sum to less than 360°`,
           );
-        if (quadResult.quadMode === "SSSAA" && v4 + v5 >= 360)
+        if (quadResult.quadMode === "SASAS" && v2 + v4 >= 360)
           errors.push(
-            `"quadrilateral SSSAA": angles must sum to less than 360°`,
+            `"quadrilateral SASAS": angles must sum to less than 360°`,
           );
-        if (
-          (quadResult.quadMode === "SSAAA" ||
-            quadResult.quadMode === "SSSAA") &&
-          (v4 <= 0 || v5 <= 0)
-        )
+        if (quadResult.quadMode === "ASASA" && (v1 <= 0 || v3 <= 0 || v5 <= 0))
           errors.push(
-            `"quadrilateral ${quadResult.quadMode}": angles must be positive`,
+            `"quadrilateral ASASA": angles must be positive`,
+          );
+        if (quadResult.quadMode === "SASAS" && (v2 <= 0 || v4 <= 0))
+          errors.push(
+            `"quadrilateral SASAS": angles must be positive`,
           );
       }
     }
