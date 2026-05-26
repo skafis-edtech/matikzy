@@ -625,7 +625,9 @@
             <button class="tab-btn active" data-tab="builder">
                 Interval Builder
             </button>
-            <button class="tab-btn" data-tab="demo">What's behind this?</button>
+            <button class="tab-btn" data-tab="demo">
+                What's behind the curtain?
+            </button>
         </div>
 
         <!-- ══════════════════════════════════════════════════
@@ -633,26 +635,44 @@
         ══════════════════════════════════════════════════ -->
         <div id="tab-builder" class="tab-panel active">
             <!-- Preview + Code side by side -->
-            <div style="display:flex;gap:1rem;align-items:flex-start">
+            <div style="display: flex; gap: 1rem; align-items: flex-start">
                 <!-- Left: preview -->
-                <div style="flex:1;min-width:0">
-                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Preview</div>
+                <div style="flex: 1; min-width: 0">
+                    <div
+                        class="ib-section-label"
+                        style="margin-top: 0; margin-bottom: 0"
+                    >
+                        Preview
+                    </div>
                     <div id="ib-error" class="ib-error"></div>
                     <div id="ib-output" class="ib-output-box"></div>
                     <button
                         class="ib-small-btn"
                         id="ib-download-svg"
-                        style="display:none;margin-top:6px;font-size:11px;height:22px;padding:0 8px"
-                    >⬇ svg</button>
+                        style="
+                            display: none;
+                            margin-top: 6px;
+                            font-size: 11px;
+                            height: 22px;
+                            padding: 0 8px;
+                        "
+                    >
+                        ⬇ svg
+                    </button>
                 </div>
                 <!-- Right: code -->
-                <div style="flex:1;min-width:0">
-                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Generated Matikzy</div>
+                <div style="flex: 1; min-width: 0">
+                    <div
+                        class="ib-section-label"
+                        style="margin-top: 0; margin-bottom: 0"
+                    >
+                        Generated Matikzy
+                    </div>
                     <textarea
                         id="ib-code-wrap"
                         spellcheck="false"
                         autocomplete="off"
-                        style="margin-top:0.4rem"
+                        style="margin-top: 0.4rem"
                     ></textarea>
                 </div>
             </div>
@@ -743,9 +763,13 @@
         <div id="tab-demo" class="tab-panel">
             <label class="field-label">Matikzy (by Šimtukas) (beta)</label>
             <div id="matikzy-editor" class="editor-wrap"></div>
-            <div style="display:flex;gap:8px;align-items:center">
-                <button id="compile-only-btn" class="action-btn">Compile</button>
-                <button id="compile-btn" class="action-btn">Compile &amp; Render</button>
+            <div style="display: flex; gap: 8px; align-items: center">
+                <button id="compile-only-btn" class="action-btn">
+                    Compile
+                </button>
+                <button id="compile-btn" class="action-btn">
+                    Compile &amp; Render
+                </button>
             </div>
             <div id="compile-error" class="error-msg"></div>
 
@@ -2051,7 +2075,8 @@
                 .getElementById("compile-only-btn")
                 .addEventListener("click", () => {
                     const matikzy = matikzyEditor.state.doc.toString().trim();
-                    const compileError = document.getElementById("compile-error");
+                    const compileError =
+                        document.getElementById("compile-error");
                     compileError.textContent = "";
                     try {
                         setTikz(compile(matikzy));

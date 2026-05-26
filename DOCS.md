@@ -189,8 +189,6 @@ point (1.6666;0.5) [] x-line
 
 ## `geometry`
 
-In progress...
-
 Start with `geometry` and then add components.
 
 ### Size
@@ -235,7 +233,7 @@ or
 
 ```
 geometry:
-triangle AAS 120 30 new ABC >>rot >>rot120 >>invert
+triangle AAS 120 30 5 new ABC >>rot >>rot120 >>invert
 ```
 
 `triangle + <congruence rule> + <3 parts> + new + <name> + [<rotations and inversions>]`
@@ -260,13 +258,13 @@ congruence rules:
   ┌──────┬───────────────────────────┐
   │ Mode │          Values           │
   ├──────┼───────────────────────────┤
-  │ SSS  │ side AB, side BC, side CA │
+  │ SSS  │ side CA, side AB, side BC │
   ├──────┼───────────────────────────┤
-  │ SAS  │ side AB, angle B, side BC │
+  │ SAS  │ side CA, angle A, side AB │
   ├──────┼───────────────────────────┤
-  │ ASA  │ angle A, side AB, angle B │
+  │ ASA  │ angle C, side CA, angle A │
   ├──────┼───────────────────────────┤
-  │ AAS  │ angle A, angle B, side BC │
+  │ AAS  │ angle C, angle A, side AB │
   └──────┴───────────────────────────┘
 ```
 
@@ -290,15 +288,15 @@ Includes rotation, like in triangle.
 geometry:
 quadrilateral square new ABCD >>rot45
 ```
-
+WIP:
 ```
-quadrilateral square new ABCD
-quadrilateral rectangle new ABCD
-quadrilateral parallelogram new ABCD
-quadrilateral rhombus new ABCD
-quadrilateral trapezoid new ABCD
-quadrilateral right trapezoid new ABCD
-quadrilateral isosceles trapezoid new ABCD
+quadrilateral square 4 new ABCD // this length is default, can be omitted
+quadrilateral rectangle 5.5 3 new ABCD // these lengths are default, can be omitted
+quadrilateral parallelogram 5 60 3 new ABCD // this side angle side are default, can be omitted
+quadrilateral rhombus 4 60 new ABCD // this side and angle are default, can be omitted
+quadrilateral trapezoid new ABCD // these lengths are default, can be omitted
+quadrilateral right trapezoid new ABCD // these lengths are default, can be omitted
+quadrilateral isosceles trapezoid new ABCD // these lengths are default, can be omitted
 quadrilateral SSSSD 1 2 3 4 2 new ABCD
 quadrilateral SSSDD 1 2 3 2 3 new ABCD
 quadrilateral SSAAA 3 3 90 90 90 new ABCD

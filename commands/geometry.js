@@ -587,7 +587,8 @@ function computeRawTriVerts(mode, values) {
   // A=(0,0) bottom-left, B=apex top, C=(sCA,0) bottom-right — clockwise A→B→C.
   const deg2rad = (d) => (d * Math.PI) / 180;
   if (mode === "SSS") {
-    const [sAB, sBC, sCA] = values;
+    // values: sCA, sAB, sBC
+    const [sCA, sAB, sBC] = values;
     const cosA = Math.max(
       -1,
       Math.min(1, (sAB * sAB + sCA * sCA - sBC * sBC) / (2 * sAB * sCA)),
@@ -600,32 +601,23 @@ function computeRawTriVerts(mode, values) {
     ];
   }
   if (mode === "SAS") {
-    const [sAB, angleB, sBC] = values;
-    const rB = deg2rad(angleB);
-    const sCA = Math.sqrt(
-      Math.max(0, sAB * sAB + sBC * sBC - 2 * sAB * sBC * Math.cos(rB)),
-    );
-    const cosA =
-      sCA > 1e-10
-        ? Math.max(
-            -1,
-            Math.min(1, (sAB * sAB + sCA * sCA - sBC * sBC) / (2 * sAB * sCA)),
-          )
-        : 1;
-    const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+    // values: sCA, angleA, sAB  — angle at A between CA and AB
+    const [sCA, angleA, sAB] = values;
+    const rA = deg2rad(angleA);
     return [
       { x: 0, y: 0 },
-      { x: sAB * cosA, y: sAB * sinA },
+      { x: sAB * Math.cos(rA), y: sAB * Math.sin(rA) },
       { x: sCA, y: 0 },
     ];
   }
   if (mode === "ASA") {
-    const [angleA, sAB, angleB] = values;
-    const angleC = 180 - angleA - angleB;
+    // values: angleC, sCA, angleA
+    const [angleC, sCA, angleA] = values;
+    const angleB = 180 - angleA - angleC;
     const rA = deg2rad(angleA),
       rB = deg2rad(angleB),
       rC = deg2rad(angleC);
-    const sCA = Math.sin(rC) > 1e-10 ? (sAB * Math.sin(rB)) / Math.sin(rC) : 0;
+    const sAB = Math.sin(rB) > 1e-10 ? (sCA * Math.sin(rC)) / Math.sin(rB) : 0;
     return [
       { x: 0, y: 0 },
       { x: sAB * Math.cos(rA), y: sAB * Math.sin(rA) },
@@ -633,13 +625,13 @@ function computeRawTriVerts(mode, values) {
     ];
   }
   if (mode === "AAS") {
-    const [angleA, angleB, sBC] = values;
-    const angleC = 180 - angleA - angleB;
+    // values: angleC, angleA, sAB
+    const [angleC, angleA, sAB] = values;
+    const angleB = 180 - angleA - angleC;
     const rA = deg2rad(angleA),
+      rB = deg2rad(angleB),
       rC = deg2rad(angleC);
-    const sinA = Math.sin(rA);
-    const sAB = sinA > 1e-10 ? (sBC * Math.sin(rC)) / sinA : 0;
-    const sCA = sinA > 1e-10 ? (sBC * Math.sin(deg2rad(angleB))) / sinA : 0;
+    const sCA = Math.sin(rC) > 1e-10 ? (sAB * Math.sin(rB)) / Math.sin(rC) : 0;
     return [
       { x: 0, y: 0 },
       { x: sAB * Math.cos(rA), y: sAB * Math.sin(rA) },
@@ -729,14 +721,14 @@ const QUAD_VERTS = {
   ],
   parallelogram: [
     [0, 0],
-    [1.5, 3],
-    [6.5, 3],
+    [1.5, 2.598],
+    [6.5, 2.598],
     [5, 0],
   ],
   rhombus: [
     [0, 0],
-    [1.368, 3.759],
-    [5.368, 3.759],
+    [2, 3.464],
+    [6, 3.464],
     [4, 0],
   ],
   trapezoid: [
@@ -2340,6 +2332,106 @@ function compile(content, size) {
     },
   );
 
+  // Register cube vertex positions (must precede pointCmds so lookupPt finds them).
+  if (cubeCmds.length > 0) {
+    const defaultS = { small: 2.46, medium: 4, large: 6.15 }[size];
+    for (const { pts, sideLen } of cubeCmds) {
+      const cubeS  = sideLen ?? defaultS;
+      const cubeDX = cubeS * 0.5;
+      const cubeDY = cubeS * 0.325;
+      const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
+      newPtsMap[pA]  = { x: 0,                 y: 0,                pos: "below left"  };
+      newPtsMap[pB]  = { x: cubeDX,            y: cubeDY,           pos: "below"       };
+      newPtsMap[pC]  = { x: cubeS + cubeDX,    y: cubeDY,           pos: "below right" };
+      newPtsMap[pD]  = { x: cubeS,             y: 0,                pos: "below right" };
+      newPtsMap[pA1] = { x: 0,                 y: cubeS,            pos: "above left"  };
+      newPtsMap[pB1] = { x: cubeDX,            y: cubeS + cubeDY,   pos: "above left"  };
+      newPtsMap[pC1] = { x: cubeS + cubeDX,    y: cubeS + cubeDY,   pos: "above right" };
+      newPtsMap[pD1] = { x: cubeS,             y: cubeS,            pos: "above"       };
+    }
+  }
+
+  // Register pyramid vertex positions (must precede pointCmds).
+  if (pyramidCmds.length > 0) {
+    const cubeScale = { small: 2.46, medium: 4, large: 6.15 }[size];
+    const sizeScale = cubeScale / 4; // 1.0 at medium; explicit dims are in medium units
+    for (const { pts, internalD, baseLen, height, isRight, triBase, rotCount } of pyramidCmds) {
+      const [pS, pA, pB, pC] = pts;
+      if (triBase) {
+        const L = baseLen != null ? baseLen * sizeScale : cubeScale * 1.75;
+        const H = height  != null ? height  * sizeScale : cubeScale * 1.5;
+        const bY = L * 2.25 / 7;
+        if (rotCount === 1) {
+          const rotW = L * 6 / 7;
+          newPtsMap[pA] = { x: 0,             y: 0,            pos: "below left"  };
+          newPtsMap[pB] = { x: rotW * 11/18,  y: L * 2.609/7,  pos: "left"        };
+          newPtsMap[pC] = { x: rotW,          y: 0,            pos: "below right" };
+          newPtsMap[pS] = { x: rotW / 2,      y: H,            pos: "above"       };
+        } else if (rotCount >= 2) {
+          newPtsMap[pA] = { x: L * 4/7,  y: -L / 14,  pos: "below"  };
+          newPtsMap[pB] = { x: 0,        y: bY,        pos: "left"   };
+          newPtsMap[pC] = { x: L * 6/7,  y: bY,        pos: "right"  };
+          newPtsMap[pS] = { x: L * 3/7,  y: H,         pos: "above"  };
+        } else {
+          const aX = L * 2 / 7;
+          newPtsMap[pA] = { x: aX, y: 0,   pos: "below"  };
+          newPtsMap[pB] = { x: 0,  y: bY,  pos: "left"   };
+          newPtsMap[pC] = { x: L,  y: bY,  pos: "right"  };
+          newPtsMap[pS] = { x: (aX + L) / 3, y: H, pos: "above" };
+        }
+      } else {
+        const L = baseLen != null ? baseLen * sizeScale : cubeScale;
+        const H = height  != null ? height  * sizeScale : cubeScale;
+        const dX = L * 0.5;
+        const dY = L * 0.325;
+        newPtsMap[pA]        = { x: 0,      y: 0,   pos: "below left"  };
+        newPtsMap[pB]        = { x: dX,     y: dY,  pos: "left"        };
+        newPtsMap[pC]        = { x: L,      y: 0,   pos: "below right" };
+        newPtsMap[internalD] = { x: L + dX, y: dY                      };
+        newPtsMap[pS]        = isRight
+          ? { x: dX,              y: dY + H,     pos: "above left" }
+          : { x: (L + dX) / 2,   y: dY / 2 + H, pos: "above"      };
+      }
+    }
+  }
+
+  // Expand pyramid into draw commands — just edges, solid or dashed.
+  for (const { pts, internalD, triBase, rotCount } of pyramidCmds) {
+    const [pS, pA, pB, pC] = pts;
+    const seg = (a, b, dashed = false) =>
+      drawCmds.push({ drawType: "segment", pts: [a, b], lineStyle: dashed ? "dashed" : null });
+    if (triBase) {
+      if (rotCount === 1) {
+        seg(pA, pB, true);  seg(pB, pC, true);  seg(pC, pA);
+        seg(pC, pS);        seg(pA, pS);         seg(pB, pS, true);
+      } else {
+        // default and >>rot >>rot
+        seg(pC, pA);        seg(pA, pB);         seg(pB, pC, true);
+        seg(pC, pS);        seg(pA, pS);         seg(pB, pS);
+      }
+    } else {
+      const pD = internalD;
+      seg(pA, pS);   seg(pS, pC);   seg(pC, pA);
+      seg(pB, pS, true);  seg(pS, pD);   seg(pC, pD);
+      seg(pD, pB, true);  seg(pA, pB, true);
+    }
+  }
+
+  // Register cuboid vertex positions (must precede pointCmds).
+  for (const { pts, L, W, H } of cuboidCmds) {
+    const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
+    const dX = W / 2;
+    const dY = 1.3 * W / 4;
+    newPtsMap[pA]  = { x: 0,       y: 0,        pos: "below left"  };
+    newPtsMap[pB]  = { x: dX,      y: dY,       pos: "below"       };
+    newPtsMap[pC]  = { x: L + dX,  y: dY,       pos: "below right" };
+    newPtsMap[pD]  = { x: L,       y: 0,        pos: "below right" };
+    newPtsMap[pA1] = { x: 0,       y: H,        pos: "above left"  };
+    newPtsMap[pB1] = { x: dX,      y: H + dY,   pos: "above left"  };
+    newPtsMap[pC1] = { x: L + dX,  y: H + dY,   pos: "above right" };
+    newPtsMap[pD1] = { x: L,       y: H,        pos: "above"       };
+  }
+
   // Compute positions for explicit points on sides.
   for (const { sideSpec, ratioStr, name } of pointCmds) {
     const [r1, r2] = ratioStr.split(":").map(Number);
@@ -2395,7 +2487,7 @@ function compile(content, size) {
   for (const { circleName, angleStr, name } of circlePointCmds) {
     const circleCmd = circleCmds.find((c) => c.name === circleName);
     if (!circleCmd) continue;
-    const center = newPtsMap[circleCmd.center];
+    const center = lookupPt(circleCmd.center);
     if (!center) continue;
     const R = getCircleR(circleCmd);
     const hScale = circleCmd.hScale ?? 1;
@@ -2406,89 +2498,6 @@ function compile(content, size) {
       originX: center.x,
       originY: center.y,
     };
-  }
-
-  // Register cube vertex positions.
-  if (cubeCmds.length > 0) {
-    const defaultS = { small: 2.46, medium: 4, large: 6.15 }[size];
-    for (const { pts, sideLen } of cubeCmds) {
-      const cubeS  = sideLen ?? defaultS;
-      const cubeDX = cubeS * 0.5;
-      const cubeDY = cubeS * 0.325;
-      const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
-      // Bottom face ABCD, top face A1B1C1D1 (each directly above its partner)
-      newPtsMap[pA]  = { x: 0,                 y: 0,                pos: "below left"  };
-      newPtsMap[pB]  = { x: cubeDX,            y: cubeDY,           pos: "below"       };
-      newPtsMap[pC]  = { x: cubeS + cubeDX,    y: cubeDY,           pos: "below right" };
-      newPtsMap[pD]  = { x: cubeS,             y: 0,                pos: "below right" };
-      newPtsMap[pA1] = { x: 0,                 y: cubeS,            pos: "above left"  };
-      newPtsMap[pB1] = { x: cubeDX,            y: cubeS + cubeDY,   pos: "above left"  };
-      newPtsMap[pC1] = { x: cubeS + cubeDX,    y: cubeS + cubeDY,   pos: "above right" };
-      newPtsMap[pD1] = { x: cubeS,             y: cubeS,            pos: "above"       };
-    }
-  }
-
-  // Register pyramid vertex positions.
-  if (pyramidCmds.length > 0) {
-    const cubeScale = { small: 2.46, medium: 4, large: 6.15 }[size];
-    for (const { pts, internalD, baseLen, height, isRight, triBase, rotCount } of pyramidCmds) {
-      const [pS, pA, pB, pC] = pts;
-      if (triBase) {
-        const L = baseLen ?? cubeScale * 1.75;
-        const H = height ?? cubeScale * 1.5;
-        const bY = L * 2.25 / 7;
-        if (rotCount === 1) {
-          // Rotated view 1: A-C is the solid front-bottom edge; B is the hidden back vertex.
-          const rotW = L * 6 / 7;
-          newPtsMap[pA] = { x: 0,             y: 0,            pos: "below left"  };
-          newPtsMap[pB] = { x: rotW * 11/18,  y: L * 2.609/7,  pos: "left"        };
-          newPtsMap[pC] = { x: rotW,          y: 0,            pos: "below right" };
-          newPtsMap[pS] = { x: rotW / 2,      y: H,            pos: "above"       };
-        } else if (rotCount >= 2) {
-          // Rotated view 2: B-C dashed (same topology as no-rot), different positions.
-          newPtsMap[pA] = { x: L * 4/7,  y: -L / 14,  pos: "below"  };
-          newPtsMap[pB] = { x: 0,        y: bY,        pos: "left"   };
-          newPtsMap[pC] = { x: L * 6/7,  y: bY,        pos: "right"  };
-          newPtsMap[pS] = { x: L * 3/7,  y: H,         pos: "above"  };
-        } else {
-          // Default: A=front-bottom, B=left, C=right; B-C is the hidden base edge.
-          const aX = L * 2 / 7;
-          newPtsMap[pA] = { x: aX, y: 0,   pos: "below"  };
-          newPtsMap[pB] = { x: 0,  y: bY,  pos: "left"   };
-          newPtsMap[pC] = { x: L,  y: bY,  pos: "right"  };
-          newPtsMap[pS] = { x: (aX + L) / 3, y: H, pos: "above" };
-        }
-      } else {
-        // Quad pyramid: A=front-left, B=back-left, C=front-right; D auto-computed.
-        const L = baseLen ?? cubeScale;
-        const H = height ?? cubeScale;
-        const dX = L * 0.5;
-        const dY = L * 0.325;
-        newPtsMap[pA]        = { x: 0,      y: 0,   pos: "below left"  };
-        newPtsMap[pB]        = { x: dX,     y: dY,  pos: "left"        };
-        newPtsMap[pC]        = { x: L,      y: 0,   pos: "below right" };
-        newPtsMap[internalD] = { x: L + dX, y: dY                      };
-        newPtsMap[pS]        = isRight
-          ? { x: dX,              y: dY + H,     pos: "above left" }
-          : { x: (L + dX) / 2,   y: dY / 2 + H, pos: "above"      };
-      }
-    }
-  }
-
-  // Register cuboid vertex positions. L=AD (length), W=AB (width/depth), H=AA1 (height).
-  // Depth offsets scale proportionally with W (base: W=4 → dX=2, dY=1.3).
-  for (const { pts, L, W, H } of cuboidCmds) {
-    const [pA, pB, pC, pD, pA1, pB1, pC1, pD1] = pts;
-    const dX = W / 2;
-    const dY = 1.3 * W / 4;
-    newPtsMap[pA]  = { x: 0,       y: 0,        pos: "below left"  };
-    newPtsMap[pB]  = { x: dX,      y: dY,       pos: "below"       };
-    newPtsMap[pC]  = { x: L + dX,  y: dY,       pos: "below right" };
-    newPtsMap[pD]  = { x: L,       y: 0,        pos: "below right" };
-    newPtsMap[pA1] = { x: 0,       y: H,        pos: "above left"  };
-    newPtsMap[pB1] = { x: dX,      y: H + dY,   pos: "above left"  };
-    newPtsMap[pC1] = { x: L + dX,  y: H + dY,   pos: "above right" };
-    newPtsMap[pD1] = { x: L,       y: H,        pos: "above"       };
   }
 
   // Compute foot-of-perpendicular for "line distance" commands.
@@ -2525,7 +2534,7 @@ function compile(content, size) {
   for (const { circleName, pointName, newName } of tangentLineCmds) {
     const circleCmd = circleCmds.find((c) => c.name === circleName);
     if (!circleCmd) continue;
-    const center = newPtsMap[circleCmd.center];
+    const center = lookupPt(circleCmd.center);
     const pt = lookupPt(pointName);
     if (!center || !pt) continue;
     const rdx = pt.x - center.x,
@@ -3124,47 +3133,6 @@ function compile(content, size) {
     }
   }
 
-  // Pyramid: draw edges with hidden-line dashing.
-  if (pyramidCmds.length > 0) {
-    lines.push("");
-    for (const { pts, internalD, triBase, rotCount } of pyramidCmds) {
-      const [pS, pA, pB, pC] = pts;
-      const w  = "line width=1.5pt";
-      const wd = "line width=1.5pt, dashed";
-      const e = (s, a, b) => `\\draw[${s}] (${f(newPtsMap[a].x)},${f(newPtsMap[a].y)}) -- (${f(newPtsMap[b].x)},${f(newPtsMap[b].y)});`;
-      if (triBase) {
-        if (rotCount === 1) {
-          // Rot 1: C-A solid (front), A-B and B-C dashed, B-S dashed.
-          lines.push(e(wd, pA, pB));
-          lines.push(e(wd, pB, pC));
-          lines.push(e(w,  pC, pA));
-          lines.push(e(w,  pC, pS));
-          lines.push(e(w,  pA, pS));
-          lines.push(e(wd, pB, pS));
-        } else {
-          // Default and rot 2: B-C dashed, all lateral solid.
-          lines.push(e(w,  pC, pA));
-          lines.push(e(w,  pA, pB));
-          lines.push(e(wd, pB, pC));
-          lines.push(e(w,  pC, pS));
-          lines.push(e(w,  pA, pS));
-          lines.push(e(w,  pB, pS));
-        }
-      } else {
-        const pD = internalD;
-        // Quad pyramid: B and its edges are hidden.
-        lines.push(e(w,  pA, pS));
-        lines.push(e(w,  pS, pC));
-        lines.push(e(w,  pC, pA));
-        lines.push(e(wd, pB, pS));
-        lines.push(e(w,  pS, pD));
-        lines.push(e(w,  pC, pD));
-        lines.push(e(wd, pD, pB));
-        lines.push(e(wd, pA, pB));
-      }
-    }
-  }
-
   // Tangent lines: drawn as full lines clipped to the padded bounding box.
   if (tangentLineCmds.length > 0) {
     lines.push("");
@@ -3174,7 +3142,7 @@ function compile(content, size) {
       if (lp1 && lp2 && segmentCoversLine(lp1, lp2)) continue;
       const circleCmd = circleCmds.find((c) => c.name === circleName);
       if (!circleCmd) continue;
-      const center = newPtsMap[circleCmd.center];
+      const center = lookupPt(circleCmd.center);
       const pt = lookupPt(pointName);
       if (!center || !pt) continue;
       const rdx = pt.x - center.x,
