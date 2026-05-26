@@ -250,7 +250,7 @@ side types:
 - isosceles (special vertex - different one, default B, if acute)
 - equilateral (only acute)
 
-congruence rules:
+congruence rules (starts with the vertex C, goes clockwise):
 
 - SSS, SAS, ASA and AAS.
 
@@ -294,21 +294,35 @@ quadrilateral square 4 new ABCD // this length is default, can be omitted
 quadrilateral rectangle 5.5 3 new ABCD // these lengths are default, can be omitted
 quadrilateral parallelogram 5 60 3 new ABCD // this side angle side are default, can be omitted
 quadrilateral rhombus 4 60 new ABCD // this side and angle are default, can be omitted
-quadrilateral trapezoid new ABCD // these lengths are default, can be omitted
-quadrilateral right trapezoid new ABCD // these lengths are default, can be omitted
-quadrilateral isosceles trapezoid new ABCD // these lengths are default, can be omitted
+quadrilateral trapezoid 30 12 60 4 new ABCD // these lengths are default, can be omitted
+quadrilateral right trapezoid 30 10 3.5 new ABCD // these lengths are default, can be omitted
+quadrilateral isosceles trapezoid 60 8 4 new ABCD // these lengths are default, can be omitted
 quadrilateral SSSSD 1 2 3 4 2 new ABCD
 quadrilateral SSSDD 1 2 3 2 3 new ABCD
-quadrilateral SSAAA 3 3 90 90 90 new ABCD
-quadrilateral SSSAA 3 3 3 90 90 new ABCD
+quadrilateral ASASA 90 3 90 3 90 new ABCD
+quadrilateral SASAS 3 90 3 90 3 new ABCD
 ```
 
-Free form (D-diagonal):
+Free form (D-diagonal) (listing starts with bottom right (D vertex), goes clockwise):
 
 - SSSSD
 - SSSDD
-- SSAAA (adjacent S)
-- SSSAA (included A)
+- ASASA
+- SASASSSAAA
+
+```
+  ┌───────┬──────────────────────────────────────────────────────┐
+  │ Mode  │          Values                                      │
+  ├───────┼──────────────────────────────────────────────────────┤
+  │ SSSSD │ side DA, side AB, side BC, side CD, diagonal DB      │
+  ├───────┼──────────────────────────────────────────────────────┤
+  │ SSSDD │ side DA, angle AB, side BC, diagonal DB, diagonal AC │
+  ├───────┼──────────────────────────────────────────────────────┤
+  │ ASASA │ angle D, side DA, angle A, side AB, angle B          │
+  ├───────┼──────────────────────────────────────────────────────┤
+  │ SASAS │ side DA, angle A, side AB, angle B, side BC          │
+  └───────┴──────────────────────────────────────────────────────┘
+```
 
 ### 3d as basis
 
@@ -790,3 +804,9 @@ parabola n_1 n_2 -- down
 ```
 
 ![alt text](img/image-9.png)
+
+### Issues
+
+- not possible to do hatching from -infty to +infty
+- not possible to have no points at all (plain line)
+- not possible to adjust the segment lengths / distances between points

@@ -733,21 +733,21 @@ const QUAD_VERTS = {
   ],
   trapezoid: [
     [0, 0],
-    [0.5, 3],
-    [4, 3],
-    [5, 0],
+    [2, 3.464],
+    [6, 3.464],
+    [12, 0],
   ],
   "right trapezoid": [
     [0, 0],
-    [0, 3],
-    [3.5, 3],
-    [5, 0],
+    [0, 3.5],
+    [3.938, 3.5],
+    [10, 0],
   ],
   "isosceles trapezoid": [
     [0, 0],
-    [1, 3],
-    [4, 3],
-    [5, 0],
+    [2, 3.464],
+    [6, 3.464],
+    [8, 0],
   ],
 };
 const QUAD_SCALE = { small: 0.75, medium: 1.0, large: 1.375 };
@@ -2163,6 +2163,45 @@ function compile(content, size) {
     positions = [];
   }
 
+  // Effective TikZ scale factor for the shape — used to scale user-specified distances
+  // (e.g. "point AB A 3 new X") so they stay in proportion at small/medium/large.
+  let geoScale = 1.0;
+  if (triMode) {
+    // Congruence-rule triangle: scale = TRI_LONGEST_TARGET / longest raw side.
+    const rawVerts = computeRawTriVerts(triMode, triValues);
+    if (rawVerts) {
+      const sides = [
+        Math.hypot(rawVerts[1].x - rawVerts[0].x, rawVerts[1].y - rawVerts[0].y),
+        Math.hypot(rawVerts[2].x - rawVerts[1].x, rawVerts[2].y - rawVerts[1].y),
+        Math.hypot(rawVerts[0].x - rawVerts[2].x, rawVerts[0].y - rawVerts[2].y),
+      ];
+      const maxSide = Math.max(...sides);
+      if (maxSide > 1e-10) geoScale = TRI_LONGEST_TARGET[size] / maxSide;
+    }
+  } else if (hasTriangle) {
+    // Typed triangle (scalene/isosceles/equilateral): consistent per-size ratio.
+    // Derived from COORDS table: small≈8/13, medium=1, large≈20/13.
+    geoScale = { small: 8 / 13, medium: 1.0, large: 20 / 13 }[size];
+  } else if (hasQuad) {
+    if (quadResult.quadMode) {
+      // Freeform quad: scale = QUAD_FREEFORM_TARGET / longest raw side.
+      const rawVerts = computeRawQuadVerts(quadResult.quadMode, quadResult.quadValues);
+      if (rawVerts) {
+        const sides = [
+          Math.hypot(rawVerts[1].x - rawVerts[0].x, rawVerts[1].y - rawVerts[0].y),
+          Math.hypot(rawVerts[2].x - rawVerts[1].x, rawVerts[2].y - rawVerts[1].y),
+          Math.hypot(rawVerts[3].x - rawVerts[2].x, rawVerts[3].y - rawVerts[2].y),
+          Math.hypot(rawVerts[0].x - rawVerts[3].x, rawVerts[0].y - rawVerts[3].y),
+        ];
+        const maxSide = Math.max(...sides);
+        if (maxSide > 1e-10) geoScale = QUAD_FREEFORM_TARGET[size] / maxSide;
+      }
+    } else {
+      // Named quad type: flat scale factor.
+      geoScale = QUAD_SCALE[size];
+    }
+  }
+
   // Shared size-scaled mark/arc constants (used by both angle labels and mark rendering).
   const arcBase = 0.35;
   const arcGap = 0.15;
@@ -2514,6 +2553,7 @@ function compile(content, size) {
   }
 
   // Compute linear points: point on a line at a given distance from a reference point.
+  // dist is specified in medium-scale units; multiply by geoScale to match rendered size.
   for (const { lineSpec, refPt, dist, left, newName } of linearPointCmds) {
     const A = lookupPt(lineSpec[0]);
     const B = lookupPt(lineSpec[1]);
@@ -2524,9 +2564,10 @@ function compile(content, size) {
     if (len < 1e-10) continue;
     const ux = ex / len, uy = ey / len;
     const sign = left ? -1 : 1;
+    const scaledDist = dist * geoScale;
     newPtsMap[newName] = {
-      x: R.x + sign * dist * ux,
-      y: R.y + sign * dist * uy,
+      x: R.x + sign * scaledDist * ux,
+      y: R.y + sign * scaledDist * uy,
     };
   }
 
