@@ -743,10 +743,15 @@
         <div id="tab-demo" class="tab-panel">
             <label class="field-label">Matikzy (by Šimtukas) (beta)</label>
             <div id="matikzy-editor" class="editor-wrap"></div>
-            <button id="compile-btn" class="action-btn">
-                Compile &amp; Render
-            </button>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button id="compile-only-btn" class="action-btn">Compile</button>
+                <button id="compile-btn" class="action-btn">Compile &amp; Render</button>
+            </div>
             <div id="compile-error" class="error-msg"></div>
+
+            <label class="field-label">TikZ</label>
+            <div id="tikz-editor" class="editor-wrap"></div>
+            <button id="render-btn" class="action-btn">Render</button>
 
             <div id="demo-error" class="error-msg"></div>
             <div id="demo-output"></div>
@@ -766,10 +771,6 @@
             >
                 Download SVG
             </button>
-
-            <label class="field-label">TikZ</label>
-            <div id="tikz-editor" class="editor-wrap"></div>
-            <button id="render-btn" class="action-btn">Render</button>
         </div>
 
         <script type="module">
@@ -2046,6 +2047,18 @@
                 });
             }
 
+            document
+                .getElementById("compile-only-btn")
+                .addEventListener("click", () => {
+                    const matikzy = matikzyEditor.state.doc.toString().trim();
+                    const compileError = document.getElementById("compile-error");
+                    compileError.textContent = "";
+                    try {
+                        setTikz(compile(matikzy));
+                    } catch (e) {
+                        compileError.textContent = e.message;
+                    }
+                });
             document
                 .getElementById("compile-btn")
                 .addEventListener("click", compileMatikzy);
