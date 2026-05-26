@@ -297,7 +297,7 @@ function parseQuadrilateral(content) {
     };
   }
 
-  // Named type mode: quadrilateral square/rectangle/… [ABCD] [>>transforms]
+  // Named type mode: quadrilateral square/rectangle/… [dims…] [new ABCD] [>>transforms]
   let transformStart = words.length;
   for (let i = 1; i < words.length; i++) {
     if (words[i].startsWith(">>")) {
@@ -323,6 +323,9 @@ function parseQuadrilateral(content) {
     labelStr = mainWords[newIdx + 1];
   }
 
+  const isNumericWord = (w) => /^-?\d*\.?\d+$/.test(w);
+  const typeNumerics = [];
+
   let i = 0;
   while (i < mainWords.length) {
     if (newIdx !== -1 && (i === newIdx || i === newIdx + 1)) {
@@ -341,6 +344,9 @@ function parseQuadrilateral(content) {
         : (unknown.push(w), i++);
     } else if (QUAD_SINGLE_TYPES.has(w)) {
       quadType === null ? ((quadType = w), i++) : (unknown.push(w), i++);
+    } else if (isNumericWord(w)) {
+      typeNumerics.push(Number(w));
+      i++;
     } else {
       unknown.push(w);
       i++;
@@ -351,7 +357,7 @@ function parseQuadrilateral(content) {
   return {
     quadType,
     quadMode: null,
-    quadValues: null,
+    quadValues: typeNumerics.length > 0 ? typeNumerics : null,
     labelStr,
     quadTransforms,
     unknown,
@@ -787,9 +793,63 @@ function quadLabelPos(x, y, cx, cy) {
   return vert + horiz;
 }
 
-function computeQuadPositions(quadType, quadTransforms, size) {
+// Compute raw (medium-scale) vertices for a named quad type with custom dimensions.
+// Returns [[x,y], ...] same format as QUAD_VERTS, or null to fall back to defaults.
+function computeNamedQuadVerts(quadType, values) {
+  const deg = (d) => (d * Math.PI) / 180;
+  switch (quadType) {
+    case "square": {
+      const [s = 4] = values;
+      return [[0, 0], [0, s], [s, s], [s, 0]];
+    }
+    case "rectangle": {
+      const [w = 5.5, h = 3] = values;
+      return [[0, 0], [0, h], [w, h], [w, 0]];
+    }
+    case "parallelogram": {
+      // sideCA, angleA, sideAB
+      const [sCA = 5, angleA = 60, sAB = 3] = values;
+      const dx = sAB * Math.cos(deg(angleA));
+      const dy = sAB * Math.sin(deg(angleA));
+      return [[0, 0], [dx, dy], [dx + sCA, dy], [sCA, 0]];
+    }
+    case "rhombus": {
+      // side, angle (at A)
+      const [side = 4, angle = 60] = values;
+      const dx = side * Math.cos(deg(angle));
+      const dy = side * Math.sin(deg(angle));
+      return [[0, 0], [dx, dy], [dx + side, dy], [side, 0]];
+    }
+    case "trapezoid": {
+      // angleD, bottom, angleA, sideAB
+      const [angleD = 30, bottom = 12, angleA = 60, sideAB = 4] = values;
+      const h = sideAB * Math.sin(deg(angleA));
+      const leftOff = sideAB * Math.cos(deg(angleA));
+      const rightOff = h / Math.tan(deg(angleD));
+      return [[0, 0], [leftOff, h], [bottom - rightOff, h], [bottom, 0]];
+    }
+    case "right trapezoid": {
+      // angleD, bottom, sideAB (vertical left height)
+      const [angleD = 30, bottom = 10, sideAB = 3.5] = values;
+      const rightOff = sideAB / Math.tan(deg(angleD));
+      return [[0, 0], [0, sideAB], [bottom - rightOff, sideAB], [bottom, 0]];
+    }
+    case "isosceles trapezoid": {
+      // angle (at D = at A), bottom, side (leg)
+      const [angle = 60, bottom = 8, side = 4] = values;
+      const h = side * Math.sin(deg(angle));
+      const off = side * Math.cos(deg(angle));
+      return [[0, 0], [off, h], [bottom - off, h], [bottom, 0]];
+    }
+    default:
+      return null;
+  }
+}
+
+function computeQuadPositions(quadType, quadTransforms, size, quadValues) {
   const scale = QUAD_SCALE[size];
-  const verts = QUAD_VERTS[quadType] ?? QUAD_VERTS.square;
+  const rawVerts = (quadValues && computeNamedQuadVerts(quadType, quadValues)) ?? null;
+  const verts = rawVerts ?? (QUAD_VERTS[quadType] ?? QUAD_VERTS.square);
   const raw = verts.map(([x, y]) => ({ x: x * scale, y: y * scale }));
   const transformed = applyQuadTransforms(raw, quadTransforms);
   const cx = transformed.reduce((acc, p) => acc + p.x, 0) / 4;
@@ -2158,6 +2218,7 @@ function compile(content, size) {
           quadResult.quadType,
           quadResult.quadTransforms,
           size,
+          quadResult.quadValues,
         );
   } else {
     positions = [];

@@ -288,7 +288,7 @@ Includes rotation, like in triangle.
 geometry:
 quadrilateral square new ABCD >>rot45
 ```
-WIP:
+
 ```
 quadrilateral square 4 new ABCD // this length is default, can be omitted
 quadrilateral rectangle 5.5 3 new ABCD // these lengths are default, can be omitted
