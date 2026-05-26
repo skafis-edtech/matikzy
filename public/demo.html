@@ -7,32 +7,28 @@
             src="https://analitika.simtukas.lt/script.js"
             data-website-id="4480c330-1256-45c7-9a73-0b87f38944c4"
         ></script>
-        <!-- SEO -->
-        <title>Šimtukas Tikz – Matikzy to TikZ Renderer</title>
+        <title>MaTikZy – Math to TikZ for school</title>
         <meta
             name="description"
-            content="Šimtukas Tikz is an open-source tool to convert Matikzy syntax into TikZ and render it instantly in your browser."
+            content="MaTikZy is an open-source language, used for school mathematics graphics, by generating a basic TikZ code."
         />
         <link rel="canonical" href="https://github.com/skafis-edtech/matikzy" />
         <meta
             name="keywords"
-            content="TikZ, LaTeX, math diagrams, Matikzy, renderer, open source, math visualization"
+            content="TikZ, LaTeX, math diagrams, MaTikZy, renderer, open source, math visualization"
         />
-        <meta name="author" content="Šimtukas Tikz" />
+        <meta name="author" content="MaTikZy" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-        <!-- Open Graph -->
-        <meta property="og:title" content="Šimtukas Tikz" />
+        <meta property="og:title" content="MaTikZy" />
         <meta
             property="og:description"
-            content="Convert Matikzy syntax into TikZ and render diagrams instantly."
+            content="Convert MaTikZy syntax into TikZ and render diagrams instantly."
         />
         <meta property="og:type" content="website" />
         <meta
             property="og:url"
             content="https://github.com/skafis-edtech/matikzy"
         />
-
         <meta name="theme-color" content="#3b6fd4" />
 
         <style>
@@ -49,7 +45,6 @@
                 --output-bg: #ffffff;
                 --stats-val: #111;
             }
-
             [data-theme="dark"] {
                 --bg: #111318;
                 --surface: #1e2128;
@@ -63,11 +58,9 @@
                 --output-bg: #1e2128;
                 --stats-val: #e2e4ea;
             }
-
             * {
                 box-sizing: border-box;
             }
-
             body {
                 font-family: monospace;
                 max-width: 900px;
@@ -79,20 +72,17 @@
                     background 0.2s,
                     color 0.2s;
             }
-
             header {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 margin-bottom: 1.25rem;
             }
-
             h2 {
                 margin: 0;
                 font-size: 1.4rem;
                 letter-spacing: 0.03em;
             }
-
             #theme-toggle {
                 background: none;
                 border: 1px solid var(--border);
@@ -111,7 +101,360 @@
                 color: var(--accent);
             }
 
-            /* CodeMirror editor wrapper */
+            /* ── Tabs ── */
+            .tabs {
+                display: flex;
+                border-bottom: 2px solid var(--border);
+                margin-bottom: 1.5rem;
+                gap: 0;
+            }
+            .tab-btn {
+                background: none;
+                border: none;
+                border-bottom: 2px solid transparent;
+                margin-bottom: -2px;
+                padding: 0.55rem 1.2rem;
+                font-size: 13px;
+                font-family: monospace;
+                cursor: pointer;
+                color: var(--text-muted);
+                transition:
+                    color 0.15s,
+                    border-color 0.15s;
+            }
+            .tab-btn.active {
+                color: var(--accent);
+                border-bottom-color: var(--accent);
+                font-weight: bold;
+            }
+            .tab-btn:hover:not(.active) {
+                color: var(--text);
+            }
+            .tab-panel {
+                display: none;
+            }
+            .tab-panel.active {
+                display: block;
+            }
+
+            /* ── Interval Builder ── */
+            .ib-section-label {
+                font-size: 11px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.07em;
+                color: var(--text-muted);
+                margin: 1.2rem 0 0.4rem;
+            }
+            #ib-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex-wrap: wrap;
+                padding: 1rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                background: var(--surface);
+                min-height: 72px;
+            }
+            .ib-seg {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+            }
+            .ib-seg-sign {
+                display: flex;
+                gap: 3px;
+            }
+            .ib-seg-btn {
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text);
+                font-family: monospace;
+                font-size: 13px;
+                width: 28px;
+                height: 28px;
+                cursor: pointer;
+                transition:
+                    background 0.1s,
+                    border-color 0.1s;
+                padding: 0;
+            }
+            .ib-seg-btn:hover {
+                border-color: var(--accent);
+            }
+            .ib-seg-btn.active-plus {
+                background: #d4edda;
+                color: #155724;
+                border-color: #28a745;
+            }
+            .ib-seg-btn.active-minus {
+                background: #f8d7da;
+                color: #721c24;
+                border-color: #dc3545;
+            }
+            .ib-seg-btn.active-hatch {
+                background: #fff3cd;
+                color: #856404;
+                border-color: #ffc107;
+            }
+            [data-theme="dark"] .ib-seg-btn.active-plus {
+                background: #1a3a22;
+                color: #7dd69a;
+                border-color: #28a745;
+            }
+            [data-theme="dark"] .ib-seg-btn.active-minus {
+                background: #3a1a1a;
+                color: #e88;
+                border-color: #dc3545;
+            }
+            [data-theme="dark"] .ib-seg-btn.active-hatch {
+                background: #3a3010;
+                color: #f0c040;
+                border-color: #ffc107;
+            }
+            .ib-seg-dir {
+                display: flex;
+                gap: 2px;
+            }
+            .ib-dir-btn {
+                border: 1px solid var(--border);
+                border-radius: 3px;
+                background: var(--bg);
+                color: var(--text-muted);
+                font-family: monospace;
+                font-size: 10px;
+                width: 20px;
+                height: 18px;
+                cursor: pointer;
+                padding: 0;
+                transition: background 0.1s;
+            }
+            .ib-dir-btn.active {
+                background: var(--accent);
+                color: #fff;
+                border-color: var(--accent);
+            }
+
+            .ib-pt {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 3px;
+                position: relative;
+            }
+            .ib-pt-row {
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            }
+            .ib-pt-type {
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text);
+                font-family: monospace;
+                font-size: 11px;
+                height: 28px;
+                cursor: pointer;
+                padding: 0 4px;
+            }
+            .ib-pt-label {
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text);
+                font-family: monospace;
+                font-size: 13px;
+                width: 54px;
+                height: 28px;
+                padding: 0 5px;
+            }
+            .ib-pt-label:focus {
+                outline: none;
+                border-color: var(--accent);
+            }
+            .ib-pt-remove {
+                background: none;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                color: var(--error);
+                font-size: 13px;
+                width: 22px;
+                height: 22px;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+            }
+
+            .ib-add-pt-btn {
+                border: 1px dashed var(--accent);
+                border-radius: 4px;
+                background: none;
+                color: var(--accent);
+                font-family: monospace;
+                font-size: 13px;
+                padding: 4px 10px;
+                cursor: pointer;
+                height: 28px;
+                white-space: nowrap;
+                transition: background 0.1s;
+            }
+            .ib-add-pt-btn:hover {
+                background: color-mix(in srgb, var(--accent) 10%, transparent);
+            }
+
+            /* arrow row */
+            .ib-arrow-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 0.6rem;
+            }
+            .ib-arrow-label-input {
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text);
+                font-family: monospace;
+                font-size: 13px;
+                width: 60px;
+                height: 26px;
+                padding: 0 5px;
+            }
+            .ib-arrow-label-input:focus {
+                outline: none;
+                border-color: var(--accent);
+            }
+
+            /* arcs + extra commands */
+            .ib-row-controls {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                align-items: center;
+                margin-top: 0.5rem;
+            }
+            .ib-select {
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text);
+                font-family: monospace;
+                font-size: 12px;
+                height: 28px;
+                padding: 0 6px;
+                cursor: pointer;
+            }
+            .ib-small-btn {
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text);
+                font-family: monospace;
+                font-size: 12px;
+                height: 28px;
+                padding: 0 10px;
+                cursor: pointer;
+                transition: border-color 0.1s;
+            }
+            .ib-small-btn:hover {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+            .ib-small-btn.danger:hover {
+                border-color: var(--error);
+                color: var(--error);
+            }
+
+            /* parabola / arc-range / hatch list rows */
+            .ib-list-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 6px;
+                flex-wrap: wrap;
+            }
+            .ib-list-label {
+                font-size: 12px;
+                color: var(--text-muted);
+                min-width: 2ch;
+                text-align: right;
+            }
+            /* arcs mode toggle */
+            .ib-mode-btns {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 6px;
+            }
+            .ib-mode-btn {
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text-muted);
+                font-family: monospace;
+                font-size: 12px;
+                height: 26px;
+                padding: 0 10px;
+                cursor: pointer;
+                transition: all 0.1s;
+            }
+            .ib-mode-btn.active {
+                background: var(--accent);
+                color: #fff;
+                border-color: var(--accent);
+            }
+
+            /* generated code display */
+            #ib-code-wrap {
+                display: block;
+                width: 100%;
+                box-sizing: border-box;
+                margin-top: 0;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                background: var(--surface);
+                padding: 0.6rem 0.85rem;
+                font-size: 12px;
+                font-family: monospace;
+                white-space: pre;
+                overflow-x: auto;
+                color: var(--text);
+                line-height: 1.5;
+                resize: vertical;
+                min-height: 60px;
+                outline: none;
+                transition: border-color 0.15s;
+            }
+            #ib-code-wrap:focus {
+                border-color: var(--accent);
+            }
+
+            /* output shared */
+            .ib-output-box {
+                margin-top: 0.4rem;
+                min-height: 80px;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 1rem;
+                background: var(--output-bg);
+                transition:
+                    background 0.2s,
+                    border-color 0.2s;
+            }
+            [data-theme="dark"] .ib-output-box svg {
+                filter: invert(1);
+            }
+            .ib-error {
+                color: var(--error);
+                font-size: 13px;
+                margin-top: 0.35rem;
+                min-height: 1em;
+            }
+
+            /* ── Demo tab (existing styles) ── */
             .editor-wrap {
                 border: 1px solid var(--border);
                 border-radius: 6px;
@@ -122,8 +465,6 @@
             .editor-wrap:focus-within {
                 border-color: var(--accent);
             }
-
-            /* Override CodeMirror internals to match site font */
             .cm-editor,
             .cm-editor .cm-content,
             .cm-editor .cm-scroller,
@@ -131,12 +472,9 @@
                 font-family: monospace !important;
                 font-size: 13px !important;
             }
-
             .cm-editor .cm-content {
                 padding: 0.5rem 0.75rem !important;
             }
-
-            /* Matikzy editor: grows but caps at 300px */
             #matikzy-editor .cm-editor {
                 min-height: 80px;
             }
@@ -145,8 +483,6 @@
                 max-height: 300px;
                 overflow-y: auto;
             }
-
-            /* TikZ editor: fixed 180px */
             #tikz-editor .cm-editor {
                 height: 180px;
             }
@@ -154,8 +490,6 @@
                 height: 100%;
                 overflow-y: auto;
             }
-
-            /* Autocomplete tooltip */
             .cm-tooltip.cm-tooltip-autocomplete {
                 border: 1px solid var(--border) !important;
                 border-radius: 4px !important;
@@ -171,7 +505,6 @@
                 background: var(--accent) !important;
                 color: var(--btn-text) !important;
             }
-
             button.action-btn {
                 margin-top: 0.5rem;
                 padding: 0.45rem 1.3rem;
@@ -187,12 +520,10 @@
             button.action-btn:hover {
                 background: var(--accent-hover);
             }
-
-            [data-theme="dark"] #output svg {
+            [data-theme="dark"] #demo-output svg {
                 filter: invert(1);
             }
-
-            #output {
+            #demo-output {
                 margin-top: 1.5rem;
                 min-height: 100px;
                 border: 1px solid var(--border);
@@ -204,15 +535,13 @@
                     background 0.2s,
                     border-color 0.2s;
             }
-
             .error-msg {
                 color: var(--error);
                 margin-top: 0.35rem;
                 font-size: 13px;
                 min-height: 1em;
             }
-
-            label {
+            label.field-label {
                 font-size: 12px;
                 font-weight: bold;
                 text-transform: uppercase;
@@ -222,7 +551,6 @@
                 margin-top: 1.25rem;
                 margin-bottom: 0.35rem;
             }
-
             #stats {
                 display: flex;
                 gap: 0;
@@ -256,7 +584,7 @@
     </head>
     <body>
         <header>
-            <h2>Šimtukas Tikz</h2>
+            <h2>MaTikZy <sub> by Šimtukas</sub></h2>
             <button id="theme-toggle">dark mode</button>
         </header>
 
@@ -292,35 +620,157 @@
         </p>
         <div id="stats" class="loading">Loading stats...</div>
 
-        <label>Matikzy (by Šimtukas) (beta)</label>
-        <div id="matikzy-editor" class="editor-wrap"></div>
-        <button id="compile-btn" class="action-btn">
-            Compile &amp; Render
-        </button>
-        <div id="compile-error" class="error-msg"></div>
+        <!-- Tab nav -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="builder">
+                Interval Builder
+            </button>
+            <button class="tab-btn" data-tab="demo">What's behind this?</button>
+        </div>
 
-        <div id="error" class="error-msg"></div>
-        <div id="output"></div>
-        <div
-            id="render-status"
-            style="
-                font-size: 13px;
-                color: var(--text-muted);
-                min-height: 1em;
-                margin-top: 0.35rem;
-            "
-        ></div>
-        <button
-            id="download-btn"
-            class="action-btn"
-            style="display: none; margin-top: 0.5rem"
-        >
-            Download SVG
-        </button>
+        <!-- ══════════════════════════════════════════════════
+             TAB 1 — Interval Builder
+        ══════════════════════════════════════════════════ -->
+        <div id="tab-builder" class="tab-panel active">
+            <!-- Preview + Code side by side -->
+            <div style="display:flex;gap:1rem;align-items:flex-start">
+                <!-- Left: preview -->
+                <div style="flex:1;min-width:0">
+                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Preview</div>
+                    <div id="ib-error" class="ib-error"></div>
+                    <div id="ib-output" class="ib-output-box"></div>
+                    <button
+                        class="ib-small-btn"
+                        id="ib-download-svg"
+                        style="display:none;margin-top:6px;font-size:11px;height:22px;padding:0 8px"
+                    >⬇ svg</button>
+                </div>
+                <!-- Right: code -->
+                <div style="flex:1;min-width:0">
+                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Generated Matikzy</div>
+                    <textarea
+                        id="ib-code-wrap"
+                        spellcheck="false"
+                        autocomplete="off"
+                        style="margin-top:0.4rem"
+                    ></textarea>
+                </div>
+            </div>
 
-        <label>TikZ</label>
-        <div id="tikz-editor" class="editor-wrap"></div>
-        <button id="render-btn" class="action-btn">Render</button>
+            <div class="ib-section-label">Segments &amp; Points</div>
+
+            <!-- Visual row -->
+            <div id="ib-row"></div>
+
+            <!-- Left-side labels (dynamic) -->
+            <div id="ib-left-labels" style="margin-top: 0.6rem"></div>
+
+            <!-- Arrow -->
+            <div class="ib-arrow-row">
+                <label
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 5px;
+                        font-size: 13px;
+                        margin: 0;
+                        text-transform: none;
+                        letter-spacing: 0;
+                        color: var(--text);
+                    "
+                >
+                    <input type="checkbox" id="ib-has-arrow" checked /> arrow
+                    label:
+                </label>
+                <input
+                    type="text"
+                    id="ib-arrow-label"
+                    class="ib-arrow-label-input"
+                    value="x"
+                    placeholder="x"
+                />
+            </div>
+
+            <!-- Arcs -->
+            <div class="ib-section-label">Arcs</div>
+            <div class="ib-mode-btns">
+                <button class="ib-mode-btn active" data-arcs-mode="none">
+                    None
+                </button>
+                <button class="ib-mode-btn" data-arcs-mode="all">All</button>
+                <button class="ib-mode-btn" data-arcs-mode="closed-only">
+                    Closed only
+                </button>
+                <button class="ib-mode-btn" data-arcs-mode="no-left">
+                    No left
+                </button>
+                <button class="ib-mode-btn" data-arcs-mode="no-right">
+                    No right
+                </button>
+                <button class="ib-mode-btn" data-arcs-mode="custom">
+                    Custom ranges
+                </button>
+            </div>
+            <div id="ib-arc-ranges" style="display: none"></div>
+            <div id="ib-arc-ranges-add" style="display: none; margin-top: 6px">
+                <button class="ib-small-btn" id="ib-add-arc">
+                    + Add arc range
+                </button>
+            </div>
+
+            <!-- Hatch -->
+            <div class="ib-section-label">Hatch</div>
+            <div id="ib-hatches"></div>
+            <div class="ib-row-controls" style="margin-top: 6px">
+                <button class="ib-small-btn" id="ib-add-hatch">
+                    + Add hatch
+                </button>
+            </div>
+
+            <!-- Parabolas -->
+            <div class="ib-section-label">Parabolas</div>
+            <div id="ib-parabolas"></div>
+            <div class="ib-row-controls" style="margin-top: 6px">
+                <button class="ib-small-btn" id="ib-add-para">
+                    + Add parabola
+                </button>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             TAB 2 — What's behind this? (original demo)
+        ══════════════════════════════════════════════════ -->
+        <div id="tab-demo" class="tab-panel">
+            <label class="field-label">Matikzy (by Šimtukas) (beta)</label>
+            <div id="matikzy-editor" class="editor-wrap"></div>
+            <button id="compile-btn" class="action-btn">
+                Compile &amp; Render
+            </button>
+            <div id="compile-error" class="error-msg"></div>
+
+            <div id="demo-error" class="error-msg"></div>
+            <div id="demo-output"></div>
+            <div
+                id="render-status"
+                style="
+                    font-size: 13px;
+                    color: var(--text-muted);
+                    min-height: 1em;
+                    margin-top: 0.35rem;
+                "
+            ></div>
+            <button
+                id="download-btn"
+                class="action-btn"
+                style="display: none; margin-top: 0.5rem"
+            >
+                Download SVG
+            </button>
+
+            <label class="field-label">TikZ</label>
+            <div id="tikz-editor" class="editor-wrap"></div>
+            <button id="render-btn" class="action-btn">Render</button>
+        </div>
 
         <script type="module">
             import {
@@ -350,44 +800,1047 @@
             import { tags } from "https://esm.sh/@lezer/highlight@1";
             import { compile } from "/matikzy.js";
 
-            // ── Matikzy language (StreamLanguage tokenizer) ───────────────────────
+            // ═══════════════════════════════════════════════
+            //  TAB SWITCHING
+            // ═══════════════════════════════════════════════
+            document.querySelectorAll(".tab-btn").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    document
+                        .querySelectorAll(".tab-btn")
+                        .forEach((b) => b.classList.remove("active"));
+                    document
+                        .querySelectorAll(".tab-panel")
+                        .forEach((p) => p.classList.remove("active"));
+                    btn.classList.add("active");
+                    document
+                        .getElementById("tab-" + btn.dataset.tab)
+                        .classList.add("active");
+                });
+            });
+
+            // ═══════════════════════════════════════════════
+            //  INTERVAL BUILDER
+            // ═══════════════════════════════════════════════
+
+            // State
+            // segments.length === points.length + 1  (always)
+            // segment: { label: '+' | '-' | '' , hatch: bool, dir: 'up'|'down'|null }
+            // point:   { type: 'solid'|'hollow'|'mark', label: string }
+            let ibState = {
+                segments: [
+                    { label: "+", hatch: false, dir: null },
+                    { label: "-", hatch: false, dir: null },
+                ],
+                points: [{ type: "solid", label: "", subLabel: "" }],
+                hasArrow: true,
+                arrowLabel: "x",
+                labelTop: null,
+                labelBot: null,
+                arcs: "none", // simple mode: none/all/closed-only/no-left/no-right
+                arcsMode: "simple", // 'simple' | 'custom'
+                arcRanges: [], // [{from: string|null, to: string|null}]
+                hatches: [], // [{from: string|null, to: string|null, direction: string}]
+                parabolas: [], // { from: string, to: string, dir: 'up'|'down' }
+            };
+
+            function ptRef(idx) {
+                // Use 1-based index always (label might be empty/dupe)
+                return `<${idx + 1}>`;
+            }
+
+            function generateCode() {
+                const s = ibState;
+                let inlineParts = [];
+                for (let i = 0; i <= s.points.length; i++) {
+                    const seg = s.segments[i];
+                    const open = seg.hatch ? "=" : "_";
+                    const close = seg.hatch ? "=" : "_";
+                    const dirSuffix = seg.dir ? seg.dir : "";
+                    inlineParts.push(
+                        open + (seg.label || "") + close + dirSuffix,
+                    );
+                    if (i < s.points.length) {
+                        const pt = s.points[i];
+                        const lbl = pt.label;
+                        const sub = pt.subLabel ? `{${pt.subLabel}}` : "";
+                        if (pt.type === "solid")
+                            inlineParts.push(`[${lbl}]${sub}`);
+                        else if (pt.type === "hollow")
+                            inlineParts.push(`(${lbl})${sub}`);
+                        else inlineParts.push(`|${lbl}|${sub}`);
+                    }
+                }
+                if (s.hasArrow) inlineParts.push(`>${s.arrowLabel}`);
+
+                let leftLabels = "";
+                if (s.labelTop) leftLabels += `^{${s.labelTop}}`;
+                if (s.labelBot) leftLabels += `_{${s.labelBot}}`;
+
+                const lines = [
+                    "interval:",
+                    "inline " + leftLabels + inlineParts.join(" "),
+                ];
+
+                if (s.arcsMode === "custom") {
+                    for (const r of s.arcRanges) {
+                        const f = r.from || "";
+                        const t = r.to || "";
+                        if (f || t) lines.push(`arcs ${f}-${t}`);
+                    }
+                } else if (s.arcs !== "none") {
+                    if (s.arcs === "all") lines.push("arcs");
+                    else lines.push("arcs -- " + s.arcs);
+                }
+
+                for (const h of s.hatches) {
+                    const f = h.from || "";
+                    const t = h.to || "";
+                    if (f || t) {
+                        const dir =
+                            h.direction && h.direction !== "auto"
+                                ? ` -- ${h.direction}`
+                                : "";
+                        lines.push(`hatch ${f}-${t}${dir}`);
+                    }
+                }
+
+                for (const p of s.parabolas) {
+                    const dir = p.dir === "down" ? " -- down" : "";
+                    if (p.from === "" && p.to === "") {
+                        lines.push("parabola" + dir);
+                    } else {
+                        lines.push(
+                            `parabola ${p.from || "<1>"} ${p.to || "<2>"}${dir}`,
+                        );
+                    }
+                }
+
+                return lines.join("\n");
+            }
+
+            const ibDlBtn = document.getElementById("ib-download-svg");
+            ibDlBtn.addEventListener("click", () => {
+                const svg = document.getElementById("ib-output").innerHTML;
+                if (!svg) return;
+                const blob = new Blob([svg], { type: "image/svg+xml" });
+                const a = Object.assign(document.createElement("a"), {
+                    href: URL.createObjectURL(blob),
+                    download: "interval.svg",
+                });
+                a.click();
+                URL.revokeObjectURL(a.href);
+            });
+
+            const ibCodeEl = document.getElementById("ib-code-wrap");
+
+            // Render from whatever is currently in the textarea
+            let ibRenderSeq = 0;
+            async function ibRenderFromCode(code) {
+                const errEl = document.getElementById("ib-error");
+                const outEl = document.getElementById("ib-output");
+                errEl.textContent = "";
+                let tikz;
+                try {
+                    tikz = compile(code);
+                } catch (e) {
+                    errEl.textContent = e.message;
+                    return;
+                }
+
+                const seq = ++ibRenderSeq;
+                try {
+                    const res = await fetch("/render", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ lang: "tikz", content: tikz }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const svg = await res.text();
+                    if (seq !== ibRenderSeq) return;
+                    outEl.innerHTML = svg;
+                    ibDlBtn.style.display = "";
+                } catch (e) {
+                    if (seq !== ibRenderSeq) return;
+                    errEl.textContent = e.message;
+                }
+            }
+
+            // Called by builder controls: regenerate code, update textarea, render
+            async function ibRender() {
+                const code = generateCode();
+                ibCodeEl.value = code;
+                await ibRenderFromCode(code);
+            }
+
+            // ── Parse code back into builder state ───────────
+            function parseRangeStrSimple(str) {
+                const parts = [];
+                let cur = "",
+                    inAngle = false;
+                for (const ch of str) {
+                    if (ch === "<") {
+                        inAngle = true;
+                        cur += ch;
+                    } else if (ch === ">") {
+                        inAngle = false;
+                        cur += ch;
+                    } else if (ch === "-" && !inAngle) {
+                        parts.push(cur.trim());
+                        cur = "";
+                    } else cur += ch;
+                }
+                parts.push(cur.trim());
+                const ranges = [];
+                for (let i = 0; i + 1 < parts.length; i++)
+                    ranges.push({
+                        from: parts[i] || null,
+                        to: parts[i + 1] || null,
+                    });
+                return ranges;
+            }
+
+            function parseCodeToState(code) {
+                const lines = code
+                    .split("\n")
+                    .map((l) => l.trim())
+                    .filter(Boolean);
+                const inlineIdx = lines.findIndex((l) =>
+                    l.startsWith("inline "),
+                );
+                if (inlineIdx === -1) return null;
+
+                const st = {
+                    segments: [],
+                    points: [],
+                    hasArrow: false,
+                    arrowLabel: "",
+                    labelTop: null,
+                    labelBot: null,
+                    arcs: "none",
+                    arcsMode: "simple",
+                    arcRanges: [],
+                    hatches: [],
+                    parabolas: [],
+                };
+
+                // ── inline line ──
+                let rest = lines[inlineIdx].slice("inline ".length);
+
+                function readBraced(s, prefix) {
+                    if (!s.startsWith(prefix + "{")) return null;
+                    let i = prefix.length + 1,
+                        depth = 1;
+                    while (i < s.length) {
+                        if (s[i] === "{") depth++;
+                        else if (s[i] === "}") {
+                            depth--;
+                            if (!depth) {
+                                i++;
+                                break;
+                            }
+                        }
+                        i++;
+                    }
+                    return {
+                        label: s.slice(prefix.length + 1, i - 1),
+                        rest: s.slice(i).trimStart(),
+                    };
+                }
+
+                // Left labels
+                for (let iter = 0; iter < 2; iter++) {
+                    const top =
+                        st.labelTop === null ? readBraced(rest, "^") : null;
+                    const bot =
+                        st.labelBot === null ? readBraced(rest, "_") : null;
+                    if (top) {
+                        st.labelTop = top.label;
+                        rest = top.rest;
+                    } else if (bot) {
+                        st.labelBot = bot.label;
+                        rest = bot.rest;
+                    } else break;
+                }
+                rest = rest.trimStart();
+
+                function readUntilChar(s, close) {
+                    let i = 0;
+                    while (i < s.length && s[i] !== close) i++;
+                    return {
+                        content: s.slice(0, i),
+                        rest: s.slice(i + 1).trimStart(),
+                    };
+                }
+                function readBracedContent(s) {
+                    let i = 1,
+                        depth = 1;
+                    while (i < s.length) {
+                        if (s[i] === "{") depth++;
+                        else if (s[i] === "}") {
+                            depth--;
+                            if (!depth) {
+                                i++;
+                                break;
+                            }
+                        }
+                        i++;
+                    }
+                    return {
+                        content: s.slice(1, i - 1),
+                        rest: s.slice(i).trimStart(),
+                    };
+                }
+                function tryDir(s) {
+                    const m = s.match(/^(up|down)(\s|$)/);
+                    return m
+                        ? { dir: m[1], rest: s.slice(m[1].length).trimStart() }
+                        : { dir: null, rest: s };
+                }
+
+                // Tokens: seg (pt seg)* [arrow]
+                let expectSeg = true;
+                while (rest.length > 0) {
+                    if (rest[0] === ">") {
+                        st.hasArrow = true;
+                        st.arrowLabel = rest.slice(1).trim();
+                        break;
+                    }
+                    if (expectSeg) {
+                        const delim = rest[0];
+                        if (delim !== "_" && delim !== "=") break;
+                        const r = readUntilChar(rest.slice(1), delim);
+                        rest = r.rest;
+                        const d = tryDir(rest);
+                        rest = d.rest;
+                        st.segments.push({
+                            label: r.content,
+                            hatch: delim === "=",
+                            dir: d.dir,
+                        });
+                        expectSeg = false;
+                    } else {
+                        const delim = rest[0];
+                        let type, close;
+                        if (delim === "[") {
+                            type = "solid";
+                            close = "]";
+                        } else if (delim === "(") {
+                            type = "hollow";
+                            close = ")";
+                        } else if (delim === "|") {
+                            type = "mark";
+                            close = "|";
+                        } else break;
+                        const r = readUntilChar(rest.slice(1), close);
+                        rest = r.rest;
+                        let subLabel = "";
+                        if (rest.startsWith("{")) {
+                            const b = readBracedContent(rest);
+                            subLabel = b.content;
+                            rest = b.rest;
+                        }
+                        st.points.push({ type, label: r.content, subLabel });
+                        expectSeg = true;
+                    }
+                }
+
+                // ── remaining lines ──
+                for (let i = inlineIdx + 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (line === "interval:") continue;
+                    if (/^arcs(\s|$)/.test(line)) {
+                        const body = line.slice("arcs".length).trim();
+                        const flagM = body.match(
+                            /^--\s*(closed-only|no-left|no-right|all)\s*$/,
+                        );
+                        if (!body) {
+                            st.arcsMode = "simple";
+                            st.arcs = "all";
+                        } else if (flagM) {
+                            st.arcsMode = "simple";
+                            st.arcs = flagM[1];
+                        } else {
+                            st.arcsMode = "custom";
+                            st.arcRanges.push(...parseRangeStrSimple(body));
+                        }
+                    } else if (/^hatch(\s|$)/.test(line)) {
+                        const body = line.slice("hatch".length).trim();
+                        const dirM = body.match(
+                            /^(.*?)\s*--\s*(top|bottom)\s+(left|right)\s*$/,
+                        );
+                        const rangeStr = dirM ? dirM[1].trim() : body;
+                        const direction = dirM
+                            ? `${dirM[2]} ${dirM[3]}`
+                            : "auto";
+                        for (const r of parseRangeStrSimple(rangeStr))
+                            st.hatches.push({
+                                from: r.from,
+                                to: r.to,
+                                direction,
+                            });
+                    } else if (/^parabola(\s|$)/.test(line)) {
+                        const body = line.slice("parabola".length).trim();
+                        const dirM = body.match(/--\s*(up|down)\s*$/);
+                        const dir = dirM ? dirM[1] : "up";
+                        const txt = dirM
+                            ? body.slice(0, dirM.index).trim()
+                            : body;
+                        const pts = txt.match(/<\d+>/g) || [];
+                        st.parabolas.push({
+                            from: pts[0] || "",
+                            to: pts[1] || "",
+                            dir,
+                        });
+                    }
+                }
+
+                return st;
+            }
+
+            function syncUIFromState() {
+                // Static controls
+                const arrowChk = document.getElementById("ib-has-arrow");
+                const arrowInp = document.getElementById("ib-arrow-label");
+                if (arrowChk) arrowChk.checked = ibState.hasArrow;
+                if (arrowInp) arrowInp.value = ibState.arrowLabel;
+
+                // Arcs mode buttons
+                document.querySelectorAll("[data-arcs-mode]").forEach((btn) => {
+                    const m = btn.dataset.arcsMode;
+                    const on =
+                        ibState.arcsMode === "custom"
+                            ? m === "custom"
+                            : m === ibState.arcs;
+                    btn.classList.toggle("active", on);
+                });
+
+                // Dynamic sections
+                ibRenderRow();
+                ibRenderLeftLabels();
+                ibRenderArcRanges();
+                ibRenderHatches();
+                ibRenderParabolas();
+            }
+
+            // Textarea edited manually → parse state, sync UI, render
+            let ibDebounce;
+            ibCodeEl.addEventListener("input", () => {
+                clearTimeout(ibDebounce);
+                ibDebounce = setTimeout(() => {
+                    const code = ibCodeEl.value;
+                    const parsed = parseCodeToState(code);
+                    if (parsed) {
+                        Object.assign(ibState, parsed);
+                        syncUIFromState();
+                    }
+                    ibRenderFromCode(code);
+                }, 400);
+            });
+
+            function ibScheduleRender() {
+                clearTimeout(ibDebounce);
+                ibDebounce = setTimeout(ibRender, 400);
+            }
+
+            // ── Render the builder row ────────────────────
+            function ibRenderRow() {
+                const row = document.getElementById("ib-row");
+                row.innerHTML = "";
+
+                const s = ibState;
+                for (let i = 0; i <= s.points.length; i++) {
+                    row.appendChild(makeSegEl(i));
+                    if (i < s.points.length) {
+                        row.appendChild(makePtEl(i));
+                    }
+                }
+
+                // Add-point button at the end
+                const addBtn = document.createElement("button");
+                addBtn.className = "ib-add-pt-btn";
+                addBtn.textContent = "+ point";
+                addBtn.addEventListener("click", () => {
+                    s.points.push({ type: "solid", label: "", subLabel: "" });
+                    s.segments.push({ label: "+", hatch: false, dir: null });
+                    ibRenderRow();
+                    ibRenderArcRanges();
+                    ibRenderHatches();
+                    ibRenderParabolas();
+                    ibScheduleRender();
+                });
+                row.appendChild(addBtn);
+            }
+
+            function makeSegEl(idx) {
+                const seg = ibState.segments[idx];
+                const wrap = document.createElement("div");
+                wrap.className = "ib-seg";
+
+                // Row 1: sign label buttons  + / −  (click active to deselect → blank)
+                const signRow = document.createElement("div");
+                signRow.className = "ib-seg-sign";
+
+                for (const [val, glyph, cls] of [
+                    ["+", "+", "active-plus"],
+                    ["-", "−", "active-minus"],
+                ]) {
+                    const btn = document.createElement("button");
+                    btn.className = "ib-seg-btn";
+                    btn.textContent = glyph;
+                    btn.title = val;
+                    if (seg.label === val) btn.classList.add(cls);
+                    btn.addEventListener("click", () => {
+                        seg.label = seg.label === val ? "" : val;
+                        ibRenderRow();
+                        ibScheduleRender();
+                    });
+                    signRow.appendChild(btn);
+                }
+
+                // Row 1 continued: hatch toggle (independent of sign)
+                const hBtn = document.createElement("button");
+                hBtn.className = "ib-seg-btn";
+                hBtn.textContent = "≡";
+                hBtn.title = "toggle hatching";
+                if (seg.hatch) hBtn.classList.add("active-hatch");
+                hBtn.addEventListener("click", () => {
+                    seg.hatch = !seg.hatch;
+                    ibRenderRow();
+                    ibScheduleRender();
+                });
+                signRow.appendChild(hBtn);
+
+                wrap.appendChild(signRow);
+
+                // Row 2: direction buttons  ↑ / ↓  (click active to deselect → null)
+                const dirRow = document.createElement("div");
+                dirRow.className = "ib-seg-dir";
+                for (const [val, glyph] of [
+                    ["up", "↑"],
+                    ["down", "↓"],
+                ]) {
+                    const btn = document.createElement("button");
+                    btn.className = "ib-dir-btn";
+                    btn.textContent = glyph;
+                    if (seg.dir === val) btn.classList.add("active");
+                    btn.addEventListener("click", () => {
+                        seg.dir = seg.dir === val ? null : val;
+                        ibRenderRow();
+                        ibScheduleRender();
+                    });
+                    dirRow.appendChild(btn);
+                }
+                wrap.appendChild(dirRow);
+
+                return wrap;
+            }
+
+            function makePtEl(idx) {
+                const pt = ibState.points[idx];
+                const wrap = document.createElement("div");
+                wrap.className = "ib-pt";
+
+                const row = document.createElement("div");
+                row.className = "ib-pt-row";
+
+                // Type select
+                const sel = document.createElement("select");
+                sel.className = "ib-pt-type";
+                for (const [val, glyph] of [
+                    ["solid", "●"],
+                    ["hollow", "○"],
+                    ["mark", "|"],
+                ]) {
+                    const opt = document.createElement("option");
+                    opt.value = val;
+                    opt.textContent = glyph;
+                    if (pt.type === val) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+                sel.addEventListener("change", () => {
+                    pt.type = sel.value;
+                    ibScheduleRender();
+                });
+                row.appendChild(sel);
+
+                // Label input
+                const inp = document.createElement("input");
+                inp.className = "ib-pt-label";
+                inp.type = "text";
+                inp.value = pt.label;
+                inp.placeholder = `p${idx + 1}`;
+                inp.addEventListener("input", () => {
+                    pt.label = inp.value;
+                    ibScheduleRender();
+                });
+                row.appendChild(inp);
+
+                // Remove button
+                const del = document.createElement("button");
+                del.className = "ib-pt-remove";
+                del.textContent = "×";
+                del.title = "Remove this point";
+                del.addEventListener("click", () => {
+                    ibState.points.splice(idx, 1);
+                    ibState.segments.splice(idx + 1, 1);
+                    ibRenderRow();
+                    ibRenderArcRanges();
+                    ibRenderHatches();
+                    ibRenderParabolas();
+                    ibScheduleRender();
+                });
+                row.appendChild(del);
+
+                wrap.appendChild(row);
+
+                // Sub-label input (renders as {label-below})
+                const subInp = document.createElement("input");
+                subInp.className = "ib-pt-label";
+                subInp.type = "text";
+                subInp.value = pt.subLabel ?? "";
+                subInp.placeholder = "label below";
+                subInp.title = "Label below the point ({...})";
+                subInp.style.cssText =
+                    "width:80px;font-size:11px;margin-top:3px;opacity:0.8";
+                subInp.addEventListener("input", () => {
+                    pt.subLabel = subInp.value;
+                    ibScheduleRender();
+                });
+                wrap.appendChild(subInp);
+
+                return wrap;
+            }
+
+            // ── Left labels ───────────────────────────────
+            function ibRenderLeftLabels() {
+                const wrap = document.getElementById("ib-left-labels");
+                wrap.innerHTML = "";
+                const s = ibState;
+                const active = s.labelTop !== null || s.labelBot !== null;
+
+                if (!active) {
+                    // Show "+ add left labels" button
+                    const btn = document.createElement("button");
+                    btn.className = "ib-small-btn";
+                    btn.textContent = "+ add left labels";
+                    btn.addEventListener("click", () => {
+                        s.labelTop = "f'(x)";
+                        s.labelBot = "f(x)";
+                        ibRenderLeftLabels();
+                        ibScheduleRender();
+                    });
+                    wrap.appendChild(btn);
+                } else {
+                    // Show the two inputs + remove button
+                    const row = document.createElement("div");
+                    row.className = "ib-arrow-row";
+
+                    const mkLabel = (text) => {
+                        const l = document.createElement("span");
+                        l.textContent = text;
+                        l.style.cssText =
+                            "font-size:12px;color:var(--text-muted)";
+                        return l;
+                    };
+
+                    const mkInput = (id, val, ph, stateKey) => {
+                        const inp = document.createElement("input");
+                        inp.type = "text";
+                        inp.id = id;
+                        inp.className = "ib-arrow-label-input";
+                        inp.value = val ?? "";
+                        inp.placeholder = ph;
+                        inp.style.width = "90px";
+                        inp.addEventListener("input", () => {
+                            s[stateKey] = inp.value;
+                            ibScheduleRender();
+                        });
+                        return inp;
+                    };
+
+                    row.appendChild(mkLabel("top"));
+                    row.appendChild(
+                        mkInput(
+                            "ib-label-top",
+                            s.labelTop,
+                            "f'(x)",
+                            "labelTop",
+                        ),
+                    );
+                    row.appendChild(mkLabel("bottom"));
+                    row.appendChild(
+                        mkInput("ib-label-bot", s.labelBot, "f(x)", "labelBot"),
+                    );
+
+                    // Remove button
+                    const del = document.createElement("button");
+                    del.className = "ib-pt-remove";
+                    del.textContent = "×";
+                    del.title = "Remove left labels";
+                    del.addEventListener("click", () => {
+                        s.labelTop = null;
+                        s.labelBot = null;
+                        ibRenderLeftLabels();
+                        ibScheduleRender();
+                    });
+                    row.appendChild(del);
+
+                    wrap.appendChild(row);
+                }
+            }
+
+            // ── Arc ranges list ───────────────────────────
+            function ibRenderArcRanges() {
+                const container = document.getElementById("ib-arc-ranges");
+                const addDiv = document.getElementById("ib-arc-ranges-add");
+                const s = ibState;
+                const isCustom = s.arcsMode === "custom";
+                container.style.display = isCustom ? "" : "none";
+                addDiv.style.display = isCustom ? "" : "none";
+                if (!isCustom) return;
+
+                container.innerHTML = "";
+                const ptCount = s.points.length;
+                if (s.arcRanges.length === 0) {
+                    const note = document.createElement("div");
+                    note.style.cssText =
+                        "font-size:12px;color:var(--text-muted)";
+                    note.textContent = "No arc ranges — add one below.";
+                    container.appendChild(note);
+                    return;
+                }
+                s.arcRanges.forEach((r, i) => {
+                    const item = document.createElement("div");
+                    item.className = "ib-list-item";
+                    const lbl = document.createElement("span");
+                    lbl.className = "ib-list-label";
+                    lbl.textContent = `#${i + 1}`;
+                    item.appendChild(lbl);
+
+                    const fromSel = makeEdgeSelect(r.from, ptCount, "−∞");
+                    fromSel.addEventListener("change", () => {
+                        r.from = fromSel.value || null;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(document.createTextNode(" from "));
+                    item.appendChild(fromSel);
+
+                    const toSel = makeEdgeSelect(r.to, ptCount, "+∞");
+                    toSel.addEventListener("change", () => {
+                        r.to = toSel.value || null;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(document.createTextNode(" to "));
+                    item.appendChild(toSel);
+
+                    const del = document.createElement("button");
+                    del.className = "ib-pt-remove";
+                    del.textContent = "×";
+                    del.addEventListener("click", () => {
+                        s.arcRanges.splice(i, 1);
+                        ibRenderArcRanges();
+                        ibScheduleRender();
+                    });
+                    item.appendChild(del);
+                    container.appendChild(item);
+                });
+            }
+
+            // ── Hatch list ────────────────────────────────
+            function ibRenderHatches() {
+                const container = document.getElementById("ib-hatches");
+                container.innerHTML = "";
+                const s = ibState;
+                const ptCount = s.points.length;
+                if (s.hatches.length === 0) {
+                    const note = document.createElement("div");
+                    note.style.cssText =
+                        "font-size:12px;color:var(--text-muted)";
+                    note.textContent = "No hatching.";
+                    container.appendChild(note);
+                    return;
+                }
+                s.hatches.forEach((h, i) => {
+                    const item = document.createElement("div");
+                    item.className = "ib-list-item";
+                    const lbl = document.createElement("span");
+                    lbl.className = "ib-list-label";
+                    lbl.textContent = `#${i + 1}`;
+                    item.appendChild(lbl);
+
+                    const fromSel = makeEdgeSelect(h.from, ptCount, "−∞");
+                    fromSel.addEventListener("change", () => {
+                        h.from = fromSel.value || null;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(document.createTextNode(" from "));
+                    item.appendChild(fromSel);
+
+                    const toSel = makeEdgeSelect(h.to, ptCount, "+∞");
+                    toSel.addEventListener("change", () => {
+                        h.to = toSel.value || null;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(document.createTextNode(" to "));
+                    item.appendChild(toSel);
+
+                    const dirSel = document.createElement("select");
+                    dirSel.className = "ib-select";
+                    for (const [val, txt] of [
+                        ["auto", "auto (cycle)"],
+                        ["top right", "top right /"],
+                        ["bottom right", "bottom right \\"],
+                        ["top left", "top left \\"],
+                        ["bottom left", "bottom left /"],
+                    ]) {
+                        const opt = document.createElement("option");
+                        opt.value = val;
+                        opt.textContent = txt;
+                        if ((h.direction || "auto") === val)
+                            opt.selected = true;
+                        dirSel.appendChild(opt);
+                    }
+                    dirSel.addEventListener("change", () => {
+                        h.direction = dirSel.value;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(dirSel);
+
+                    const del = document.createElement("button");
+                    del.className = "ib-pt-remove";
+                    del.textContent = "×";
+                    del.addEventListener("click", () => {
+                        s.hatches.splice(i, 1);
+                        ibRenderHatches();
+                        ibScheduleRender();
+                    });
+                    item.appendChild(del);
+                    container.appendChild(item);
+                });
+            }
+
+            // ── Parabola list ─────────────────────────────
+            function ibRenderParabolas() {
+                const container = document.getElementById("ib-parabolas");
+                container.innerHTML = "";
+                const s = ibState;
+                const ptCount = s.points.length;
+
+                if (s.parabolas.length === 0) {
+                    const note = document.createElement("div");
+                    note.style.cssText =
+                        "font-size:12px;color:var(--text-muted)";
+                    note.textContent = "No parabolas.";
+                    container.appendChild(note);
+                    return;
+                }
+
+                s.parabolas.forEach((p, i) => {
+                    const item = document.createElement("div");
+                    item.className = "ib-list-item";
+
+                    const lbl = document.createElement("span");
+                    lbl.className = "ib-list-label";
+                    lbl.textContent = `#${i + 1}`;
+                    item.appendChild(lbl);
+
+                    const fromSel = makeIndexSelect(p.from, ptCount, "(auto)");
+                    fromSel.addEventListener("change", () => {
+                        p.from = fromSel.value;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(document.createTextNode(" from "));
+                    item.appendChild(fromSel);
+
+                    const toSel = makeIndexSelect(p.to, ptCount, "(auto)");
+                    toSel.addEventListener("change", () => {
+                        p.to = toSel.value;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(document.createTextNode(" to "));
+                    item.appendChild(toSel);
+
+                    const dirSel = document.createElement("select");
+                    dirSel.className = "ib-select";
+                    for (const [val, txt] of [
+                        ["up", "↑ up"],
+                        ["down", "↓ down"],
+                    ]) {
+                        const opt = document.createElement("option");
+                        opt.value = val;
+                        opt.textContent = txt;
+                        if (p.dir === val) opt.selected = true;
+                        dirSel.appendChild(opt);
+                    }
+                    dirSel.addEventListener("change", () => {
+                        p.dir = dirSel.value;
+                        ibScheduleRender();
+                    });
+                    item.appendChild(dirSel);
+
+                    const del = document.createElement("button");
+                    del.className = "ib-pt-remove";
+                    del.textContent = "×";
+                    del.addEventListener("click", () => {
+                        s.parabolas.splice(i, 1);
+                        ibRenderParabolas();
+                        ibScheduleRender();
+                    });
+                    item.appendChild(del);
+                    container.appendChild(item);
+                });
+            }
+
+            // Points only (no edge options) — for parabola from/to
+            function makeIndexSelect(current, ptCount, emptyLabel) {
+                const sel = document.createElement("select");
+                sel.className = "ib-select";
+                const emptyOpt = document.createElement("option");
+                emptyOpt.value = "";
+                emptyOpt.textContent = emptyLabel;
+                if (!current) emptyOpt.selected = true;
+                sel.appendChild(emptyOpt);
+                for (let n = 1; n <= ptCount; n++) {
+                    const opt = document.createElement("option");
+                    opt.value = `<${n}>`;
+                    opt.textContent = `<${n}>`;
+                    if (current === `<${n}>`) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+                return sel;
+            }
+
+            // Points + infinity edges — for arc/hatch from/to
+            function makeEdgeSelect(current, ptCount, edgeLabel) {
+                const sel = document.createElement("select");
+                sel.className = "ib-select";
+                const edgeOpt = document.createElement("option");
+                edgeOpt.value = "";
+                edgeOpt.textContent = edgeLabel;
+                if (!current) edgeOpt.selected = true;
+                sel.appendChild(edgeOpt);
+                for (let n = 1; n <= ptCount; n++) {
+                    const opt = document.createElement("option");
+                    opt.value = `<${n}>`;
+                    opt.textContent = `<${n}>`;
+                    if (current === `<${n}>`) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+                return sel;
+            }
+
+            // ── Wire up controls ──────────────────────────
+            document
+                .getElementById("ib-has-arrow")
+                .addEventListener("change", (e) => {
+                    ibState.hasArrow = e.target.checked;
+                    ibScheduleRender();
+                });
+            document
+                .getElementById("ib-arrow-label")
+                .addEventListener("input", (e) => {
+                    ibState.arrowLabel = e.target.value;
+                    ibScheduleRender();
+                });
+            // Arcs mode buttons
+            document.querySelectorAll("[data-arcs-mode]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const mode = btn.dataset.arcsMode;
+                    if (mode === "custom") {
+                        ibState.arcsMode = "custom";
+                        ibState.arcs = "none";
+                    } else {
+                        ibState.arcsMode = "simple";
+                        ibState.arcs = mode;
+                    }
+                    document
+                        .querySelectorAll("[data-arcs-mode]")
+                        .forEach((b) => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    ibRenderArcRanges();
+                    ibScheduleRender();
+                });
+            });
+
+            document
+                .getElementById("ib-add-arc")
+                .addEventListener("click", () => {
+                    ibState.arcRanges.push({ from: null, to: null });
+                    ibRenderArcRanges();
+                    ibScheduleRender();
+                });
+
+            document
+                .getElementById("ib-add-hatch")
+                .addEventListener("click", () => {
+                    ibState.hatches.push({
+                        from: null,
+                        to: null,
+                        direction: "auto",
+                    });
+                    ibRenderHatches();
+                    ibScheduleRender();
+                });
+
+            document
+                .getElementById("ib-add-para")
+                .addEventListener("click", () => {
+                    ibState.parabolas.push({ from: "", to: "", dir: "up" });
+                    ibRenderParabolas();
+                    ibScheduleRender();
+                });
+
+            // Also refresh arc/hatch dropdowns when row changes (point count changes)
+            const origIbRenderRow = ibRenderRow;
+            function ibRenderRowAndLists() {
+                origIbRenderRow();
+                ibRenderArcRanges();
+                ibRenderHatches();
+                ibRenderParabolas();
+            }
+
+            // Initial render
+            ibRenderRow();
+            ibRenderLeftLabels();
+            ibRenderArcRanges();
+            ibRenderHatches();
+            ibRenderParabolas();
+            ibRender();
+
+            // ═══════════════════════════════════════════════
+            //  DEMO TAB — CodeMirror + existing logic
+            // ═══════════════════════════════════════════════
+
             const matikzyLang = StreamLanguage.define({
                 token(stream) {
-                    // Comments
                     if (stream.match("//")) {
                         stream.skipToEnd();
                         return "comment";
                     }
-                    // Command prefixes only at start of line
                     if (
                         stream.sol() &&
                         stream.match(
-                            /(?:function|geometry|interval-arcs|unit-circle|cuboid)(?:\[[^\]]*\])?:/,
+                            /(?:function|geometry|interval|interval-arcs|unit-circle|cuboid)(?:\[[^\]]*\])?:/,
                         )
-                    ) {
+                    )
                         return "keyword";
-                    }
-                    // Skip whitespace
                     if (stream.eatSpace()) return null;
-                    // Main commands
                     if (
                         stream.match(
-                            /(?:graph|axes|point|line|triangle|circle|quadrilateral|area|label|mark|angle|new|segment|ray|arrow|inscribe|circumscribe|bisector|median|altitude|midsegment|tangent|perpendicular|rotangle|x-line|y-line|cube|pyramid)(?=\s|$)/,
+                            /(?:graph|axes|point|line|triangle|circle|quadrilateral|area|label|mark|angle|new|segment|ray|arrow|inscribe|circumscribe|bisector|median|altitude|midsegment|tangent|perpendicular|rotangle|x-line|y-line|cube|pyramid|inline|arcs|parabola|hatch)(?=\s|$)/,
                         )
-                    ) {
+                    )
                         return "atom";
-                    }
                     stream.next();
                     return null;
                 },
             });
 
-            // ── Autocomplete ──────────────────────────────────────────────────────
             const COMPLETIONS = [
                 ...[
                     "function:",
                     "geometry:",
-                    "interval-arcs:",
+                    "interval:",
                     "unit-circle:",
                     "cuboid:",
                 ].map((label) => ({ label, type: "keyword", boost: 10 })),
@@ -420,6 +1873,10 @@
                     "y-line",
                     "cube",
                     "pyramid",
+                    "inline",
+                    "arcs",
+                    "parabola",
+                    "hatch",
                 ].map((label) => ({ label, type: "function" })),
                 ...[
                     "parabola",
@@ -463,7 +1920,6 @@
                 };
             }
 
-            // ── Theme (compartments for live switching) ───────────────────────────
             const matikzyThemeComp = new Compartment();
             const tikzThemeComp = new Compartment();
 
@@ -517,17 +1973,15 @@
                 ];
             }
 
-            // ── Create editors ────────────────────────────────────────────────────
             const prefersDark = window.matchMedia(
                 "(prefers-color-scheme: dark)",
             );
             let currentDark = prefersDark.matches;
-
             let debounceTimer;
 
             const matikzyEditor = new EditorView({
                 state: EditorState.create({
-                    doc: "function: graph parabola y=x^2+2x-1",
+                    doc: "interval:\ninline _-_ (0) =+= (4) _-_ >x\narcs",
                     extensions: [
                         history(),
                         keymap.of([
@@ -541,7 +1995,9 @@
                             activateOnTypingDelay: 1000,
                         }),
                         highlightActiveLine(),
-                        placeholder("function: graph parabola y=x^2+2x-1"),
+                        placeholder(
+                            "interval:\ninline _-_ (0) =+= (4) _-_ >x\narcs",
+                        ),
                         EditorView.lineWrapping,
                         matikzyThemeComp.of(makeTheme(currentDark)),
                         EditorView.updateListener.of((update) => {
@@ -590,18 +2046,17 @@
                 });
             }
 
-            // ── App logic ─────────────────────────────────────────────────────────
             document
                 .getElementById("compile-btn")
                 .addEventListener("click", compileMatikzy);
             document
                 .getElementById("render-btn")
-                .addEventListener("click", render);
-
+                .addEventListener("click", demoRender);
             document
                 .getElementById("download-btn")
                 .addEventListener("click", () => {
-                    const svg = document.getElementById("output").innerHTML;
+                    const svg =
+                        document.getElementById("demo-output").innerHTML;
                     const blob = new Blob([svg], { type: "image/svg+xml" });
                     const a = Object.assign(document.createElement("a"), {
                         href: URL.createObjectURL(blob),
@@ -621,14 +2076,14 @@
                     compileError.textContent = e.message;
                     return;
                 }
-                await render();
+                await demoRender();
             }
 
             let renderSeq = 0;
-            async function render() {
+            async function demoRender() {
                 const tikz = tikzEditor.state.doc.toString();
-                const error = document.getElementById("error");
-                const output = document.getElementById("output");
+                const error = document.getElementById("demo-error");
+                const output = document.getElementById("demo-output");
                 const status = document.getElementById("render-status");
                 const downloadBtn = document.getElementById("download-btn");
                 error.textContent = "";
@@ -676,12 +2131,10 @@
                     el.textContent = "Stats unavailable";
                 }
             }
-
             loadStats();
 
-            // ── Theme switching ───────────────────────────────────────────────────
+            // ── Theme ─────────────────────────────────────
             const toggle = document.getElementById("theme-toggle");
-
             function applyTheme(dark) {
                 currentDark = dark;
                 document.documentElement.setAttribute(
@@ -697,7 +2150,6 @@
                     effects: tikzThemeComp.reconfigure(theme),
                 });
             }
-
             applyTheme(prefersDark.matches);
             prefersDark.addEventListener("change", (e) =>
                 applyTheme(e.matches),
