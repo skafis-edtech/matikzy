@@ -498,18 +498,28 @@ Line segment cuts off the (if already existing) line or ray excess.
 
 Line extends (if already existing) segment or ray.
 
-Also possible to do dashed or dotted with:
+Also possible to do dashed or dotted with (default - solid):
 
 ```
 line AB -- dashed
 line AB -- dotted
+line AB -- thick
+line AB -- none
+line AB -- solid
+```
+
+Also possible to draw a perpendicular line or parallel line:
+
+```
+line parallel AB C new D // draws a parallel line CD that goes parallel with AB through existing point C (not on line AB)
+line perpendicular AB C new D // draws a perpendicular line CD to the AB through AB line point C.
 ```
 
 ### Arc and circle transform
 
 ```
 geometry:
-circle new O-OX >>h0.5 // becomes an oval, the Y axis is shrunk by 0.5
+circle new O-OX >>h0.5 // becomes an oval/ellipse, the Y axis is shrunk by 0.5
 point O-OX 90 new K
 point O-OX -90 new L
 arc O-OX KL bigger -- dotted
@@ -530,13 +540,11 @@ Labels point, segment, angle. Default - point the same as name, segment - lowerc
 
 For segment label - if more than 3 symbols, aligns with the line.
 
-TODO: choose right/left with default right if not in triangle and default outside if on triangle.
-
-Labels have default positions, but can be explicitly stated. For point choose "top bottom, left right", for segment choose "left right, horizontal aligned".
+Labels have default positions, but can be explicitly stated. For point choose "top bottom, left right", for segment/line choose "left right, horizontal aligned, end center". center is default, others idk what's default.
 
 ```
-label A B -- top right
-label AB x\;\mathrm{cm} -- left horizontal
+label A B -- top right center
+label AB x\;\mathrm{cm} -- left horizontal end
 ```
 
 Also labeling circle arcs (where with angle) (bigger means taking the bigger of 2 arcs):

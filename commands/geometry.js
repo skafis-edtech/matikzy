@@ -1065,6 +1065,7 @@ function parseContent(content) {
   const inscribedCircleCmds = [];
   const circumscribedCircleCmds = [];
   const tangentLineCmds = [];
+  const parallelPerpLineCmds = [];
   const distanceCmds = [];
   const linearPointCmds = [];
   const secondaryPolyFigureCmds = [];
@@ -1226,11 +1227,15 @@ function parseContent(content) {
           const orientWord = posWords.find(
             (w) => w === "horizontal" || w === "aligned",
           );
+          const positionWord = posWords.find(
+            (w) => w === "end" || w === "center",
+          );
           const sideWords = posWords.filter(
-            (w) => w !== "horizontal" && w !== "aligned",
+            (w) => w !== "horizontal" && w !== "aligned" && w !== "end" && w !== "center",
           );
           const labelSide = sideWords.length > 0 ? sideWords[0] : null;
           const labelOrient = orientWord ?? null;
+          const labelEnd = positionWord === "end";
           const labelText = textWords.length > 0 ? textWords.join(" ") : null;
           if (labelText === null) {
             extraErrors.push(
@@ -1242,6 +1247,7 @@ function parseContent(content) {
               labelText,
               labelSide,
               labelOrient,
+              labelEnd,
             });
           }
         }
@@ -1371,6 +1377,22 @@ function parseContent(content) {
         const sepIdx = words.indexOf("--");
         const lineStyle = sepIdx !== -1 ? (words[sepIdx + 1] ?? null) : null;
         drawCmds.push({ drawType: "line", pts: splitPointNames(words[1]), lineStyle });
+      } else if (words[1] === "parallel" || (words[1] === "perpendicular" && words[2] !== "bisector")) {
+        const lineKind = words[1]; // "parallel" | "perpendicular"
+        const refSegNames = splitPointNames(words[2] ?? "");
+        const throughPt = words[3] ?? "";
+        const newIdx = words.indexOf("new");
+        const newName = newIdx !== -1 ? (words[newIdx + 1] ?? "") : "";
+        const sepIdx = words.indexOf("--");
+        const lineStyle = sepIdx !== -1 && sepIdx > newIdx ? (words[sepIdx + 1] ?? null) : null;
+        if (refSegNames.length !== 2 || !throughPt || !newName) {
+          extraErrors.push(
+            `"line ${lineKind}": format is "line ${lineKind} AB C new D"`,
+          );
+        } else {
+          parallelPerpLineCmds.push({ lineKind, refSegNames, throughPt, newName, lineStyle });
+          drawCmds.push({ drawType: "line", pts: [throughPt, newName], lineStyle });
+        }
       } else if (words[1] === "tangent") {
         if (words.length < 6 || words[4] !== "new") {
           extraErrors.push(
@@ -1744,6 +1766,7 @@ function parseContent(content) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    parallelPerpLineCmds,
     distanceCmds,
     linearPointCmds,
     secondaryPolyFigureCmds,
@@ -1782,6 +1805,7 @@ function syntaxCheck(content) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    parallelPerpLineCmds,
     distanceCmds,
     linearPointCmds,
     secondaryPolyFigureCmds,
@@ -1973,6 +1997,7 @@ function syntaxCheck(content) {
     ...circleKnownNames,
     ...lineCmds.flatMap((c) => c.newNames ?? []),
     ...tangentLineCmds.map((c) => c.newName),
+    ...parallelPerpLineCmds.map((c) => c.newName),
     ...cubeCmds.flatMap((c) => c.pts),
     ...cuboidCmds.flatMap((c) => c.pts),
     ...pyramidCmds.flatMap((c) => c.pts),
@@ -2084,6 +2109,15 @@ function syntaxCheck(content) {
     }
   }
 
+  for (const { lineKind, refSegNames, throughPt } of parallelPerpLineCmds) {
+    if (!allKnownNames.has(refSegNames[0]) || !allKnownNames.has(refSegNames[1]))
+      errors.push(
+        `"line ${lineKind}": unknown reference segment points "${refSegNames.join("")}"`,
+      );
+    if (!allKnownNames.has(throughPt))
+      errors.push(`"line ${lineKind}": unknown through-point "${throughPt}"`);
+  }
+
   for (const { triSpec, circleName, touchNames } of inscribedCircleCmds) {
     const tvChars = splitPointNames(triSpec ?? "");
     if (tvChars.length !== 3 || !tvChars.every((c) => vertexNames.includes(c)))
@@ -2192,9 +2226,9 @@ function syntaxCheck(content) {
       !allKnownNames.has(arcPts[1])
     )
       errors.push(`"arc": invalid points "${arcPts}"`);
-    if (!["none", "dotted", "dashed", "solid"].includes(style))
+    if (!["none", "dotted", "dashed", "solid", "thick"].includes(style))
       errors.push(
-        `"arc": unknown style "${style}" — use solid, dotted, dashed, or none`,
+        `"arc": unknown style "${style}" — use solid, dotted, dashed, thick, or none`,
       );
   }
 
@@ -2249,6 +2283,7 @@ function compile(content, size) {
     inscribedCircleCmds,
     circumscribedCircleCmds,
     tangentLineCmds,
+    parallelPerpLineCmds,
     distanceCmds,
     linearPointCmds,
     secondaryPolyFigureCmds,
@@ -2805,6 +2840,25 @@ function compile(content, size) {
     };
   }
 
+  // Parallel / perpendicular lines: place the second point D on the derived line through C.
+  for (const { lineKind, refSegNames, throughPt, newName } of parallelPerpLineCmds) {
+    const pA = lookupPt(refSegNames[0]);
+    const pB = lookupPt(refSegNames[1]);
+    const pC = lookupPt(throughPt);
+    if (!pA || !pB || !pC) continue;
+    const dx = pB.x - pA.x, dy = pB.y - pA.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-10) continue;
+    const ux = dx / len, uy = dy / len;
+    // Direction of the new line: same as AB for parallel, perpendicular for perpendicular.
+    const dirX = lineKind === "parallel" ? ux : -uy;
+    const dirY = lineKind === "parallel" ? uy :  ux;
+    newPtsMap[newName] = {
+      x: pC.x + dirX * circleR,
+      y: pC.y + dirY * circleR,
+    };
+  }
+
   // Tangent line: place new point B along the tangent at the given circle/ellipse point.
   for (const { circleName, pointName, newName } of tangentLineCmds) {
     const circleCmd = circleCmds.find((c) => c.name === circleName);
@@ -3227,6 +3281,8 @@ function compile(content, size) {
       if (len < 1e-10) continue;
       const ux = dx / len,
         uy = dy / len;
+      const isThick = lineStyle === "thick";
+      const lineW = isThick ? "2.5pt" : "1pt";
       const styleAttr =
         lineStyle === "dashed"
           ? ",dashed"
@@ -3243,20 +3299,20 @@ function compile(content, size) {
         const rx = bx + aWid * uy,
           ry = by - aWid * ux;
         lines.push(
-          `\\draw[line width=1pt${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(bx)},${f(by)});`,
+          `\\draw[line width=${lineW}${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(bx)},${f(by)});`,
         );
         arrowHeads.push(
           `\\fill (${f(p2.x)},${f(p2.y)}) -- (${f(lx)},${f(ly)}) -- (${f(rx)},${f(ry)}) -- cycle;`,
         );
       } else if (drawType === "segment") {
         lines.push(
-          `\\draw[line width=1pt${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`,
+          `\\draw[line width=${lineW}${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(p2.x)},${f(p2.y)});`,
         );
       } else if (drawType === "ray") {
         const ex = p2.x + extAmt * ux,
           ey = p2.y + extAmt * uy;
         lines.push(
-          `\\draw[line width=1pt${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(ex)},${f(ey)});`,
+          `\\draw[line width=${lineW}${styleAttr}] (${f(p1.x)},${f(p1.y)}) -- (${f(ex)},${f(ey)});`,
         );
       } else {
         // Clip the infinite line to the padded image bounding box (slab method).
@@ -3276,7 +3332,7 @@ function compile(content, size) {
         }
         if (tMin >= tMax) continue;
         lines.push(
-          `\\draw[line width=1pt${styleAttr}] (${f(p1.x + tMin * ux)},${f(p1.y + tMin * uy)}) -- (${f(p1.x + tMax * ux)},${f(p1.y + tMax * uy)});`,
+          `\\draw[line width=${lineW}${styleAttr}] (${f(p1.x + tMin * ux)},${f(p1.y + tMin * uy)}) -- (${f(p1.x + tMax * ux)},${f(p1.y + tMax * uy)});`,
         );
       }
     }
@@ -3327,12 +3383,14 @@ function compile(content, size) {
             if (sweep <= 180) { startDeg = θB; endDeg = θB + (360 - sweep); }
             else { startDeg = θA; endDeg = θA + sweep; }
           }
+          const arcThick = style === "thick";
+          const arcLineW = arcThick ? "3pt" : "1.5pt";
           const styleStr =
             style === "dotted" ? ",dotted" : style === "dashed" ? ",dashed" : "";
           const sx = f(ccx + R * Math.cos((startDeg * Math.PI) / 180));
           const sy = f(ccy + Ry * Math.sin((startDeg * Math.PI) / 180));
           lines.push(
-            `\\draw[line width=1.5pt${styleStr}] (${sx},${sy}) arc [start angle=${f(startDeg)}, end angle=${f(endDeg)}, x radius=${f(R)}, y radius=${f(Ry)}];`,
+            `\\draw[line width=${arcLineW}${styleStr}] (${sx},${sy}) arc [start angle=${f(startDeg)}, end angle=${f(endDeg)}, x radius=${f(R)}, y radius=${f(Ry)}];`,
           );
         }
       } else {
@@ -3622,6 +3680,7 @@ function compile(content, size) {
       labelText,
       labelSide,
       labelOrient,
+      labelEnd,
     } of sideLabelCmds) {
       let p1, p2, defaultLabel, refPt;
       const sideNames = splitPointNames(sideSpec);
@@ -3640,8 +3699,45 @@ function compile(content, size) {
       }
       const text = labelText ?? defaultLabel;
       if (!text) continue;
-      const mx = (p1.x + p2.x) / 2;
-      const my = (p1.y + p2.y) / 2;
+      // "end" positions the label at the p2 end.
+      // If an extended "line" draw command exists for these two points, use the
+      // bounding-box clip endpoint (image boundary) instead of the raw p2 coordinate.
+      let mx, my;
+      if (labelEnd) {
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        const llen = Math.hypot(dx, dy);
+        const isLineDraw =
+          llen > 1e-10 &&
+          drawCmds.some(
+            (d) =>
+              d.drawType === "line" &&
+              ((d.pts[0] === sideNames[0] && d.pts[1] === sideNames[1]) ||
+                (d.pts[0] === sideNames[1] && d.pts[1] === sideNames[0])),
+          );
+        if (isLineDraw) {
+          // Clip the infinite line to the bounding box; take the p2-direction end.
+          const ux = dx / llen, uy = dy / llen;
+          let tMin = -Infinity, tMax = Infinity;
+          if (Math.abs(ux) > 1e-10) {
+            const ta = (bbX0 - p1.x) / ux, tb = (bbX1 - p1.x) / ux;
+            tMin = Math.max(tMin, Math.min(ta, tb));
+            tMax = Math.min(tMax, Math.max(ta, tb));
+          }
+          if (Math.abs(uy) > 1e-10) {
+            const ta = (bbY0 - p1.y) / uy, tb = (bbY1 - p1.y) / uy;
+            tMin = Math.max(tMin, Math.min(ta, tb));
+            tMax = Math.min(tMax, Math.max(ta, tb));
+          }
+          mx = p1.x + tMax * ux;
+          my = p1.y + tMax * uy;
+        } else {
+          mx = p2.x;
+          my = p2.y;
+        }
+      } else {
+        mx = (p1.x + p2.x) / 2;
+        my = (p1.y + p2.y) / 2;
+      }
       // Perpendicular to the side; offset away from refPt if available, else always left.
       const sdx = p2.x - p1.x;
       const sdy = p2.y - p1.y;
