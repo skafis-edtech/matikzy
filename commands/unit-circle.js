@@ -116,9 +116,11 @@ const BASE_LINES = [
 
 const POINT_RE = /^point\s+(\S+)\s+new\s+([A-Za-z]\w*)$/;
 const LABEL_RE = /^label\s+([A-Za-z]\w*)\s+(?:\[([^\]]*)\]|\(([^)]*)\)|(.+))$/;
-const ROTANGLE_RE = /^rotangle\s+([A-Za-z]\w*)-([A-Za-z]\w*)\s+(.+)$/;
-const XLINE_RE = /^x-line\s+([A-Za-z]\w*)(?:\s+--\s+(dotted|dashed|solid))?$/;
-const YLINE_RE = /^y-line\s+([A-Za-z]\w*)(?:\s+--\s+(dotted|dashed|solid))?$/;
+const ROTANGLE_RE = /^rotangle\s+([A-Za-z]\w*)-([A-Za-z]\w*)(?:\s+(.+))?$/;
+const ANGLE_RE = /^angle\s+([A-Za-z]\w*)-([A-Za-z]\w*)(?:\s+(.+))?$/;
+const XLINE_RE = /^x-line\s+([A-Za-z]\w*)(?:\s+(?!--\s)(\S+))?(?:\s+--\s+(dotted|dashed|solid))?(\s+right-angle)?$/;
+const YLINE_RE = /^y-line\s+([A-Za-z]\w*)(?:\s+(?!--\s)(\S+))?(?:\s+--\s+(dotted|dashed|solid))?(\s+right-angle)?$/;
+const LINE_RE = /^line\s+(x|y)=(-?\d+(?:\.\d+)?)$/;
 
 function parseCommands(content) {
   const lines = content
@@ -132,6 +134,7 @@ function parseCommands(content) {
   const rotangles = [];
   const xlines = [];
   const ylines = [];
+  const lineDraws = [];
 
   for (const line of lines) {
     let m;
@@ -149,24 +152,28 @@ function parseCommands(content) {
           m[2] !== undefined ? "filled" : m[3] !== undefined ? "hollow" : null,
       };
     } else if ((m = line.match(ROTANGLE_RE))) {
-      rotangles.push({ from: m[1], to: m[2], arcLabel: m[3] });
+      rotangles.push({ from: m[1], to: m[2], arcLabel: m[3], arrow: true });
+    } else if ((m = line.match(ANGLE_RE))) {
+      rotangles.push({ from: m[1], to: m[2], arcLabel: m[3], arrow: false });
     } else if ((m = line.match(XLINE_RE))) {
-      xlines.push({ name: m[1], style: m[2] ?? "dotted" });
+      xlines.push({ name: m[1], label: m[2] ?? null, style: m[3] ?? "dotted", rightAngle: !!m[4] });
     } else if ((m = line.match(YLINE_RE))) {
-      ylines.push({ name: m[1], style: m[2] ?? "dotted" });
+      ylines.push({ name: m[1], label: m[2] ?? null, style: m[3] ?? "dotted", rightAngle: !!m[4] });
+    } else if ((m = line.match(LINE_RE))) {
+      lineDraws.push({ axis: m[1], val: parseFloat(m[2]) });
     } else {
       errors.push(`Unknown command: "${line}"`);
     }
   }
 
-  return { points, labels, rotangles, xlines, ylines, errors };
+  return { points, labels, rotangles, xlines, ylines, lineDraws, errors };
 }
 
 function syntaxCheck(content) {
   const trimmed = content.trim();
   if (trimmed === "") return { valid: true, errors: [] };
 
-  const { points, labels, rotangles, xlines, ylines, errors } =
+  const { points, labels, rotangles, xlines, ylines, lineDraws, errors } =
     parseCommands(trimmed);
   if (errors.length > 0) return { valid: false, errors };
 
@@ -192,10 +199,10 @@ function compile(content) {
   const lines = [...BASE_LINES];
   const trimmed = content.trim();
 
-  const { points, labels, rotangles, xlines, ylines } =
+  const { points, labels, rotangles, xlines, ylines, lineDraws } =
     trimmed !== ""
       ? parseCommands(trimmed)
-      : { points: {}, labels: {}, rotangles: [], xlines: [], ylines: [] };
+      : { points: {}, labels: {}, rotangles: [], xlines: [], ylines: [], lineDraws: [] };
 
   const oInQ3 = rotangles.some(({ to }) => {
     const pt = points[to];
@@ -203,11 +210,16 @@ function compile(content) {
   });
   lines.push(
     oInQ3
-      ? `\\node[below, scale=1.5] at (0.3,0.1) {$O$};`
-      : `\\node[below, scale=1.5] at (-0.3,0) {$O$};`,
+      ? `\\node[below, scale=1.1] at (0.2,0.05) {$O$};`
+      : `\\node[below, scale=1.1] at (-0.2,0) {$O$};`,
   );
 
-  for (const { from, to, arcLabel } of rotangles) {
+  // Radius sequence: 1st=0.6, 2nd=0.45 (smaller), 3rd=0.75 then growing.
+  const rotangleRadius = (i) =>
+    i === 0 ? 0.6 : i === 1 ? 0.45 : 0.75 + (i - 2) * 0.15;
+
+  for (let ri = 0; ri < rotangles.length; ri++) {
+    const { from, to, arcLabel, arrow } = rotangles[ri];
     const fromPt = points[from];
     const toPt = points[to];
     const { x, y, deg: toDeg } = toPt;
@@ -215,7 +227,7 @@ function compile(content) {
     const span = toDeg - fromDeg;
 
     const isSpiral = Math.abs(span) > 360;
-    const R_BASE = 0.6;
+    const R_BASE = rotangleRadius(ri);
     const STEP = 0.2; // radius increase per full revolution
 
     const arcRad = (toDeg * Math.PI) / 180;
@@ -290,26 +302,30 @@ function compile(content) {
 
       const arcX = fmt(rxEnd * cosA);
       const arcY = fmt(ryEnd * sinA);
-      const w1x = fmt(rxEnd * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
-      const w1y = fmt(ryEnd * sinA + (cw ? 1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
-      const w2x = fmt(rxEnd * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
-      const w2y = fmt(ryEnd * sinA + (cw ? 1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
-      lines.push(
-        `\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`,
-      );
+      if (arrow) {
+        const w1x = fmt(rxEnd * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
+        const w1y = fmt(ryEnd * sinA + (cw ? 1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
+        const w2x = fmt(rxEnd * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
+        const w2y = fmt(ryEnd * sinA + (cw ? 1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
+        lines.push(
+          `\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`,
+        );
+      }
     } else {
-      const arcX = fmt(0.6 * cosA);
-      const arcY = fmt(0.6 * sinA);
-      const w1x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
-      const w1y = fmt(0.6 * sinA + (cw ? 1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
-      const w2x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
-      const w2y = fmt(0.6 * sinA + (cw ? 1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
+      const arcX = fmt(R_BASE * cosA);
+      const arcY = fmt(R_BASE * sinA);
       lines.push(
-        `\\draw[thick] (${startX},${startY}) arc[start angle=${fromDeg}, end angle=${toDeg}, x radius=0.6, y radius=0.6];`,
+        `\\draw[thick] (${startX},${startY}) arc[start angle=${fromDeg}, end angle=${toDeg}, x radius=${fmt(R_BASE)}, y radius=${fmt(R_BASE)}];`,
       );
-      lines.push(
-        `\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`,
-      );
+      if (arrow) {
+        const w1x = fmt(R_BASE * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
+        const w1y = fmt(R_BASE * sinA + (cw ? 1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
+        const w2x = fmt(R_BASE * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
+        const w2y = fmt(R_BASE * sinA + (cw ? 1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
+        lines.push(
+          `\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`,
+        );
+      }
     }
     lines.push(
       `\\draw[line width=1pt] (0,0) -- (${fmt(fromPt.x)}, ${fmt(fromPt.y)});`,
@@ -347,7 +363,8 @@ function compile(content) {
       const lblRadius = outerArcR + 0.02;
 
       const lblX = fmt(lblRadius * lblCos);
-      const lblY = fmt(lblRadius * Math.sin(lblRad));
+      const lblSin = Math.sin(lblRad);
+      const lblY = fmt(lblRadius * lblSin + (lblSin >= 0 ? 0.12 : -0.12));
       // Always anchor left (right half) or right (left half) — just a small nudge
       // so long labels don't overlap the arc. Never above/below.
       const lblAlign = lblCos >= 0 ? "right, " : "left, ";
@@ -357,21 +374,58 @@ function compile(content) {
     }
   }
 
-  for (const { name, style } of xlines) {
+  for (const { axis, val } of lineDraws) {
+    const v = fmt(val * RADIUS);
+    if (axis === "x") {
+      lines.push(`\\draw[line width=1pt] (${v}, -3.5) -- (${v}, 3.5);`);
+    } else {
+      lines.push(`\\draw[line width=1pt] (-3.5, ${v}) -- (3.5, ${v});`);
+    }
+  }
+
+  for (const { name, label, style, rightAngle } of xlines) {
     const pt = points[name];
     if (!pt) continue;
     const s = style === "solid" ? "line width=1pt" : `${style}, line width=1pt`;
     lines.push(
       `\\draw[${s}] (${fmt(pt.x)}, ${fmt(pt.y)}) -- (${fmt(pt.x)}, 0);`,
     );
+    if (rightAngle) {
+      const sq = 0.22;
+      const raXd = fmt(pt.x + (pt.x >= 0 ? -1 : 1) * sq);
+      const raYd = fmt((pt.y >= 0 ? 1 : -1) * sq);
+      lines.push(
+        `\\draw[line width=0.8pt] (${raXd}, 0) -- (${raXd}, ${raYd}) -- (${fmt(pt.x)}, ${raYd});`,
+      );
+    }
+    if (label) {
+      const xAlign = pt.y < 0 ? "above" : "below";
+      lines.push(
+        `\\node[${xAlign}, scale=1.5] at (${fmt(pt.x)}, 0) {$${label}$};`,
+      );
+    }
   }
-  for (const { name, style } of ylines) {
+  for (const { name, label, style, rightAngle } of ylines) {
     const pt = points[name];
     if (!pt) continue;
     const s = style === "solid" ? "line width=1pt" : `${style}, line width=1pt`;
     lines.push(
       `\\draw[${s}] (${fmt(pt.x)}, ${fmt(pt.y)}) -- (0, ${fmt(pt.y)});`,
     );
+    if (rightAngle) {
+      const sq = 0.22;
+      const raXd = fmt((pt.x >= 0 ? 1 : -1) * sq);
+      const raYd = fmt(pt.y + (pt.y >= 0 ? -1 : 1) * sq);
+      lines.push(
+        `\\draw[line width=0.8pt] (${raXd}, ${fmt(pt.y)}) -- (${raXd}, ${raYd}) -- (0, ${raYd});`,
+      );
+    }
+    if (label) {
+      const yAlign = pt.x < 0 ? "right" : "left";
+      lines.push(
+        `\\node[${yAlign}, scale=1.5] at (0, ${fmt(pt.y)}) {$${label}$};`,
+      );
+    }
   }
 
   for (const [name, { text, dot }] of Object.entries(labels)) {

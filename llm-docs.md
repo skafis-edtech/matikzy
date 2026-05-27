@@ -713,8 +713,8 @@ The circle, axes, labels ±1, and center O are always drawn. Point `X` at 0° is
 ```
 point <angle> new <Name>
 ```
-- `<angle>` — degrees (integer or decimal, can be negative) **or** `n/dpi` notation
-- Examples: `point 120 new A`, `point -30 new B`, `point 1/2pi new C`, `point 3/4pi new D`
+- `<angle>` — degrees (integer, decimal, or negative) **or** pi notation: `pi`, `-pi`, `2pi`, `1.5pi`, `1/2pi`, `3/4pi`, `11/6pi`, etc.
+- Examples: `point 120 new A`, `point -30 new B`, `point 1/2pi new C`, `point 1.5pi new D`
 
 **Label a point:**
 ```
@@ -722,22 +722,52 @@ label <Name> [text]      ← filled dot + label
 label <Name> (text)      ← hollow dot + label
 label <Name> text        ← label only, no dot
 ```
+- Label position is auto-placed: right side of point if x≥0, left side if x<0.
 
 **Rotation arc with arrowhead:**
 ```
+rotangle <fromName>-<toName>
 rotangle <fromName>-<toName> <arcLabel>
 ```
-Draws a small arc at the origin from angle `from` to angle `to`, with an arrowhead at `to` and a label at the arc midpoint. Also draws radii to both points.
+Draws a small arc at the origin from angle `from` to angle `to`, with an arrowhead at `to` and an optional label near the arc. Also draws radii to both points.
 - Clockwise arc if `toDeg < fromDeg`, counter-clockwise otherwise.
+- Arc label is optional.
+- When multiple `rotangle`/`angle` commands are used, each gets a distinct radius (1st=0.6, 2nd=0.45, 3rd=0.75 growing by 0.15).
+- Spans >360° produce a spiral arc (phases: flat semicircle → expand ry → expand rx, repeating).
 
-**Projection lines:**
+**Arc without arrowhead:**
 ```
-x-line <Name>                      ← vertical dotted line to x-axis (default dotted)
-x-line <Name> -- dashed
+angle <fromName>-<toName>
+angle <fromName>-<toName> <arcLabel>
+```
+Same as `rotangle` but no arrowhead. Shares the same radius sequence as `rotangle`.
+
+**Projection lines to axes:**
+```
+x-line <Name>                                    ← vertical dotted line to x-axis
+x-line <Name> <axisLabel>                        ← with label on x-axis
+x-line <Name> -- dashed                          ← dashed style
 x-line <Name> -- solid
-y-line <Name>                      ← horizontal dotted line to y-axis
+x-line <Name> <axisLabel> -- dashed right-angle  ← label + right-angle mark at foot
+x-line <Name> -- dashed right-angle              ← right-angle mark only
+
+y-line <Name>                                    ← horizontal dotted line to y-axis
+y-line <Name> <axisLabel>
 y-line <Name> -- dashed
+y-line <Name> <axisLabel> -- solid right-angle
 ```
+- Default style is `dotted`. Options: `dotted`, `dashed`, `solid`.
+- `<axisLabel>` is a LaTeX math token (e.g. `x_M`, `\cos\alpha`); rendered at the foot on the axis.
+- Label side is auto-placed: x-axis label below if point is above (y>0), above if below (y<0); y-axis label left if point is to the right (x>0), right if to the left (x<0).
+- `right-angle` draws a small right-angle square at the foot of the projection.
+
+**Full straight lines through the diagram:**
+```
+line x=<value>    ← vertical line at x = value × RADIUS
+line y=<value>    ← horizontal line at y = value × RADIUS
+```
+- Values are in unit-circle units (1 = radius of the circle). E.g. `line y=1` draws at the top of the circle.
+- Negative and decimal values are accepted: `line x=-0.5`, `line y=0.5`.
 
 ### Examples
 ```
@@ -755,8 +785,8 @@ unit-circle:
 point 240 new M
 label M [M(x;y)]
 rotangle X-M 240^\circ
-x-line M -- dashed
-y-line M
+x-line M x_M -- dashed right-angle
+y-line M y_M -- dashed right-angle
 ```
 
 ```
@@ -766,4 +796,13 @@ point 3/4pi new B
 label A [A]
 label B [B]
 rotangle X-A \frac{\pi}{2}
+angle A-B \frac{\pi}{4}
+```
+
+```
+unit-circle:
+point 60 new A
+rotangle X-A
+line y=0.5
+line x=1
 ```

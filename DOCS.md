@@ -23,6 +23,8 @@ Commands:
   - quadritelateral-pyramid - not started,
   - triangle-pyramid - not started.
 
+TODO: add colors (?)
+
 ## `function`
 
 Start with `function` and then add components.
@@ -185,7 +187,21 @@ point (1.6666;0.5) [] x-line
 
 - graph: domain/range issue. Even points outside the viewport are sometimes calculated that leads to calculation errors, e.g. function exp. (u19750).
 - `function: graph cubic (-0.5;0) (0;1) (2;0) (5;0)`
-- labels - axis label with `\text{}`, point label with `\sin x` with space! --- introduce `""`?
+- labels - axis label with `\text{}`, point label with `\sin x` with space! --- introduce `""`? 
+```(point (5;1) [y=\sin x]
+point (4;1) y=\cos\;x top)```
+- function large points too big.
+- axes cut off exactly (?)
+- `angle A` in parallelogram:
+```
+geometry:
+quadrilateral parallelogram new ABCD
+label A label B label C label D
+label AB 6
+label AD 9
+label angle A 60^\circ
+mark angle A
+```
 
 ## `geometry`
 
@@ -713,10 +729,23 @@ label CE 10 label ED 6 label AE 4
 
 ### Issues
 
-- not able to make arbitraty basis triangle (by side lengths, by angle sizes)
 - need language support for LT.
-- should be clear separation between new or old namings for elements. Clear separation between "basis" figure, like triangle or circle, and additional "in-drawn" figures.
 - make shortcuts for circle, the same way as is for triangle.
+- cones not scaling up/dpwn with geometry large/small
+- can't remove lines in cuboid with -- none.
+- shortcuts more in general
+- shortcuts for figure with labels
+- labels shorter notation (listing out???)
+- make possible to skip naming in figures! less boilerplate...
+- !!! fix quad pyramid naming, doesnt have D point.
+```
+geometry:
+pyramid quad 2 5 new
+point AC 1:1 new O
+label S label A label B label C label D label O
+line segment AC -- dashed
+line segmen BD -- dashed
+```
 
 ## `interval`
 
@@ -865,10 +894,7 @@ parabola n_1 n_2 -- down
 
 Start with `unit-circle` and then (optionally) add commands.
 
-### rotangle
-
-1. Template
-2. rotangle - rad/deg, label, point (hallow, fill, none; label)
+rotangle - rad/deg, label, point (hallow, fill, none; label)
 
 ```
 unit-circle:
@@ -878,15 +904,19 @@ label M [M(x;y)]
 rotangle X-M 240^\circ
 ```
 
-- x-line y-line, solid dashed dotted - default dotted
+- x-line y-line, solid dashed dotted - default dotted. `(x-line | y-line) <point> [<label>] [-- dashed | -- solid] [right-angle]`
 
 ```
-x-line M -- dashed
-y-line M
+x-line M -- dashed right-angle
+y-line M y_M 
 ```
 
-- angle
+- angle: same as rotangle just without arrow and without spiraling (angle -360 to 360).
 
-```
-angle 
-```
+- line: only x=a or y=a
+
+`line x=1`
+
+### issues
+
+- no tangent line functionality yet.
