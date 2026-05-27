@@ -1659,10 +1659,10 @@ function parseContent(content) {
         }
       }
     } else if (words[0] === "pyramid") {
-      // pyramid quad [right] [L H] new SABC  |  pyramid tri [L H] new SABC
+      // pyramid quad [right] [L H] new SABCD  |  pyramid tri [L H] new SABC
       if (words[1] !== "quad" && words[1] !== "tri") {
         extraErrors.push(
-          `"pyramid": base type must be "quad" or "tri" (e.g. "pyramid quad new SABC" or "pyramid tri new SABC")`,
+          `"pyramid": base type must be "quad" or "tri" (e.g. "pyramid quad new SABCD" or "pyramid tri new SABC")`,
         );
       } else {
         const triBase = words[1] === "tri";
@@ -1676,18 +1676,21 @@ function parseContent(content) {
         }
         if (words[i] !== "new") {
           extraErrors.push(
-            `"pyramid ${words[1]}": requires "new" before the name (e.g. "pyramid ${words[1]} new SABC")`,
+            `"pyramid ${words[1]}": requires "new" before the name (e.g. "pyramid ${words[1]} new ${words[1] === "quad" ? "SABCD" : "SABC"}")`,
           );
         } else {
           const nameWord = words[i + 1] ?? "";
           const hasName = nameWord !== "" && !nameWord.startsWith(">>");
-          const pts = splitPointNames(hasName ? nameWord : "SABC");
-          if (pts.length !== 4) {
+          const defaultName = triBase ? "SABC" : "SABCD";
+          const allPts = splitPointNames(hasName ? nameWord : defaultName);
+          const expectedLen = triBase ? 4 : 5;
+          if (allPts.length !== expectedLen) {
             extraErrors.push(
-              `"pyramid ${words[1]}": requires exactly 4 point names — apex then 3 base vertices (e.g. "pyramid ${words[1]} new SABC")`,
+              `"pyramid ${words[1]}": requires exactly ${expectedLen} point names — apex then ${expectedLen - 1} base vertices (e.g. "pyramid ${words[1]} new ${defaultName}")`,
             );
           } else {
-            const internalD = triBase ? null : `__pyD_${pyramidCmds.length}__`;
+            const internalD = triBase ? null : allPts[4];
+            const pts = triBase ? allPts : allPts.slice(0, 4);
             const rotCount = words.slice(i + (hasName ? 2 : 1)).filter(w => w === ">>rot").length;
             pyramidCmds.push({ pts, internalD, baseLen, height, isRight, triBase, rotCount });
           }
@@ -2044,7 +2047,7 @@ function syntaxCheck(content) {
     ...parallelPerpLineCmds.map((c) => c.newName),
     ...cubeCmds.flatMap((c) => c.pts),
     ...cuboidCmds.flatMap((c) => c.pts),
-    ...pyramidCmds.flatMap((c) => c.pts),
+    ...pyramidCmds.flatMap((c) => [...c.pts, ...(c.internalD ? [c.internalD] : [])]),
     ...coneCmds.flatMap((c) => [c.apexName, c.centerName, c.rimName, c.internalT1, c.internalT2]),
     ...cylinderCmds.flatMap((c) => [c.bottomCenter, c.bottomRim, c.topCenter, c.topRim, c.internalBL, c.internalTL]),
   ]);
@@ -2286,9 +2289,11 @@ function syntaxCheck(content) {
       errors.push(`"cuboid": all 8 point names must be distinct`);
   }
 
-  for (const { pts } of pyramidCmds) {
-    if (new Set(pts).size !== 4)
-      errors.push(`"pyramid quad": all 4 point names must be distinct`);
+  for (const { pts, internalD, triBase } of pyramidCmds) {
+    const allPts = internalD ? [...pts, internalD] : pts;
+    const expectedLen = triBase ? 4 : 5;
+    if (new Set(allPts).size !== expectedLen)
+      errors.push(`"pyramid ${triBase ? "tri" : "quad"}": all ${expectedLen} point names must be distinct`);
   }
 
   for (const { apexName, centerName, rimName } of coneCmds) {
@@ -2703,10 +2708,11 @@ function compile(content, size) {
         const H = height  != null ? height  * sizeScale : cubeScale;
         const dX = L * 0.5;
         const dY = L * 0.325;
+        // Clockwise base (y-up): A(front-left) → B(back-left) → C(back-right) → D(front-right)
         newPtsMap[pA]        = { x: 0,      y: 0,   pos: "below left"  };
         newPtsMap[pB]        = { x: dX,     y: dY,  pos: "left"        };
-        newPtsMap[pC]        = { x: L,      y: 0,   pos: "below right" };
-        newPtsMap[internalD] = { x: L + dX, y: dY                      };
+        newPtsMap[pC]        = { x: L + dX, y: dY,  pos: "right"       };
+        newPtsMap[internalD] = { x: L,      y: 0,   pos: "below right" };
         newPtsMap[pS]        = isRight
           ? { x: dX,              y: dY + H,     pos: "above left" }
           : { x: (L + dX) / 2,   y: dY / 2 + H, pos: "above"      };
@@ -2742,9 +2748,10 @@ function compile(content, size) {
       }
     } else {
       const pD = internalD;
-      seg(pA, pS);   seg(pS, pC);   seg(pC, pA);
-      seg(pB, pS, true);  seg(pS, pD);   seg(pC, pD);
-      seg(pD, pB, true);  seg(pA, pB, true);
+      // Clockwise base ABCD (y-up): A(front-left), B(back-left), C(back-right), D(front-right)
+      seg(pA, pS);        seg(pD, pS);        seg(pC, pS);        // solid laterals A,D,C
+      seg(pA, pD);        seg(pD, pC);                            // solid front and right base
+      seg(pB, pS, true);  seg(pA, pB, true);  seg(pB, pC, true); // dashed: B lateral + B base edges
     }
   }
 

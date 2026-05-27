@@ -353,7 +353,7 @@ cuboid 3x4x5 new
 
 ```
 geometry:
-pyramid quad 4 4 new SABC
+pyramid quad 4 4 new SABCD
 pyramid quad right 2 3 new
 ```
 
