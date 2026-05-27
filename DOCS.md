@@ -375,6 +375,8 @@ parallels new AA1BB1 // bottom is AA1, top is BB1
 
 ### Naming
 
+_To be able to skip naming and not being able to use the point later_
+
 _To be extended, more accurate for lines, rays, segments; triangle angle_
 
 Points, line segments, angles, triangles, circles - have their own notation for naming, but by default they are not labeled on the image. They can have different labels than names (tho it would be a bit consufing).
@@ -597,7 +599,7 @@ area OAB -- solid light
 
 None, solid, solid light.
 
-## Shortcuts
+### Shortcuts
 
 Yes, everything is possible with current setup (pretty much). But sometimes it's a bit exhaustive, e.g.:
 
@@ -658,7 +660,7 @@ circle D-DN
 
 TODO...
 
-## From basic principles
+### From basic principles
 
 TODO: make everything from points and lines.
 
@@ -720,7 +722,7 @@ label CE 10 label ED 6 label AE 4
 
 Start with `interval` and then add components.
 
-## inline
+### inline
 
 This is the main section, everything can be written into one line (except for arcs and parabolas).
 
@@ -747,7 +749,7 @@ then goes elements:
 
 then the arrow: `> x`. Optional, can be no arrow, can be no arrow label.
 
-## arcs
+### arcs
 
 ```
 interval:
@@ -781,7 +783,7 @@ inline __[]__[]__[]__[]__>x
 arcs -<1>-<2>-
 ```
 
-## hatch
+### hatch
 
 Also, similarly to the arcs, can specify exact hatching between points. For the same interval max 4 hatches (top lean left, top lean right, bottom lean left, bottom lean right).
 
@@ -803,7 +805,7 @@ hatch <1>-<3> -- top right
 hatch <2>- -- bottom left
 ```
 
-## parabola
+### parabola
 
 ```
 interval:
@@ -858,3 +860,33 @@ parabola n_1 n_2 -- down
 - not possible to do hatching from -infty to +infty
 - not possible to have no points at all (plain line)
 - not possible to adjust the segment lengths / distances between points
+
+## `unit-circle`
+
+Start with `unit-circle` and then (optionally) add commands.
+
+### rotangle
+
+1. Template
+2. rotangle - rad/deg, label, point (hallow, fill, none; label)
+
+```
+unit-circle:
+point 240 new M
+point 0 new X    // optional, X at 0° is always implicit
+label M [M(x;y)]
+rotangle X-M 240^\circ
+```
+
+- x-line y-line, solid dashed dotted - default dotted
+
+```
+x-line M -- dashed
+y-line M
+```
+
+- angle
+
+```
+angle 
+```

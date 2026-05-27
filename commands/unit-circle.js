@@ -25,12 +25,23 @@ function fmt(n) {
 }
 
 // Parse "pi" notation (input already lowercased, whitespace stripped).
-// Only accepts [−]<int>/<int>pi — e.g. "1/2pi", "-3/4pi", "11/6pi"
+// Accepts: pi, -pi, 2pi, -3pi, 1.5pi, 0.5pi, 1/2pi, -3/4pi, 11/6pi, etc.
 function parsePiRadians(s) {
-  const m = s.match(/^(-?)(\d+)\/(\d+)pi$/);
+  // coefficient can be: empty (=1), integer, decimal, or int/int fraction
+  const m = s.match(/^(-?)(\d+(?:\.\d+)?|\d+\/\d+)?pi$/);
   if (!m) return null;
   const sign = m[1] === "-" ? -1 : 1;
-  return sign * (parseInt(m[2]) / parseInt(m[3])) * Math.PI;
+  const raw = m[2];
+  let coeff;
+  if (!raw) {
+    coeff = 1;
+  } else if (raw.includes("/")) {
+    const [num, den] = raw.split("/");
+    coeff = parseInt(num) / parseInt(den);
+  } else {
+    coeff = parseFloat(raw);
+  }
+  return sign * coeff * Math.PI;
 }
 
 function coordsFromDeg(deg) {
@@ -132,7 +143,11 @@ function parseCommands(content) {
       }
       points[m[2]] = angle;
     } else if ((m = line.match(LABEL_RE))) {
-      labels[m[1]] = { text: m[2] ?? m[3] ?? m[4], dot: m[2] !== undefined ? "filled" : m[3] !== undefined ? "hollow" : null };
+      labels[m[1]] = {
+        text: m[2] ?? m[3] ?? m[4],
+        dot:
+          m[2] !== undefined ? "filled" : m[3] !== undefined ? "hollow" : null,
+      };
     } else if ((m = line.match(ROTANGLE_RE))) {
       rotangles.push({ from: m[1], to: m[2], arcLabel: m[3] });
     } else if ((m = line.match(XLINE_RE))) {
@@ -151,7 +166,8 @@ function syntaxCheck(content) {
   const trimmed = content.trim();
   if (trimmed === "") return { valid: true, errors: [] };
 
-  const { points, labels, rotangles, xlines, ylines, errors } = parseCommands(trimmed);
+  const { points, labels, rotangles, xlines, ylines, errors } =
+    parseCommands(trimmed);
   if (errors.length > 0) return { valid: false, errors };
 
   for (const { from, to } of rotangles) {
@@ -198,41 +214,146 @@ function compile(content) {
     const fromDeg = fromPt.deg;
     const span = toDeg - fromDeg;
 
+    const isSpiral = Math.abs(span) > 360;
+    const R_BASE = 0.6;
+    const STEP = 0.2; // radius increase per full revolution
+
     const arcRad = (toDeg * Math.PI) / 180;
     const cosA = Math.cos(arcRad);
     const sinA = Math.sin(arcRad);
-    const arcX = fmt(0.6 * cosA);
-    const arcY = fmt(0.6 * sinA);
-
     const cw = span < 0;
     const arrowRad = arcRad + ((cw ? 14 : -14) * Math.PI) / 180;
     const cosAr = Math.cos(arrowRad);
     const sinAr = Math.sin(arrowRad);
-    const w1x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
-    const w1y = fmt(0.6 * sinA + (cw ? 1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
-    const w2x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
-    const w2y = fmt(0.6 * sinA + (cw ? 1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
 
-    const startX = fmt(0.6 * Math.cos((fromDeg * Math.PI) / 180));
-    const startY = fmt(0.6 * Math.sin((fromDeg * Math.PI) / 180));
+    const startX = fmt(R_BASE * Math.cos((fromDeg * Math.PI) / 180));
+    const startY = fmt(R_BASE * Math.sin((fromDeg * Math.PI) / 180));
 
     lines.push(``, `% Rotation angle`);
+
+    if (isSpiral) {
+      // Phases per revolution:
+      //   Phase 1 (0–180°)  : rx=r,      ry=r        — flat semicircle
+      //   Phase 2 (180–270°): rx=r,      ry=r+STEP/2  — ry expands
+      //   Phase 3 (270–360°): rx=r+STEP, ry=r+STEP/2  — rx expands, r advances
+      // The phases apply continuously — even the final partial revolution
+      // gets the expanded radii once it enters Q3 or Q4.
+      const dir = span > 0 ? 1 : -1;
+      let r = R_BASE;
+      let absLeft = Math.abs(span);
+      let cur = fromDeg;
+      let rxEnd = R_BASE,
+        ryEnd = R_BASE; // track actual endpoint radii
+
+      const arcPt = (rx, ry, angle) => {
+        const rad = (angle * Math.PI) / 180;
+        return `(${fmt(rx * Math.cos(rad))},${fmt(ry * Math.sin(rad))})`;
+      };
+
+      while (absLeft > 0.001) {
+        // Phase 1: flat semicircle (up to 180°)
+        const seg1 = Math.min(180, absLeft);
+        const e1 = cur + dir * seg1;
+        lines.push(
+          `\\draw[thick] ${arcPt(r, r, cur)} arc[start angle=${fmt(cur)}, end angle=${fmt(e1)}, x radius=${fmt(r)}, y radius=${fmt(r)}];`,
+        );
+        cur = e1;
+        absLeft -= seg1;
+        rxEnd = r;
+        ryEnd = r;
+        if (absLeft < 0.001) break;
+
+        // Phase 2: ry expands (up to 90°)
+        const seg2 = Math.min(90, absLeft);
+        const e2 = cur + dir * seg2;
+        lines.push(
+          `\\draw[thick] ${arcPt(r, r + STEP / 2, cur)} arc[start angle=${fmt(cur)}, end angle=${fmt(e2)}, x radius=${fmt(r)}, y radius=${fmt(r + STEP / 2)}];`,
+        );
+        cur = e2;
+        absLeft -= seg2;
+        rxEnd = r;
+        ryEnd = r + STEP / 2;
+        if (absLeft < 0.001) break;
+
+        // Phase 3: rx expands (up to 90°), then r advances
+        const seg3 = Math.min(90, absLeft);
+        const e3 = cur + dir * seg3;
+        lines.push(
+          `\\draw[thick] ${arcPt(r + STEP, r + STEP / 2, cur)} arc[start angle=${fmt(cur)}, end angle=${fmt(e3)}, x radius=${fmt(r + STEP)}, y radius=${fmt(r + STEP / 2)}];`,
+        );
+        cur = e3;
+        absLeft -= seg3;
+        rxEnd = r + STEP;
+        ryEnd = r + STEP / 2;
+        r += STEP;
+      }
+
+      const arcX = fmt(rxEnd * cosA);
+      const arcY = fmt(ryEnd * sinA);
+      const w1x = fmt(rxEnd * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
+      const w1y = fmt(ryEnd * sinA + (cw ? 1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
+      const w2x = fmt(rxEnd * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
+      const w2y = fmt(ryEnd * sinA + (cw ? 1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
+      lines.push(
+        `\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`,
+      );
+    } else {
+      const arcX = fmt(0.6 * cosA);
+      const arcY = fmt(0.6 * sinA);
+      const w1x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr + 0.1 * cosAr);
+      const w1y = fmt(0.6 * sinA + (cw ? 1 : -1) * 0.2 * cosAr + 0.1 * sinAr);
+      const w2x = fmt(0.6 * cosA + (cw ? -1 : 1) * 0.2 * sinAr - 0.1 * cosAr);
+      const w2y = fmt(0.6 * sinA + (cw ? 1 : -1) * 0.2 * cosAr - 0.1 * sinAr);
+      lines.push(
+        `\\draw[thick] (${startX},${startY}) arc[start angle=${fromDeg}, end angle=${toDeg}, x radius=0.6, y radius=0.6];`,
+      );
+      lines.push(
+        `\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`,
+      );
+    }
     lines.push(
-      `\\draw[thick] (${startX},${startY}) arc[start angle=${fromDeg}, end angle=${toDeg}, x radius=0.6, y radius=0.6];`,
+      `\\draw[line width=1pt] (0,0) -- (${fmt(fromPt.x)}, ${fmt(fromPt.y)});`,
     );
-    lines.push(
-      `\\fill (${arcX}, ${arcY}) -- (${w1x}, ${w1y}) -- (${w2x}, ${w2y}) -- cycle;`,
-    );
-    lines.push(`\\draw[line width=1pt] (0,0) -- (${fmt(fromPt.x)}, ${fmt(fromPt.y)});`);
     lines.push(`\\draw[line width=1pt] (0,0) -- (${fmt(x)}, ${fmt(y)});`);
 
     if (arcLabel) {
-      const midRad = (((fromDeg + toDeg) / 2) * Math.PI) / 180;
-      const cosMid = Math.cos(midRad);
-      const sinMid = Math.sin(midRad);
-      const lblX = fmt(0.9 * cosMid);
-      const lblY = fmt(0.9 * sinMid);
-      lines.push(`\\node[scale=1.5] at (${lblX}, ${lblY}) {$${arcLabel}$};`);
+      const midDeg = (fromDeg + toDeg) / 2;
+      let lblDeg;
+      if (Math.abs(span) < 90) {
+        // Small arc (< 90°): label at the arc midpoint.
+        lblDeg = midDeg;
+      } else {
+        // Larger arc: label at the centre of the 90° quarter that contains the midpoint.
+        // Quarter centres: Q1→45°, Q2→135°, Q3→225°, Q4→315°.
+        const norm = ((midDeg % 360) + 360) % 360;
+        lblDeg = Math.floor(norm / 90) * 90 + 45;
+      }
+      const lblRad = (lblDeg * Math.PI) / 180;
+      const lblCos = Math.cos(lblRad);
+
+      // Label sits just outside the outermost arc of the rotangle/spiral.
+      // For a plain arc the outer edge is R_BASE (0.6); for a spiral it grows.
+      let outerArcR = R_BASE;
+      if (isSpiral) {
+        const posInLastRev = Math.abs(span) % 360;
+        const revR = R_BASE + Math.floor(Math.abs(span) / 360) * STEP;
+        outerArcR =
+          posInLastRev > 270
+            ? revR + STEP
+            : posInLastRev > 180
+              ? revR + STEP / 2
+              : revR;
+      }
+      const lblRadius = outerArcR + 0.02;
+
+      const lblX = fmt(lblRadius * lblCos);
+      const lblY = fmt(lblRadius * Math.sin(lblRad));
+      // Always anchor left (right half) or right (left half) — just a small nudge
+      // so long labels don't overlap the arc. Never above/below.
+      const lblAlign = lblCos >= 0 ? "right, " : "left, ";
+      lines.push(
+        `\\node[${lblAlign}scale=1.5] at (${lblX}, ${lblY}) {$${arcLabel}$};`,
+      );
     }
   }
 
@@ -240,13 +361,17 @@ function compile(content) {
     const pt = points[name];
     if (!pt) continue;
     const s = style === "solid" ? "line width=1pt" : `${style}, line width=1pt`;
-    lines.push(`\\draw[${s}] (${fmt(pt.x)}, ${fmt(pt.y)}) -- (${fmt(pt.x)}, 0);`);
+    lines.push(
+      `\\draw[${s}] (${fmt(pt.x)}, ${fmt(pt.y)}) -- (${fmt(pt.x)}, 0);`,
+    );
   }
   for (const { name, style } of ylines) {
     const pt = points[name];
     if (!pt) continue;
     const s = style === "solid" ? "line width=1pt" : `${style}, line width=1pt`;
-    lines.push(`\\draw[${s}] (${fmt(pt.x)}, ${fmt(pt.y)}) -- (0, ${fmt(pt.y)});`);
+    lines.push(
+      `\\draw[${s}] (${fmt(pt.x)}, ${fmt(pt.y)}) -- (0, ${fmt(pt.y)});`,
+    );
   }
 
   for (const [name, { text, dot }] of Object.entries(labels)) {
