@@ -1009,7 +1009,7 @@ function parseContent(content) {
   const lines = content
     .trim()
     .split(
-      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid|pyramid)\b)/,
+      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid|pyramid|cone)\b)/,
     )
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -1072,6 +1072,7 @@ function parseContent(content) {
   const cubeCmds = [];
   const cuboidCmds = [];
   const pyramidCmds = [];
+  const coneCmds = [];
   const extraErrors = [];
   if (hasQuad && quadResult.unknown.length > 0) {
     const qu = quadResult.unknown;
@@ -1112,11 +1113,13 @@ function parseContent(content) {
       const isSpec = ws[1] === "inscribe" || ws[1] === "circumscribe";
       const ni = isSpec ? ws.indexOf("new") : -1;
       const isCustomR = !isSpec && /^\d+(?:\.\d+)?$/.test(ws[1] ?? "");
-      const nm = isSpec
+      const _nmRaw = isSpec
         ? (ni !== -1 ? (ws[ni + 1] ?? "") : "")
         : isCustomR
           ? (ws[2] === "new" ? (ws[3] ?? "O-OX") : "")
           : (ws[1] === "new" ? (ws[2] ?? "O-OX") : (ws[1] ?? ""));
+      // If the candidate is a transform flag (>>…) rather than a name, default to O-OX.
+      const nm = (!_nmRaw || _nmRaw.startsWith(">>")) ? "O-OX" : _nmRaw;
       const d = nm.indexOf("-");
       if (d > 0) {
         const ctr = nm.slice(0, d);
@@ -1140,6 +1143,19 @@ function parseContent(content) {
       if (ni !== -1) {
         const nw = ws[ni + 1] ?? "";
         splitPointNames((nw === "" || nw.startsWith(">>")) ? "SABC" : nw).forEach((n) => circleNewNames.add(n));
+      }
+    } else if (ws[0] === "cone") {
+      const ni = ws.indexOf("new");
+      if (ni !== -1) {
+        const nw = ws[ni + 1] ?? "SO-OX";
+        const dash = nw.indexOf("-");
+        if (dash > 0) {
+          const preNames = splitPointNames(nw.slice(0, dash));
+          const postNames = splitPointNames(nw.slice(dash + 1));
+          // apex = all preNames except last; center = last of preNames; rim = last of postNames
+          preNames.forEach((n) => circleNewNames.add(n));
+          postNames.forEach((n) => circleNewNames.add(n));
+        }
       }
     }
   }
@@ -1462,7 +1478,8 @@ function parseContent(content) {
               `"circle ${nm}": requires "new" before the name (e.g. "circle ${nm} new O-OX")`,
             );
           } else {
-            const name = words[3] ?? "O-OX";
+            const _nameRaw = words[3] ?? "O-OX";
+            const name = (!_nameRaw || _nameRaw.startsWith(">>")) ? "O-OX" : _nameRaw;
             const dash = name.indexOf("-");
             if (dash <= 0 || dash === name.length - 1) {
               extraErrors.push(
@@ -1484,7 +1501,8 @@ function parseContent(content) {
             `"circle": requires "new" before the name (e.g. "circle new O-OX") or use existing points (e.g. "circle D-DN")`,
           );
         } else {
-          const name = words[2] ?? "O-OX";
+          const _nameRaw = words[2] ?? "O-OX";
+          const name = (!_nameRaw || _nameRaw.startsWith(">>")) ? "O-OX" : _nameRaw;
           const dash = name.indexOf("-");
           if (dash <= 0 || dash === name.length - 1) {
             extraErrors.push(
@@ -1607,6 +1625,43 @@ function parseContent(content) {
           }
         }
       }
+    } else if (words[0] === "cone") {
+      // cone [R [H]] new SO-OX  — apex S, center O, right rim X; Y (left rim) is anonymous
+      let i = 1;
+      let customRadius = null, customHeight = null;
+      if (/^\d+(?:\.\d+)?$/.test(words[i] ?? "")) {
+        customRadius = parseFloat(words[i++]);
+        if (/^\d+(?:\.\d+)?$/.test(words[i] ?? "")) {
+          customHeight = parseFloat(words[i++]);
+        }
+      }
+      if (words[i] !== "new") {
+        extraErrors.push(`"cone": requires "new" before the name (e.g. "cone new SO-OX")`);
+      } else {
+        const nameWord = words[i + 1] ?? "SO-OX";
+        const dash = nameWord.indexOf("-");
+        if (dash <= 0) {
+          extraErrors.push(`"cone": name must be in "SO-OX" format (apex+center - center+rim)`);
+        } else {
+          const preNames = splitPointNames(nameWord.slice(0, dash));
+          const postNames = splitPointNames(nameWord.slice(dash + 1));
+          if (preNames.length < 2 || postNames.length < 2) {
+            extraErrors.push(`"cone": need at least apex+center before "-" and center+rim after (e.g. "cone new SO-OX")`);
+          } else {
+            const apexName = preNames[0];
+            const centerName = preNames[preNames.length - 1];
+            const rimName = postNames[postNames.length - 1];
+            const internalY = `__coneY_${coneCmds.length}__`;
+            const circleName = `${centerName}-${centerName}${rimName}`;
+            coneCmds.push({ apexName, centerName, rimName, internalY, circleName, customRadius, customHeight });
+            // Synthetic circle (ellipse with hScale 0.5)
+            circleCmds.push({ name: circleName, center: centerName, radiusSide: `${centerName}${rimName}`, northPt: rimName, hScale: 0.5, customRadius });
+            // Solid bigger arc (front of ellipse) and dotted smaller arc (back)
+            arcDrawCmds.push({ circleName, arcPts: [rimName, internalY], bigger: true, style: "solid" });
+            arcDrawCmds.push({ circleName, arcPts: [rimName, internalY], bigger: false, style: "dotted" });
+          }
+        }
+      }
     } else {
       extraErrors.push(`Unknown command: "${line}"`);
     }
@@ -1636,6 +1691,7 @@ function parseContent(content) {
     cubeCmds,
     cuboidCmds,
     pyramidCmds,
+    coneCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1672,6 +1728,7 @@ function syntaxCheck(content) {
     cubeCmds,
     cuboidCmds,
     pyramidCmds,
+    coneCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1685,12 +1742,13 @@ function syntaxCheck(content) {
     firstCmd !== "quadrilateral" &&
     firstCmd !== "cube" &&
     firstCmd !== "cuboid" &&
-    firstCmd !== "pyramid"
+    firstCmd !== "pyramid" &&
+    firstCmd !== "cone"
   ) {
     return {
       valid: false,
       errors: [
-        `Unknown shape. Only "triangle", "quadrilateral", "circle", "cube", "cuboid", and "pyramid" are supported.`,
+        `Unknown shape. Only "triangle", "quadrilateral", "circle", "cube", "cuboid", "pyramid", and "cone" are supported.`,
       ],
     };
   }
@@ -1855,6 +1913,7 @@ function syntaxCheck(content) {
     ...cubeCmds.flatMap((c) => c.pts),
     ...cuboidCmds.flatMap((c) => c.pts),
     ...pyramidCmds.flatMap((c) => c.pts),
+    ...coneCmds.flatMap((c) => [c.apexName, c.centerName, c.rimName, c.internalY]),
   ]);
 
   for (const { spec } of angleLabelCmds) {
@@ -2090,6 +2149,11 @@ function syntaxCheck(content) {
       errors.push(`"pyramid quad": all 4 point names must be distinct`);
   }
 
+  for (const { apexName, centerName, rimName } of coneCmds) {
+    if (new Set([apexName, centerName, rimName]).size !== 3)
+      errors.push(`"cone": apex, center, and rim point names must all be distinct`);
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -2123,6 +2187,7 @@ function compile(content, size) {
     cubeCmds,
     cuboidCmds,
     pyramidCmds,
+    coneCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -2478,6 +2543,12 @@ function compile(content, size) {
     }
   }
 
+  // Expand cone into draw commands: apex → right-rim and apex → left-rim (internal Y).
+  for (const { apexName, rimName, internalY } of coneCmds) {
+    drawCmds.push({ drawType: "segment", pts: [apexName, rimName], lineStyle: null });
+    drawCmds.push({ drawType: "segment", pts: [apexName, internalY], lineStyle: null });
+  }
+
   // Expand pyramid into draw commands — just edges, solid or dashed.
   for (const { pts, internalD, triBase, rotCount } of pyramidCmds) {
     const [pS, pA, pB, pC] = pts;
@@ -2566,6 +2637,31 @@ function compile(content, size) {
     return cp && np ? Math.hypot(cp.x - np.x, cp.y - np.y) : circleR;
   };
 
+  // Cone: compute left-rim (Y) and apex (S) positions.
+  for (const { apexName, centerName, rimName, internalY, circleName, customRadius: coneR, customHeight: coneH } of coneCmds) {
+    const circleCmd = circleCmds.find((c) => c.name === circleName);
+    if (!circleCmd) continue;
+    const cx = 0, cy = 0; // cone center is always at origin (standalone shape)
+    const R = coneR ?? circleR;
+    const hScale = 0.5;
+    const Ry = R * hScale;
+    // Y = left rim at 180°
+    newPtsMap[internalY] = {
+      x: cx - R,
+      y: cy,
+      originX: cx,
+      originY: cy,
+    };
+    // S = apex above center; height above the ellipse rim (Ry) + cone height
+    // If height is explicit, use it directly from the center; otherwise default to R*1.5 above center.
+    const apexY = coneH != null ? cy + coneH : cy + Ry + R * 1.5;
+    newPtsMap[apexName] = {
+      x: cx,
+      y: apexY,
+      pos: "above",
+    };
+  }
+
   // Compute positions for explicit points on circles.
   for (const { circleName, angleStr, name } of circlePointCmds) {
     const circleCmd = circleCmds.find((c) => c.name === circleName);
@@ -2615,19 +2711,24 @@ function compile(content, size) {
     };
   }
 
-  // Tangent line: place new point B along the tangent at the given circle point.
+  // Tangent line: place new point B along the tangent at the given circle/ellipse point.
   for (const { circleName, pointName, newName } of tangentLineCmds) {
     const circleCmd = circleCmds.find((c) => c.name === circleName);
     if (!circleCmd) continue;
     const center = lookupPt(circleCmd.center);
     const pt = lookupPt(pointName);
     if (!center || !pt) continue;
+    const hScale = circleCmd.hScale ?? 1;
     const rdx = pt.x - center.x,
       rdy = pt.y - center.y;
-    const rlen = Math.hypot(rdx, rdy);
-    if (rlen < 1e-10) continue;
-    const tx = -rdy / rlen,
-      ty = rdx / rlen;
+    // Ellipse tangent at (rdx, rdy) with semi-axes (R, R·hScale):
+    // parametric derivative = (-a·sinθ, b·cosθ) = (-rdy/hScale, rdx·hScale)
+    const tx_raw = -rdy / hScale,
+      ty_raw = rdx * hScale;
+    const tlen = Math.hypot(tx_raw, ty_raw);
+    if (tlen < 1e-10) continue;
+    const tx = tx_raw / tlen,
+      ty = ty_raw / tlen;
     const bOff = circleR * 0.7;
     newPtsMap[newName] = {
       x: pt.x + bOff * tx,
@@ -3230,12 +3331,16 @@ function compile(content, size) {
       const center = lookupPt(circleCmd.center);
       const pt = lookupPt(pointName);
       if (!center || !pt) continue;
+      const hScale = circleCmd.hScale ?? 1;
       const rdx = pt.x - center.x,
         rdy = pt.y - center.y;
-      const rlen = Math.hypot(rdx, rdy);
-      if (rlen < 1e-10) continue;
-      const tx = -rdy / rlen,
-        ty = rdx / rlen;
+      // Ellipse tangent: parametric derivative = (-rdy/hScale, rdx·hScale)
+      const tx_raw = -rdy / hScale,
+        ty_raw = rdx * hScale;
+      const tlen = Math.hypot(tx_raw, ty_raw);
+      if (tlen < 1e-10) continue;
+      const tx = tx_raw / tlen,
+        ty = ty_raw / tlen;
       let tMin = -Infinity,
         tMax = Infinity;
       if (Math.abs(tx) > 1e-10) {

@@ -308,7 +308,7 @@ Free form (D-diagonal) (listing starts with bottom right (D vertex), goes clockw
 - SSSSD
 - SSSDD
 - ASASA
-- SASASSSAAA
+- SASAS
 
 ```
   ┌───────┬──────────────────────────────────────────────────────┐
@@ -352,6 +352,15 @@ pyramid tri 3 4 new >>rot
 
 first number - basis, second number - height. If omitted, default 7 6. >>rot is just making variations of pyramid base, no possibility of free rotation. Only discrete.
 
+Note: possible only 3 types of pyramids - regaular triangular, regular quad, right quad (base still square).
+
+TODO: any type of base, any height point on the base.
+
+```
+geometry:
+cone 2 4 new SO-OX // these are defaults: base radius and height
+```
+
 ### Naming
 
 _To be extended, more accurate for lines, rays, segments; triangle angle_
@@ -376,6 +385,19 @@ Points, line segments, angles, triangles, circles - have their own notation for 
 **Circle**:
 
 - 3 points, dash between first and two others. one of those two others should be the same as the single one, e.g. A-AB, or K-M1K. the single letter marks center, the two letters marks a ray to the right, B is a point on circle to the right from the center (0 degrees).
+
+**Pyramid**
+
+- triangular: SABC
+- quad: SABCD
+
+**Cone**
+
+- SO-OX
+
+**Cuboid**
+
+- ABCDA1B1C1D1
 
 ### Triangle segments
 
@@ -584,6 +606,8 @@ label AD 6 -- right
 ```
 
 All this just to draw inscribed circle into a quadrilateral.
+
+... WIP
 
 **Figures from points**
 
