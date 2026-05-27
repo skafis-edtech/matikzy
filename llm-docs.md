@@ -241,10 +241,11 @@ cuboid 3x4x5 new                     ← AD × AB × AA1
 ```
 
 ```
-pyramid quad 4 4 new SABCD           ← quadrilateral base, base=4, height=4
-pyramid quad right 2 3 new           ← right pyramid (apex above B)
-pyramid tri 3 4 new >>rot            ← triangular base (>>rot for discrete rotation only)
+pyramid quad 4 4 new SABCD           ← quadrilateral base, base=4, height=4 (default name: SABCD)
+pyramid quad right 2 3 new           ← right pyramid (apex above back-left vertex)
+pyramid tri 3 4 new >>rot            ← triangular base (>>rot for discrete rotation only, default name: SABC)
 ```
+- `pyramid quad`: 5 names required — apex S then base ABCD clockwise (A=front-left, B=back-left, C=back-right, D=front-right). B is the hidden vertex (dashed edges). Default name `SABCD` when omitted.
 
 ```
 cone 2 4 new SO-OX                   ← base radius 2, height 4 (these are defaults)
