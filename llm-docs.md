@@ -130,7 +130,7 @@ geometry[small]:
 geometry[large]:
 ```
 
-Only **one basis** (triangle, circle, or quadrilateral) per diagram. Everything else is drawn on top of existing named points/segments.
+Only **one basis** per diagram (triangle, circle, quadrilateral, 3D shape, or parallels). Everything else is drawn on top of existing named points/segments.
 
 ---
 
@@ -138,12 +138,12 @@ Only **one basis** (triangle, circle, or quadrilateral) per diagram. Everything 
 
 **Keyword form:**
 ```
-triangle ABC                           ← scalene acute (default)
-triangle right A[B]C                   ← right angle at B ([] marks special vertex)
-triangle obtuse [A]BC                  ← obtuse angle at A
-triangle isosceles A[B]C               ← isosceles, apex at B
-triangle equilateral ABC
-triangle right isosceles A[B]C         ← right+isosceles at B
+triangle new ABC                        ← scalene acute (default)
+triangle right new A[B]C                ← right angle at B ([] marks special vertex)
+triangle obtuse new [A]BC               ← obtuse angle at A
+triangle isosceles new A[B]C            ← isosceles, apex at B
+triangle equilateral new ABC
+triangle right isosceles new A[B]C      ← right+isosceles at B
 ```
 - Angle type: `acute` (default), `right`, `obtuse`
 - Side type: `scalene` (default), `isosceles`, `equilateral`
@@ -152,19 +152,19 @@ triangle right isosceles A[B]C         ← right+isosceles at B
 
 **Congruence form** (specific side/angle values):
 ```
-triangle SSS 3 4 6 ABC
-triangle SAS 3 120 4 ABC
-triangle ASA 120 3 30 ABC
-triangle AAS 120 30 3 ABC >>rot >>rot120 >>invert
+triangle SSS 3 4 6 new ABC
+triangle SAS 3 120 4 new ABC
+triangle ASA 120 3 30 new ABC
+triangle AAS 120 30 3 new ABC >>rot >>rot120 >>invert
 ```
-Values follow congruence-rule order (sides in units, angles in degrees).
+Values follow congruence-rule order (sides in units, angles in degrees). Starts from vertex C, goes clockwise.
 
-| Mode | Values |
-|------|--------|
-| SSS  | side AB, side BC, side CA |
-| SAS  | side AB, angle B, side BC |
-| ASA  | angle A, side AB, angle B |
-| AAS  | angle A, angle B, side BC |
+| Mode | Values (starting at C, clockwise) |
+|------|-----------------------------------|
+| SSS  | side CA, side AB, side BC |
+| SAS  | side CA, angle A, side AB |
+| ASA  | angle C, side CA, angle A |
+| AAS  | angle C, angle A, side AB |
 
 Rotation / inversion:
 - `>>rot` — rotate so the next side is horizontal
@@ -175,62 +175,104 @@ Rotation / inversion:
 
 ### Circle (basis)
 ```
-circle O-OX
-circle A-AB
-circle 5 O-OX            ← custom radius 5 (default 2)
+circle new O-OX          ← center O, X at 0° (rightmost point)
+circle new               ← defaults to O-OX
+circle 5 new O-OX        ← custom radius 5 (default 2)
 ```
-Format: `center-centerpointOnCircle`. The point after the dash is on the circle at 0° (rightmost). `O-OX` means center O, X is at 0°.
+Format: `center-centerpointOnCircle`. The named point after the dash sits on the circle at 0°.
 
-**Oval transform:**
+**Oval (ellipse) transform:**
 ```
-circle O-OX >>h0.5       ← squish the Y axis by 0.5 → oval
+circle new O-OX >>h0.5   ← squish Y axis by 0.5 → oval
+circle new >>h0.5         ← no name → defaults to O-OX
 ```
 
 ---
 
 ### Quadrilateral (basis)
 ```
-quadrilateral square ABCD
-quadrilateral rectangle ABCD
-quadrilateral parallelogram ABCD
-quadrilateral rhombus ABCD
-quadrilateral trapezoid ABCD
-quadrilateral right trapezoid ABCD
-quadrilateral isosceles trapezoid ABCD
-quadrilateral SSSSD 1 2 3 4 2 ABCD    ← 4 sides + 1 diagonal
-quadrilateral SSSDD 1 2 3 2 3 ABCD    ← 3 sides + 2 diagonals
-quadrilateral SSAAA 3 3 90 90 90 ABCD ← 2 adjacent sides + 3 angles
-quadrilateral SSSAA 3 3 3 90 90 ABCD  ← 3 sides + 2 included angles
+quadrilateral square new ABCD
+quadrilateral rectangle new ABCD
+quadrilateral parallelogram new ABCD
+quadrilateral rhombus new ABCD
+quadrilateral trapezoid new ABCD
+quadrilateral right trapezoid new ABCD
+quadrilateral isosceles trapezoid new ABCD
 ```
+Optional custom dimensions before `new` (defaults shown in DOCS):
+```
+quadrilateral square 4 new ABCD
+quadrilateral rectangle 5.5 3 new ABCD
+quadrilateral parallelogram 5 60 3 new ABCD   ← side, angle, side
+quadrilateral trapezoid 30 12 60 4 new ABCD
+```
+
+Free-form numeric modes (listing starts at vertex D, goes clockwise D→A→B→C):
+```
+quadrilateral SSSSD 1 2 3 4 2 new ABCD   ← 4 sides + diagonal DB
+quadrilateral SSSDD 1 2 3 2 3 new ABCD   ← 3 sides + 2 diagonals
+quadrilateral ASASA 90 3 90 3 90 new ABCD
+quadrilateral SASAS 3 90 3 90 3 new ABCD
+```
+
+| Mode  | Values |
+|-------|--------|
+| SSSSD | side DA, side AB, side BC, side CD, diagonal DB |
+| SSSDD | side DA, side AB, side BC, diagonal DB, diagonal AC |
+| ASASA | angle D, side DA, angle A, side AB, angle B |
+| SASAS | side DA, angle A, side AB, angle B, side BC |
+
 Vertices: bottom-left → clockwise → ABCD. Supports `>>rot`, `>>rotN`, `>>invert`.
+
+**Suppressing sides:**
+```
+quadrilateral rectangle new
+line AB -- none          ← AB is invisible; points A and B remain usable
+line CD -- none
+```
 
 ---
 
-### 3D basis (cube / pyramid)
+### 3D basis (cube / cuboid / pyramid / cone / cylinder)
 ```
-geometry:
 cube new ABCDA1B1C1D1
-cube 4 new                           ← custom side length
-cuboid 3x4x5 new                     ← length × width × height (AD × AB × AA1)
+cube 4 new                           ← custom side length (default 4)
+cuboid 3x4x5 new                     ← AD × AB × AA1
 ```
 
 ```
-geometry:
-pyramid quad 4 4 new SABC            ← quadrilateral base, base=4, height=4
-pyramid quad right 2 3 new           ← right pyramid (BS is height)
-pyramid tri 3 4 new >>rot            ← triangular base
+pyramid quad 4 4 new SABCD           ← quadrilateral base, base=4, height=4
+pyramid quad right 2 3 new           ← right pyramid (apex above B)
+pyramid tri 3 4 new >>rot            ← triangular base (>>rot for discrete rotation only)
 ```
+
+```
+cone 2 4 new SO-OX                   ← base radius 2, height 4 (these are defaults)
+cylinder 2 4 new O-OX-O1-O1X1        ← radius 2, height 4 (these are defaults)
+```
+- Cone: S=apex, O=base center, X=base rim point
+- Cylinder: O/OX = bottom center/rim, O1/O1X1 = top center/rim
+
+---
+
+### Parallels (basis)
+```
+parallels new AA1BB1     ← bottom line AA1, top line BB1
+parallels 4 3 new AA1BB1 ← width 4, height 3 (defaults)
+```
+- Draws two infinite parallel lines (AA1 on bottom, BB1 on top) in a parallelogram layout
+- All 4 points are named and usable; sides AA1↔BB1 (left/right) are invisible by default
+- Suppress a line with `-- none`, style with `-- dashed` etc.
 
 ---
 
 ### Figures from existing points (non-basis)
-After placing a basis and adding points, you can draw sub-figures from named points without `new`:
+After placing a basis and adding points, draw sub-figures from named points without `new`:
 ```
 geometry:
 quadrilateral square new ABCD
 point AB 1:2 new K
-point BC 1:2 new L
-quadrilateral ABMN               ← quad from 4 existing points
+quadrilateral ABKL               ← quad from 4 existing points
 triangle ACK                     ← triangle from existing points
 circle D-DN                      ← circle from existing points
 ```
@@ -242,47 +284,52 @@ circle D-DN                      ← circle from existing points
 point AB 1:4 new K          ← on segment AB, ratio 1:4 from A
 point A-AB 120 new G        ← on circle A-AB at 120°
 point AD intersect BC new E ← intersection of two lines/segments
-point AB A 5 right new C    ← on line AB, 5 units right of A
+point AB A 5 right new C    ← on line AB, 5 units right of A (right/left optional)
 ```
 
 ---
 
 ### Line / Segment / Ray / Arrow / Distance
 ```
-line AB
-line segment CK
-line ray BC
-line arrow CK
-line distance C AB new K     ← foot of perpendicular from C to AB
+line AB                      ← infinite line through A and B
+line segment CK              ← exact endpoints
+line ray BC                  ← from B through C and beyond
+line arrow CK                ← segment with filled arrowhead
+line distance C AB new K     ← foot of perpendicular from C to line AB
 ```
-- `line` — full line through two points
-- `line segment` — exact endpoints only
-- `line ray` — from first point through second
-- `line arrow` — segment with arrowhead
-- Segment excess is trimmed when a shorter element is drawn on the same path
+- A `line segment` drawn on the same path suppresses any `line` or `ray` excess on that path
 
-**Style:**
+**Styles** (append `-- style`):
 ```
 line AB -- dashed
 line segment CK -- dotted
+line ray BC -- thick          ← heavier line (2.5 pt vs default 1 pt)
+line AB -- none               ← invisible (suppresses existing quad/triangle side too)
+line AB -- solid              ← explicit solid (default)
+```
+
+**Derived lines** (new point D placed on the constructed line):
+```
+line parallel AB C new D      ← line through C parallel to AB; D is a second named point on it
+line perpendicular AB C new D ← line through C perpendicular to AB
 ```
 
 ---
 
 ### Triangle segments
 ```
-line perpendicular bisector KLM KL new A B    ← perpendicular bisector of side KL
+line perpendicular bisector KLM KL new A B    ← perp bisector of side KL → points A, B
 line angle bisector KLM M new D               ← bisector from vertex M
 line median KLM K new G                       ← median from vertex K
 line altitude KLM K new G                     ← altitude from vertex K
-line midsegment KLM KL LM new G H            ← midsegment between KL and LM
+line midsegment KLM KL LM new G H            ← midsegment between midpoints of KL and LM
 ```
 
 ---
 
 ### Inscribed / Circumscribed circles
 ```
-circle inscribe ABC new O-OX K L M    ← K,L,M are tangent points opposite A,B,C
+circle inscribe ABC new O-OX K L M    ← K,L,M = tangent points opposite A,B,C
 circle circumscribe ABC new O-OX
 ```
 
@@ -290,7 +337,7 @@ circle circumscribe ABC new O-OX
 
 ### Tangent to circle
 ```
-line tangent O-OX X new Y    ← tangent at circle point X; Y is further along the tangent
+line tangent O-OX X new Y    ← tangent at circle point X; Y is a second point along the tangent
 ```
 
 ---
@@ -300,27 +347,35 @@ line tangent O-OX X new Y    ← tangent at circle point X; Y is further along t
 arc O-OX KL              ← minor arc from K to L on circle O-OX
 arc O-OX KL bigger       ← major arc (>180°)
 arc O-OX KL -- dotted
-arc O-OX KL -- none      ← invisible arc (useful for positioning)
+arc O-OX KL -- dashed
+arc O-OX KL -- thick     ← heavier arc (3 pt vs default 1.5 pt)
+arc O-OX KL -- none      ← invisible arc (hides the auto-drawn arc on a circle)
+arc O-OX KL -- solid     ← explicit solid
 ```
 
 ---
 
 ### Label
 ```
-label A                  ← labels point A with "A"
-label A B                ← labels point A with "B"
-label a                  ← labels side a (= BC in triangle ABC) with "a"
-label AB k               ← labels segment AB with "k"
-label angle A 1          ← labels angle at A with "1"
+label A                          ← point A labeled "A"
+label A B                        ← point A labeled "B"
+label a                          ← side a (= BC in ABC) labeled "a"
+label AB k                       ← segment AB labeled "k"
+label angle A 1                  ← angle at A labeled "1"
 label angle A \beta
-label arc O-OX AB bigger 220^\circ   ← labels the major arc AB
-label A -- top right     ← explicit position
-label AB a -- left
-label AB a -- left horizontal        ← align text along segment
+label arc O-OX AB bigger 220^\circ   ← major arc AB labeled
+```
+
+**Position modifiers** (after `--`):
+```
+label A -- top right             ← point label position
+label AB a -- left               ← segment label side
+label AB a -- left horizontal    ← align text along segment
+label AB x\;\mathrm{cm} -- left horizontal end   ← at the end (second named point) of segment/line
 ```
 - Point positions: `top`, `bottom`, `left`, `right`, `top left`, `top right`, `bottom left`, `bottom right`
-- Segment positions: `left`, `right`; add `horizontal` to align text along the segment
-- Segment label default: lowercase letter matching the opposite vertex (triangle sides only)
+- Segment positions: `left` / `right` (which side of segment); `horizontal` or `aligned` (text orientation); `center` (default along-segment position) or `end` (at the second named point; for a `line`, snaps to the image boundary)
+- Segment label default text: lowercase matching the opposite vertex (triangle sides only)
 
 ---
 
@@ -333,29 +388,33 @@ mark angle A I           ← single arc on angle at A
 mark angle A bigger II   ← double arc on reflex angle at A
 mark BCA right           ← right-angle square at B in angle BCA
 ```
-- Segment marks: `I`, `II`, `III` (default: auto-enumerate)
+- Segment marks: `I`, `II`, `III` (default: auto-enumerate across all marks)
 - Angle marks: `I`, `II`, `III` arcs, or `right` for square mark
 
 ---
 
 ### Area fill
 ```
-area OAB                 ← fill region OAB
+area OAB                 ← fill region OAB (sector if AB is a chord on a circle, else triangle)
 area OAB S_1             ← fill with label S_1 at center
-area OAB -- none         ← outline only
-area OAB -- solid light  ← light fill
+area OAB -- none         ← outline only (no fill)
+area OAB -- solid light  ← light grey fill
 ```
-If segment AB exists → sector; if it doesn't → triangle fill.
 
 ---
 
 ### Naming conventions
 - **Point**: single uppercase letter + optional digit — `A`, `A1`, `K9`
-- **Segment**: two point names — `AB`, `A1B` (same as `BA`)
+- **Segment / Line**: two point names — `AB`, `A1B`
 - **Side** (triangle only): single lowercase letter — `a` = side BC in ABC
-- **Angle**: three points (vertex in middle) — `ABC`; or `angle A` (any angle at A); `angle A bigger` for reflex
+- **Angle**: three points (vertex in middle) — `ABC`; or `angle A`; add `bigger` for reflex
 - **Circle**: `center-centerpointOnCircle` — `O-OX`, `A-AB`
 - **Triangle**: three uppercase letters — `ABC`
+- **Pyramid**: apex + base vertices — `SABC` (tri), `SABCD` (quad)
+- **Cone**: `SO-OX` (S=apex, O=base center, X=rim)
+- **Cylinder**: `O-OX-O1-O1X1` (bottom center/rim, top center/rim)
+- **Parallels**: `AA1BB1` (AA1=bottom line, BB1=top line)
+- **Cuboid**: `ABCDA1B1C1D1`
 
 ---
 
@@ -363,7 +422,7 @@ If segment AB exists → sector; if it doesn't → triangle fill.
 
 ```
 geometry:
-circle O-OX
+circle new O-OX
 point O-OX 85 new C
 point O-OX -30 new B
 point O-OX -135 new A
@@ -374,14 +433,14 @@ label O label A label B label C
 
 ```
 geometry:
-triangle right BA[C]
+triangle right new BA[C]
 label a label b label c label angle B \beta
 mark angle B I mark angle C right
 ```
 
 ```
 geometry:
-circle O-OX
+circle new O-OX
 point O-OX 60 new M
 point O-OX 120 new N
 line segment OM
@@ -389,6 +448,14 @@ line segment ON
 line segment MN
 label angle O 60^\circ
 label OM 12\;\mathrm{cm}
+```
+
+```
+geometry:
+parallels new AA1BB1
+line segment AA1 -- dashed
+mark angle A1AB I
+label AA1 a -- left horizontal end
 ```
 
 ---

@@ -366,6 +366,13 @@ geometry:
 cylinder 2 4 new O-OX-O1-O1X1
 ```
 
+### Another bases
+
+```
+geometry:
+parallels new AA1BB1 // bottom is AA1, top is BB1
+```
+
 ### Naming
 
 _To be extended, more accurate for lines, rays, segments; triangle angle_

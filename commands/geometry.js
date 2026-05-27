@@ -1005,16 +1005,41 @@ function computeTrianglePositions(triMode, triValues, triTransforms, size) {
 }
 
 // Splits content (any whitespace layout) into command chunks by keyword boundaries.
+function parseParallels(content) {
+  const words = content.trim().split(/\s+/);
+  // words[0] === "parallels"
+  const newIdx = words.indexOf("new");
+  const unknown = [];
+  if (newIdx === -1) {
+    unknown.push("__missing_new__");
+    return { ptNames: null, w: null, h: null, offset: null, unknown };
+  }
+  const nameStr = words[newIdx + 1] ?? "AA1BB1";
+  const ptNames = splitPointNames(nameStr);
+  if (ptNames.length !== 4) {
+    unknown.push("__bad_name__");
+    return { ptNames: null, w: null, h: null, offset: null, unknown };
+  }
+  // Optional numeric dims before "new": [w [h [offset]]]
+  const dims = [];
+  for (let i = 1; i < newIdx; i++) {
+    if (/^\d+(?:\.\d+)?$/.test(words[i])) dims.push(parseFloat(words[i]));
+  }
+  const [w = 4.0, h = 3.0, offset = 1.2] = dims;
+  return { ptNames, w, h, offset, unknown };
+}
+
 function parseContent(content) {
   const lines = content
     .trim()
     .split(
-      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid|pyramid|cone|cylinder)\b)/,
+      /(?<=\s)(?=(?:triangle|quadrilateral|parallels|label|mark|line|point|circle|area|arc|cube|cuboid|pyramid|cone|cylinder)\b)/,
     )
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   const hasTriangle = (lines[0] || "").split(/\s+/)[0] === "triangle";
   const hasQuad = (lines[0] || "").split(/\s+/)[0] === "quadrilateral";
+  const hasParallels = (lines[0] || "").split(/\s+/)[0] === "parallels";
   const triangleResult = hasTriangle
     ? parseTriangle(lines[0] || "")
     : {
@@ -1029,7 +1054,10 @@ function parseContent(content) {
   const quadResult = hasQuad
     ? parseQuadrilateral(lines[0] || "")
     : { quadType: null, labelStr: null, quadTransforms: [], unknown: [] };
-  const commandLines = lines.slice(hasTriangle || hasQuad ? 1 : 0);
+  const parallelsResult = hasParallels
+    ? parseParallels(lines[0] || "")
+    : { ptNames: null, w: null, h: null, offset: null, unknown: [] };
+  const commandLines = lines.slice(hasTriangle || hasQuad || hasParallels ? 1 : 0);
 
   const vertexNames = hasTriangle
     ? (
@@ -1048,7 +1076,9 @@ function parseContent(content) {
             { label: "D" },
           ]
         ).map((v) => v.label)
-      : [];
+      : hasParallels
+        ? (parallelsResult.ptNames ?? ["A", "A1", "B", "B1"])
+        : [];
 
   const vertexLabelCmds = [];
   const angleLabelCmds = [];
@@ -1091,6 +1121,13 @@ function parseContent(content) {
       extraErrors.push(
         `Unknown modifier(s): ${realQu.map((w) => `"${w}"`).join(", ")}`,
       );
+  }
+  if (hasParallels && parallelsResult.unknown.length > 0) {
+    const pu = parallelsResult.unknown;
+    if (pu.includes("__missing_new__"))
+      extraErrors.push(`"parallels": requires "new" before the name (e.g. "parallels new ABA1B1")`);
+    if (pu.includes("__bad_name__"))
+      extraErrors.push(`"parallels": name must be 4 points in "ABA1B1" format`);
   }
 
   // Pre-scan new point names so "label"/"mark" can reference them.
@@ -1779,6 +1816,8 @@ function parseContent(content) {
     hasTriangle,
     hasQuad,
     quadResult,
+    hasParallels,
+    parallelsResult,
     extraErrors,
   };
 }
@@ -1818,6 +1857,8 @@ function syntaxCheck(content) {
     hasTriangle,
     hasQuad,
     quadResult,
+    hasParallels,
+    parallelsResult,
     extraErrors,
   } = parseContent(content);
 
@@ -1826,6 +1867,7 @@ function syntaxCheck(content) {
     firstCmd !== "triangle" &&
     firstCmd !== "circle" &&
     firstCmd !== "quadrilateral" &&
+    firstCmd !== "parallels" &&
     firstCmd !== "cube" &&
     firstCmd !== "cuboid" &&
     firstCmd !== "pyramid" &&
@@ -1967,13 +2009,15 @@ function syntaxCheck(content) {
           { label: "D" },
         ]
       ).map((v) => v.label)
-    : (
-        parseLabels(labelStr) ?? [
-          { label: "A" },
-          { label: "B" },
-          { label: "C" },
-        ]
-      ).map((v) => v.label);
+    : hasParallels
+      ? (parallelsResult.ptNames ?? ["A", "B", "A1", "B1"])
+      : (
+          parseLabels(labelStr) ?? [
+            { label: "A" },
+            { label: "B" },
+            { label: "C" },
+          ]
+        ).map((v) => v.label);
 
   const circleKnownNames = [];
   for (const { center, northPt } of circleCmds) {
@@ -2296,6 +2340,8 @@ function compile(content, size) {
     hasTriangle,
     hasQuad,
     quadResult,
+    hasParallels,
+    parallelsResult,
   } = parseContent(content);
 
   // Labels map directly by position order. No mark = use DEFAULT_SPECIAL_POS.
@@ -2486,6 +2532,26 @@ function compile(content, size) {
 
   // Pre-compute geometry for all line commands (positions of new points + segment endpoints).
   const newPtsMap = {};
+
+  // Parallels: two horizontal parallel lines (AA1 bottom, BB1 top).
+  // Points are centred symmetrically so each label appears roughly 1/4–1/3 from its line's edge,
+  // not hard against the left boundary.  Formula: centre the whole figure at x=0:
+  //   hw = half the named-segment width,  ho = half the parallelogram offset
+  //   A  = (−hw − ho, 0)   A1 = (+hw − ho, 0)
+  //   B  = (−hw + ho, h)   B1 = (+hw + ho, h)
+  // The top segment is shifted right by `offset` relative to the bottom segment.
+  if (hasParallels && parallelsResult.ptNames) {
+    const s = QUAD_SCALE[size];
+    const { ptNames, w, h, offset } = parallelsResult;
+    const [pA, pA1, pB, pB1] = ptNames;
+    const hw = (w * s) / 2;
+    const ho = (offset * s) / 2;
+    newPtsMap[pA]  = { x: -hw + ho, y: 0,       pos: "below left"  };
+    newPtsMap[pA1] = { x:  hw + ho, y: 0,       pos: "below right" };
+    newPtsMap[pB]  = { x: -hw - ho, y: h * s,   pos: "above left"  };
+    newPtsMap[pB1] = { x:  hw - ho, y: h * s,   pos: "above right" };
+  }
+
   const lineGeoms = lineCmds.map(
     ({ lineType, triangleSpec, specWords, newNames }) => {
       const vp = {};
@@ -3199,6 +3265,7 @@ function compile(content, size) {
       [p2, p0, lc, la],
     ]) {
       const style = consumeSideStyle(a, b);
+      if (style === "none") continue;
       const sa =
         style === "dashed" ? ",dashed" : style === "dotted" ? ",dotted" : "";
       lines.push(
@@ -3215,10 +3282,41 @@ function compile(content, size) {
       [p3, p0, ld, la],
     ]) {
       const style = consumeSideStyle(a, b);
+      if (style === "none") continue;
       const sa =
         style === "dashed" ? ",dashed" : style === "dotted" ? ",dotted" : "";
       lines.push(
         `\\draw[line width=1.5pt${sa}] (${f(pt1.x)},${f(pt1.y)}) -- (${f(pt2.x)},${f(pt2.y)});`,
+      );
+    }
+  } else if (hasParallels && parallelsResult.ptNames) {
+    // Two parallel lines: A→A1 (bottom) and B→B1 (top), clipped to bounding box.
+    const [pA, pA1, pB, pB1] = parallelsResult.ptNames;
+    for (const [a, b] of [[pA, pA1], [pB, pB1]]) {
+      const style = consumeSideStyle(a, b);
+      if (style === "none") continue;
+      const sa =
+        style === "dashed" ? ",dashed" : style === "dotted" ? ",dotted" : "";
+      const pt1 = lookupPt(a), pt2 = lookupPt(b);
+      if (!pt1 || !pt2) continue;
+      const dx = pt2.x - pt1.x, dy = pt2.y - pt1.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-10) continue;
+      const ux = dx / len, uy = dy / len;
+      let tMin = -Infinity, tMax = Infinity;
+      if (Math.abs(ux) > 1e-10) {
+        const ta = (bbX0 - pt1.x) / ux, tb = (bbX1 - pt1.x) / ux;
+        tMin = Math.max(tMin, Math.min(ta, tb));
+        tMax = Math.min(tMax, Math.max(ta, tb));
+      }
+      if (Math.abs(uy) > 1e-10) {
+        const ta = (bbY0 - pt1.y) / uy, tb = (bbY1 - pt1.y) / uy;
+        tMin = Math.max(tMin, Math.min(ta, tb));
+        tMax = Math.min(tMax, Math.max(ta, tb));
+      }
+      if (tMin >= tMax) continue;
+      lines.push(
+        `\\draw[line width=1.5pt${sa}] (${f(pt1.x + tMin * ux)},${f(pt1.y + tMin * uy)}) -- (${f(pt1.x + tMax * ux)},${f(pt1.y + tMax * uy)});`,
       );
     }
   }
@@ -3264,6 +3362,7 @@ function compile(content, size) {
     for (const cmd of drawCmds) {
       if (consumedDrawCmds.has(cmd)) continue;
       const { drawType, pts, lineStyle } = cmd;
+      if (lineStyle === "none") continue;
       const idx1 = labels.findIndex((v) => v.label === pts[0]);
       const idx2 = labels.findIndex((v) => v.label === pts[1]);
       const p1 = idx1 !== -1 ? positions[idx1] : (newPtsMap[pts[0]] ?? null);
