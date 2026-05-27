@@ -361,6 +361,11 @@ geometry:
 cone 2 4 new SO-OX // these are defaults: base radius and height
 ```
 
+```
+geometry:
+cylinder 2 4 new O-OX-O1-O1X1
+```
+
 ### Naming
 
 _To be extended, more accurate for lines, rays, segments; triangle angle_
@@ -398,6 +403,10 @@ Points, line segments, angles, triangles, circles - have their own notation for 
 **Cuboid**
 
 - ABCDA1B1C1D1
+
+**Cylinder**
+
+- O-OX-O1-O1X1
 
 ### Triangle segments
 

@@ -1009,7 +1009,7 @@ function parseContent(content) {
   const lines = content
     .trim()
     .split(
-      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid|pyramid|cone)\b)/,
+      /(?<=\s)(?=(?:triangle|quadrilateral|label|mark|line|point|circle|area|arc|cube|cuboid|pyramid|cone|cylinder)\b)/,
     )
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
@@ -1073,6 +1073,7 @@ function parseContent(content) {
   const cuboidCmds = [];
   const pyramidCmds = [];
   const coneCmds = [];
+  const cylinderCmds = [];
   const extraErrors = [];
   if (hasQuad && quadResult.unknown.length > 0) {
     const qu = quadResult.unknown;
@@ -1152,10 +1153,18 @@ function parseContent(content) {
         if (dash > 0) {
           const preNames = splitPointNames(nw.slice(0, dash));
           const postNames = splitPointNames(nw.slice(dash + 1));
-          // apex = all preNames except last; center = last of preNames; rim = last of postNames
           preNames.forEach((n) => circleNewNames.add(n));
           postNames.forEach((n) => circleNewNames.add(n));
         }
+      }
+    } else if (ws[0] === "cylinder") {
+      const ni = ws.indexOf("new");
+      if (ni !== -1) {
+        const nw = ws[ni + 1] ?? "O-OX-O1-O1X1";
+        // 4 dash-separated parts: bottomCenter, bottomRadiusSide, topCenter, topRadiusSide
+        nw.split("-").forEach((part) =>
+          splitPointNames(part).forEach((n) => circleNewNames.add(n))
+        );
       }
     }
   }
@@ -1651,14 +1660,65 @@ function parseContent(content) {
             const apexName = preNames[0];
             const centerName = preNames[preNames.length - 1];
             const rimName = postNames[postNames.length - 1];
-            const internalY = `__coneY_${coneCmds.length}__`;
+            const idx = coneCmds.length;
+            // internalT1/T2: the actual tangent-touch points from S to the ellipse (computed in compile)
+            const internalT1 = `__coneT1_${idx}__`;  // right touch point
+            const internalT2 = `__coneT2_${idx}__`;  // left touch point
             const circleName = `${centerName}-${centerName}${rimName}`;
-            coneCmds.push({ apexName, centerName, rimName, internalY, circleName, customRadius, customHeight });
+            coneCmds.push({ apexName, centerName, rimName, internalT1, internalT2, circleName, customRadius, customHeight });
             // Synthetic circle (ellipse with hScale 0.5)
             circleCmds.push({ name: circleName, center: centerName, radiusSide: `${centerName}${rimName}`, northPt: rimName, hScale: 0.5, customRadius });
-            // Solid bigger arc (front of ellipse) and dotted smaller arc (back)
-            arcDrawCmds.push({ circleName, arcPts: [rimName, internalY], bigger: true, style: "solid" });
-            arcDrawCmds.push({ circleName, arcPts: [rimName, internalY], bigger: false, style: "dotted" });
+            // Arcs between the two tangent-touch points: front (solid bigger) and back (dotted smaller)
+            arcDrawCmds.push({ circleName, arcPts: [internalT1, internalT2], bigger: true, style: "solid" });
+            arcDrawCmds.push({ circleName, arcPts: [internalT1, internalT2], bigger: false, style: "dotted" });
+          }
+        }
+      }
+    } else if (words[0] === "cylinder") {
+      // cylinder [R [H]] new O-OX-O1-O1X1
+      let i = 1;
+      let customRadius = null, customHeight = null;
+      if (/^\d+(?:\.\d+)?$/.test(words[i] ?? "")) {
+        customRadius = parseFloat(words[i++]);
+        if (/^\d+(?:\.\d+)?$/.test(words[i] ?? ""))
+          customHeight = parseFloat(words[i++]);
+      }
+      if (words[i] !== "new") {
+        extraErrors.push(`"cylinder": requires "new" before the name (e.g. "cylinder new O-OX-O1-O1X1")`);
+      } else {
+        const nameWord = words[i + 1] ?? "O-OX-O1-O1X1";
+        const parts = nameWord.split("-");
+        if (parts.length !== 4) {
+          extraErrors.push(`"cylinder": name must be in "O-OX-O1-O1X1" format (4 dash-separated parts)`);
+        } else {
+          const [p0, p1, p2, p3] = parts;
+          const bottomCenter = p0;
+          const bottomRim = p1.startsWith(p0) ? p1.slice(p0.length) : p1;
+          const topCenter = p2;
+          const topRim = p3.startsWith(p2) ? p3.slice(p2.length) : p3;
+          if (!bottomCenter || !bottomRim || !topCenter || !topRim) {
+            extraErrors.push(`"cylinder": could not parse point names from "${nameWord}"`);
+          } else {
+            const idx = cylinderCmds.length;
+            const internalBL = `__cylBL_${idx}__`;  // bottom-left rim
+            const internalTL = `__cylTL_${idx}__`;  // top-left rim
+            const bottomCircleName = `${bottomCenter}-${p1}`;
+            const topCircleName = `${topCenter}-${p3}`;
+            cylinderCmds.push({
+              bottomCenter, bottomRim, topCenter, topRim,
+              internalBL, internalTL,
+              bottomCircleName, topCircleName,
+              customRadius, customHeight,
+            });
+            // Bottom circle in circleCmds (drives arc rendering)
+            circleCmds.push({
+              name: bottomCircleName, center: bottomCenter,
+              radiusSide: p1, northPt: bottomRim,
+              hScale: 0.5, customRadius,
+            });
+            // Bottom arcs: solid front (bigger) + dotted back (smaller), between rim and left
+            arcDrawCmds.push({ circleName: bottomCircleName, arcPts: [bottomRim, internalBL], bigger: true,  style: "solid" });
+            arcDrawCmds.push({ circleName: bottomCircleName, arcPts: [bottomRim, internalBL], bigger: false, style: "dotted" });
           }
         }
       }
@@ -1692,6 +1752,7 @@ function parseContent(content) {
     cuboidCmds,
     pyramidCmds,
     coneCmds,
+    cylinderCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1729,6 +1790,7 @@ function syntaxCheck(content) {
     cuboidCmds,
     pyramidCmds,
     coneCmds,
+    cylinderCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -1743,12 +1805,13 @@ function syntaxCheck(content) {
     firstCmd !== "cube" &&
     firstCmd !== "cuboid" &&
     firstCmd !== "pyramid" &&
-    firstCmd !== "cone"
+    firstCmd !== "cone" &&
+    firstCmd !== "cylinder"
   ) {
     return {
       valid: false,
       errors: [
-        `Unknown shape. Only "triangle", "quadrilateral", "circle", "cube", "cuboid", "pyramid", and "cone" are supported.`,
+        `Unknown shape. Only "triangle", "quadrilateral", "circle", "cube", "cuboid", "pyramid", "cone", and "cylinder" are supported.`,
       ],
     };
   }
@@ -1913,7 +1976,8 @@ function syntaxCheck(content) {
     ...cubeCmds.flatMap((c) => c.pts),
     ...cuboidCmds.flatMap((c) => c.pts),
     ...pyramidCmds.flatMap((c) => c.pts),
-    ...coneCmds.flatMap((c) => [c.apexName, c.centerName, c.rimName, c.internalY]),
+    ...coneCmds.flatMap((c) => [c.apexName, c.centerName, c.rimName, c.internalT1, c.internalT2]),
+    ...cylinderCmds.flatMap((c) => [c.bottomCenter, c.bottomRim, c.topCenter, c.topRim, c.internalBL, c.internalTL]),
   ]);
 
   for (const { spec } of angleLabelCmds) {
@@ -2154,6 +2218,11 @@ function syntaxCheck(content) {
       errors.push(`"cone": apex, center, and rim point names must all be distinct`);
   }
 
+  for (const { bottomCenter, bottomRim, topCenter, topRim } of cylinderCmds) {
+    if (new Set([bottomCenter, bottomRim, topCenter, topRim]).size !== 4)
+      errors.push(`"cylinder": all 4 point names (bottomCenter, bottomRim, topCenter, topRim) must be distinct`);
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -2188,6 +2257,7 @@ function compile(content, size) {
     cuboidCmds,
     pyramidCmds,
     coneCmds,
+    cylinderCmds,
     hasTriangle,
     hasQuad,
     quadResult,
@@ -2543,10 +2613,16 @@ function compile(content, size) {
     }
   }
 
-  // Expand cone into draw commands: apex → right-rim and apex → left-rim (internal Y).
-  for (const { apexName, rimName, internalY } of coneCmds) {
-    drawCmds.push({ drawType: "segment", pts: [apexName, rimName], lineStyle: null });
-    drawCmds.push({ drawType: "segment", pts: [apexName, internalY], lineStyle: null });
+  // Expand cone into draw commands: apex → right tangent-touch and apex → left tangent-touch.
+  for (const { apexName, internalT1, internalT2 } of coneCmds) {
+    drawCmds.push({ drawType: "segment", pts: [apexName, internalT1], lineStyle: null });
+    drawCmds.push({ drawType: "segment", pts: [apexName, internalT2], lineStyle: null });
+  }
+
+  // Expand cylinder into draw commands: two vertical side segments.
+  for (const { bottomRim, topRim, internalBL, internalTL } of cylinderCmds) {
+    drawCmds.push({ drawType: "segment", pts: [bottomRim, topRim],   lineStyle: null });
+    drawCmds.push({ drawType: "segment", pts: [internalBL, internalTL], lineStyle: null });
   }
 
   // Expand pyramid into draw commands — just edges, solid or dashed.
@@ -2637,29 +2713,47 @@ function compile(content, size) {
     return cp && np ? Math.hypot(cp.x - np.x, cp.y - np.y) : circleR;
   };
 
-  // Cone: compute left-rim (Y) and apex (S) positions.
-  for (const { apexName, centerName, rimName, internalY, circleName, customRadius: coneR, customHeight: coneH } of coneCmds) {
+  // Cone: compute apex (S) and tangent-touch points (T1 right, T2 left) positions.
+  for (const { apexName, internalT1, internalT2, circleName, customRadius: coneR, customHeight: coneH } of coneCmds) {
     const circleCmd = circleCmds.find((c) => c.name === circleName);
     if (!circleCmd) continue;
     const cx = 0, cy = 0; // cone center is always at origin (standalone shape)
     const R = coneR ?? circleR;
     const hScale = 0.5;
     const Ry = R * hScale;
-    // Y = left rim at 180°
-    newPtsMap[internalY] = {
-      x: cx - R,
-      y: cy,
-      originX: cx,
-      originY: cy,
-    };
-    // S = apex above center; height above the ellipse rim (Ry) + cone height
-    // If height is explicit, use it directly from the center; otherwise default to R*1.5 above center.
+    // S = apex above center
     const apexY = coneH != null ? cy + coneH : cy + Ry + R * 1.5;
-    newPtsMap[apexName] = {
-      x: cx,
-      y: apexY,
-      pos: "above",
-    };
+    newPtsMap[apexName] = { x: cx, y: apexY, pos: "above" };
+    const h = apexY - cy; // apex height above center
+    // Tangent-touch points from S=(cx, apexY) to the ellipse (x/R)²+(y/Ry)²=1:
+    //   y_t = Ry² / h,  x_t = R · √(1 − (Ry/h)²)
+    // Falls back to exact rim points when h ≤ Ry (degenerate — apex inside ellipse height).
+    let xt, yt;
+    if (h > Ry + 1e-10) {
+      yt = cy + (Ry * Ry) / h;
+      xt = R * Math.sqrt(1 - (Ry / h) * (Ry / h));
+    } else {
+      yt = cy;
+      xt = R;
+    }
+    newPtsMap[internalT1] = { x: cx + xt, y: yt, originX: cx, originY: cy };
+    newPtsMap[internalT2] = { x: cx - xt, y: yt, originX: cx, originY: cy };
+  }
+
+  // Cylinder: set up all 6 points (bottom center/rim/left, top center/rim/left).
+  for (const { bottomCenter, bottomRim, topCenter, topRim, internalBL, internalTL, bottomCircleName, customRadius: cylR, customHeight: cylH } of cylinderCmds) {
+    const R = cylR ?? circleR;
+    const H = cylH ?? R * 2;
+    const hScale = 0.5;
+    const Ry = R * hScale;
+    // Bottom ellipse at y=0
+    newPtsMap[bottomCenter] = { x: 0, y: 0,  pos: "below" };
+    newPtsMap[bottomRim]    = { x: R, y: 0,  originX: 0, originY: 0, pos: "right" };
+    newPtsMap[internalBL]   = { x: -R, y: 0, originX: 0, originY: 0 };
+    // Top ellipse at y=H
+    newPtsMap[topCenter] = { x: 0,  y: H, pos: "above" };
+    newPtsMap[topRim]    = { x: R,  y: H, originX: 0, originY: H, pos: "right" };
+    newPtsMap[internalTL] = { x: -R, y: H, originX: 0, originY: H };
   }
 
   // Compute positions for explicit points on circles.
@@ -3254,6 +3348,19 @@ function compile(content, size) {
       }
     }
   }
+  // Cylinder top ellipse: drawn as a full solid ellipse at height H.
+  if (cylinderCmds.length > 0) {
+    lines.push("");
+    for (const { customRadius: cylR, customHeight: cylH } of cylinderCmds) {
+      const R = cylR ?? circleR;
+      const H = cylH ?? R * 2;
+      const Ry = R * 0.5;
+      lines.push(
+        `\\draw[line width=1.5pt] (${f(0)},${f(H)}) ellipse (${f(R)} and ${f(Ry)});`,
+      );
+    }
+  }
+
   // Inscribed / circumscribed circles.
   if (computedCircleGeoms.length > 0) {
     lines.push("");
