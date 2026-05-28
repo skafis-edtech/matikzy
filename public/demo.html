@@ -431,6 +431,29 @@
             #ib-code-wrap:focus {
                 border-color: var(--accent);
             }
+            #gb-code-wrap, #uc-code-wrap {
+                display: block;
+                width: 100%;
+                box-sizing: border-box;
+                margin-top: 0;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                background: var(--surface);
+                padding: 0.6rem 0.85rem;
+                font-size: 12px;
+                font-family: monospace;
+                white-space: pre;
+                overflow-x: auto;
+                color: var(--text);
+                line-height: 1.5;
+                resize: vertical;
+                min-height: 60px;
+                outline: none;
+                transition: border-color 0.15s;
+            }
+            #gb-code-wrap:focus, #uc-code-wrap:focus {
+                border-color: var(--accent);
+            }
 
             /* output shared */
             .ib-output-box {
@@ -625,6 +648,12 @@
             <button class="tab-btn active" data-tab="builder">
                 Interval Builder
             </button>
+            <button class="tab-btn" data-tab="geometry">
+                Geometry Builder
+            </button>
+            <button class="tab-btn" data-tab="unitcircle">
+                Unit Circle Builder
+            </button>
             <button class="tab-btn" data-tab="demo">
                 What's behind the curtain?
             </button>
@@ -795,6 +824,139 @@
             >
                 Download SVG
             </button>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             TAB 3 — Geometry Builder
+        ══════════════════════════════════════════════════ -->
+        <div id="tab-geometry" class="tab-panel">
+            <div style="display:flex;gap:1rem;align-items:flex-start">
+                <div style="flex:1;min-width:0">
+                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Preview</div>
+                    <div id="gb-error" class="ib-error"></div>
+                    <div id="gb-output" class="ib-output-box"></div>
+                    <button class="ib-small-btn" id="gb-download-svg" style="display:none;margin-top:6px;font-size:11px;height:22px;padding:0 8px">⬇ svg</button>
+                </div>
+                <div style="flex:1;min-width:0">
+                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Generated Matikzy</div>
+                    <textarea id="gb-code-wrap" spellcheck="false" autocomplete="off" style="margin-top:0.4rem"></textarea>
+                </div>
+            </div>
+
+            <div class="ib-section-label">Shape</div>
+            <div class="ib-mode-btns" style="flex-wrap:wrap">
+                <button class="ib-mode-btn active" data-gb-basis="triangle">Triangle</button>
+                <button class="ib-mode-btn" data-gb-basis="quadrilateral">Quadrilateral</button>
+                <button class="ib-mode-btn" data-gb-basis="pyramid-quad">Pyramid (quad)</button>
+                <button class="ib-mode-btn" data-gb-basis="pyramid-tri">Pyramid (tri)</button>
+                <button class="ib-mode-btn" data-gb-basis="cone">Cone</button>
+                <button class="ib-mode-btn" data-gb-basis="cylinder">Cylinder</button>
+                <button class="ib-mode-btn" data-gb-basis="cube">Cube</button>
+                <button class="ib-mode-btn" data-gb-basis="cuboid">Cuboid</button>
+            </div>
+
+            <div id="gb-tri-opts">
+                <div style="display:flex;gap:1.5rem;margin-top:0.5rem;flex-wrap:wrap">
+                    <div>
+                        <div class="ib-section-label" style="margin-top:0">Type</div>
+                        <div class="ib-mode-btns">
+                            <button class="ib-mode-btn active" data-gb-tritype="scalene">Scalene</button>
+                            <button class="ib-mode-btn" data-gb-tritype="isosceles">Isosceles</button>
+                            <button class="ib-mode-btn" data-gb-tritype="equilateral">Equilateral</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="ib-section-label" style="margin-top:0">Angle</div>
+                        <div class="ib-mode-btns">
+                            <button class="ib-mode-btn active" data-gb-triangle="acute">Acute</button>
+                            <button class="ib-mode-btn" data-gb-triangle="right">Right</button>
+                            <button class="ib-mode-btn" data-gb-triangle="obtuse">Obtuse</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="gb-quad-opts" style="display:none">
+                <div class="ib-section-label">Type</div>
+                <div class="ib-mode-btns" style="flex-wrap:wrap">
+                    <button class="ib-mode-btn active" data-gb-quadtype="rectangle">Rectangle</button>
+                    <button class="ib-mode-btn" data-gb-quadtype="square">Square</button>
+                    <button class="ib-mode-btn" data-gb-quadtype="parallelogram">Parallelogram</button>
+                    <button class="ib-mode-btn" data-gb-quadtype="rhombus">Rhombus</button>
+                    <button class="ib-mode-btn" data-gb-quadtype="trapezoid">Trapezoid</button>
+                    <button class="ib-mode-btn" data-gb-quadtype="right trapezoid">Right trapezoid</button>
+                    <button class="ib-mode-btn" data-gb-quadtype="isosceles trapezoid">Isosceles trap.</button>
+                </div>
+            </div>
+
+            <div class="ib-section-label">Size</div>
+            <div class="ib-mode-btns">
+                <button class="ib-mode-btn" data-gb-size="small">Small</button>
+                <button class="ib-mode-btn active" data-gb-size="medium">Medium</button>
+                <button class="ib-mode-btn" data-gb-size="large">Large</button>
+            </div>
+
+            <div class="ib-section-label">Vertex Names</div>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+                <input type="text" id="gb-namestr" class="ib-pt-label" style="width:180px" placeholder="e.g. ABC or A[B]C" />
+                <span style="font-size:12px;color:var(--text-muted)">[X] marks special vertex (right angle / isosceles apex)</span>
+            </div>
+
+            <div class="ib-section-label">Marks</div>
+            <div id="gb-marks"></div>
+            <div class="ib-row-controls" style="margin-top:6px">
+                <button class="ib-small-btn" id="gb-add-mark">+ Add mark</button>
+            </div>
+
+            <div class="ib-section-label">Labels</div>
+            <div id="gb-labels-list"></div>
+            <div class="ib-row-controls" style="margin-top:6px">
+                <button class="ib-small-btn" id="gb-add-angle-label">+ Angle label</button>
+                <button class="ib-small-btn" id="gb-add-side-label">+ Side label</button>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════
+             TAB 4 — Unit Circle Builder
+        ══════════════════════════════════════════════════ -->
+        <div id="tab-unitcircle" class="tab-panel">
+            <div style="display:flex;gap:1rem;align-items:flex-start">
+                <div style="flex:1;min-width:0">
+                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Preview</div>
+                    <div id="uc-error" class="ib-error"></div>
+                    <div id="uc-output" class="ib-output-box"></div>
+                    <button class="ib-small-btn" id="uc-download-svg" style="display:none;margin-top:6px;font-size:11px;height:22px;padding:0 8px">⬇ svg</button>
+                </div>
+                <div style="flex:1;min-width:0">
+                    <div class="ib-section-label" style="margin-top:0;margin-bottom:0">Generated Matikzy</div>
+                    <textarea id="uc-code-wrap" spellcheck="false" autocomplete="off" style="margin-top:0.4rem"></textarea>
+                </div>
+            </div>
+
+            <div class="ib-section-label">Points</div>
+            <div id="uc-points"></div>
+            <div class="ib-row-controls" style="margin-top:6px">
+                <button class="ib-small-btn" id="uc-add-point">+ Add point</button>
+            </div>
+
+            <div class="ib-section-label">Arcs</div>
+            <div id="uc-arcs"></div>
+            <div class="ib-row-controls" style="margin-top:6px">
+                <button class="ib-small-btn" id="uc-add-arc">+ Add arc</button>
+            </div>
+
+            <div class="ib-section-label">Projection Lines</div>
+            <div id="uc-projlines"></div>
+            <div class="ib-row-controls" style="margin-top:6px">
+                <button class="ib-small-btn" id="uc-add-xline">+ Add x-line</button>
+                <button class="ib-small-btn" id="uc-add-yline">+ Add y-line</button>
+            </div>
+
+            <div class="ib-section-label">Lines</div>
+            <div id="uc-lines"></div>
+            <div class="ib-row-controls" style="margin-top:6px">
+                <button class="ib-small-btn" id="uc-add-line">+ Add line</button>
+            </div>
         </div>
 
         <script type="module">
@@ -1831,6 +1993,540 @@
             ibRenderHatches();
             ibRenderParabolas();
             ibRender();
+
+            // ═══════════════════════════════════════════════
+            //  GEOMETRY BUILDER
+            // ═══════════════════════════════════════════════
+
+            let gbState = {
+                basis: "triangle",
+                triAngle: "acute",
+                triType: "scalene",
+                quadType: "rectangle",
+                size: "medium",
+                nameStr: "",
+                marks: [],
+                labels: [],
+            };
+
+            function gbGenerateCode() {
+                const s = gbState;
+                const sizeStr = s.size === "medium" ? "" : `[${s.size}]`;
+                const lines = [`geometry${sizeStr}:`];
+                const nm = s.nameStr.trim();
+                if (s.basis === "triangle") {
+                    const parts = [];
+                    if (s.triType !== "scalene") parts.push(s.triType);
+                    if (s.triAngle !== "acute") parts.push(s.triAngle);
+                    const spec = parts.length ? parts.join(" ") + " " : "";
+                    lines.push(`triangle ${spec}new ${nm || "ABC"}`);
+                } else if (s.basis === "quadrilateral") {
+                    lines.push(`quadrilateral ${s.quadType} new ${nm || "ABCD"}`);
+                } else if (s.basis === "pyramid-quad") {
+                    lines.push(`pyramid quad new ${nm || "SABCD"}`);
+                } else if (s.basis === "pyramid-tri") {
+                    lines.push(`pyramid tri new ${nm || "SABC"}`);
+                } else if (s.basis === "cone") {
+                    lines.push(`cone new ${nm || "SO-OX"}`);
+                } else if (s.basis === "cylinder") {
+                    lines.push(`cylinder new ${nm || "O-OX-O1-O1X1"}`);
+                } else if (s.basis === "cube") {
+                    lines.push(`cube new ${nm || "ABCDA1B1C1D1"}`);
+                } else if (s.basis === "cuboid") {
+                    lines.push(`cuboid new`);
+                }
+                for (const mk of s.marks) {
+                    if (!mk.spec) continue;
+                    const extra = mk.markType && mk.markType !== "arc" ? ` ${mk.markType}` : "";
+                    lines.push(`mark ${mk.spec}${extra}`);
+                }
+                for (const lb of s.labels) {
+                    if (!lb.spec || !lb.text) continue;
+                    lines.push(`${lb.labelType} label ${lb.spec} -- ${lb.text}`);
+                }
+                return lines.join("\n");
+            }
+
+            let gbRenderSeq = 0;
+            async function gbRenderFromCode(code) {
+                const errEl = document.getElementById("gb-error");
+                const outEl = document.getElementById("gb-output");
+                errEl.textContent = "";
+                let tikz;
+                try { tikz = compile(code); } catch (e) { errEl.textContent = e.message; return; }
+                const seq = ++gbRenderSeq;
+                try {
+                    const res = await fetch("/render", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ lang: "tikz", content: tikz }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const svg = await res.text();
+                    if (seq !== gbRenderSeq) return;
+                    outEl.innerHTML = svg;
+                    document.getElementById("gb-download-svg").style.display = "";
+                } catch (e) {
+                    if (seq !== gbRenderSeq) return;
+                    errEl.textContent = e.message;
+                }
+            }
+
+            let gbDebounce;
+            function gbScheduleRender() {
+                const code = gbGenerateCode();
+                document.getElementById("gb-code-wrap").value = code;
+                clearTimeout(gbDebounce);
+                gbDebounce = setTimeout(() => gbRenderFromCode(code), 400);
+            }
+
+            function gbRenderMarks() {
+                const container = document.getElementById("gb-marks");
+                container.innerHTML = "";
+                gbState.marks.forEach((mk, i) => {
+                    const row = document.createElement("div");
+                    row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:4px";
+                    const specInp = document.createElement("input");
+                    specInp.type = "text"; specInp.className = "ib-pt-label";
+                    specInp.style.width = "90px"; specInp.placeholder = "AB or BAC";
+                    specInp.value = mk.spec;
+                    specInp.addEventListener("input", e => { gbState.marks[i].spec = e.target.value; gbScheduleRender(); });
+                    const typeSel = document.createElement("select");
+                    typeSel.className = "ib-select";
+                    [["arc","Angle arc"],["right","Right angle □"],["2","Double arc"],["3","Triple arc"],["ticks","Tick mark"],["2ticks","Double tick"],["3ticks","Triple tick"]].forEach(([v,t]) => {
+                        const opt = document.createElement("option");
+                        opt.value = v; opt.textContent = t;
+                        if (mk.markType === v) opt.selected = true;
+                        typeSel.appendChild(opt);
+                    });
+                    typeSel.addEventListener("change", e => { gbState.marks[i].markType = e.target.value; gbScheduleRender(); });
+                    const del = document.createElement("button");
+                    del.className = "ib-small-btn danger"; del.textContent = "✕";
+                    del.style.cssText = "height:24px;padding:0 6px;font-size:11px";
+                    del.addEventListener("click", () => { gbState.marks.splice(i, 1); gbRenderMarks(); gbScheduleRender(); });
+                    row.append(specInp, typeSel, del);
+                    container.appendChild(row);
+                });
+            }
+
+            function gbRenderLabels() {
+                const container = document.getElementById("gb-labels-list");
+                container.innerHTML = "";
+                gbState.labels.forEach((lb, i) => {
+                    const row = document.createElement("div");
+                    row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:4px";
+                    const badge = document.createElement("span");
+                    badge.textContent = lb.labelType;
+                    badge.style.cssText = "font-size:11px;color:var(--text-muted);min-width:36px";
+                    const specInp = document.createElement("input");
+                    specInp.type = "text"; specInp.className = "ib-pt-label";
+                    specInp.style.width = "70px";
+                    specInp.placeholder = lb.labelType === "angle" ? "BAC" : "AB";
+                    specInp.value = lb.spec;
+                    specInp.addEventListener("input", e => { gbState.labels[i].spec = e.target.value; gbScheduleRender(); });
+                    const textInp = document.createElement("input");
+                    textInp.type = "text"; textInp.className = "ib-pt-label";
+                    textInp.style.width = "100px";
+                    textInp.placeholder = lb.labelType === "angle" ? "\\alpha" : "a";
+                    textInp.value = lb.text;
+                    textInp.addEventListener("input", e => { gbState.labels[i].text = e.target.value; gbScheduleRender(); });
+                    const del = document.createElement("button");
+                    del.className = "ib-small-btn danger"; del.textContent = "✕";
+                    del.style.cssText = "height:24px;padding:0 6px;font-size:11px";
+                    del.addEventListener("click", () => { gbState.labels.splice(i, 1); gbRenderLabels(); gbScheduleRender(); });
+                    row.append(badge, specInp, textInp, del);
+                    container.appendChild(row);
+                });
+            }
+
+            document.querySelectorAll("[data-gb-basis]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    gbState.basis = btn.dataset.gbBasis;
+                    document.querySelectorAll("[data-gb-basis]").forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    document.getElementById("gb-tri-opts").style.display = gbState.basis === "triangle" ? "" : "none";
+                    document.getElementById("gb-quad-opts").style.display = gbState.basis === "quadrilateral" ? "" : "none";
+                    gbScheduleRender();
+                });
+            });
+            document.querySelectorAll("[data-gb-tritype]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    gbState.triType = btn.dataset.gbTritype;
+                    document.querySelectorAll("[data-gb-tritype]").forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    gbScheduleRender();
+                });
+            });
+            document.querySelectorAll("[data-gb-triangle]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    gbState.triAngle = btn.dataset.gbTriangle;
+                    document.querySelectorAll("[data-gb-triangle]").forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    gbScheduleRender();
+                });
+            });
+            document.querySelectorAll("[data-gb-quadtype]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    gbState.quadType = btn.dataset.gbQuadtype;
+                    document.querySelectorAll("[data-gb-quadtype]").forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    gbScheduleRender();
+                });
+            });
+            document.querySelectorAll("[data-gb-size]").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    gbState.size = btn.dataset.gbSize;
+                    document.querySelectorAll("[data-gb-size]").forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    gbScheduleRender();
+                });
+            });
+            document.getElementById("gb-namestr").addEventListener("input", e => {
+                gbState.nameStr = e.target.value;
+                gbScheduleRender();
+            });
+            document.getElementById("gb-add-mark").addEventListener("click", () => {
+                gbState.marks.push({ spec: "", markType: "arc" });
+                gbRenderMarks(); gbScheduleRender();
+            });
+            document.getElementById("gb-add-angle-label").addEventListener("click", () => {
+                gbState.labels.push({ labelType: "angle", spec: "", text: "" });
+                gbRenderLabels(); gbScheduleRender();
+            });
+            document.getElementById("gb-add-side-label").addEventListener("click", () => {
+                gbState.labels.push({ labelType: "side", spec: "", text: "" });
+                gbRenderLabels(); gbScheduleRender();
+            });
+            document.getElementById("gb-download-svg").addEventListener("click", () => {
+                const svg = document.getElementById("gb-output").innerHTML;
+                const blob = new Blob([svg], { type: "image/svg+xml" });
+                Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "geometry.svg" }).click();
+            });
+
+            gbRenderMarks();
+            gbRenderLabels();
+            gbScheduleRender();
+
+            // ═══════════════════════════════════════════════
+            //  UNIT CIRCLE BUILDER
+            // ═══════════════════════════════════════════════
+
+            let ucState = {
+                points: [],
+                arcs: [],
+                xlines: [],
+                ylines: [],
+                lines: [],
+            };
+
+            function ucPointNames() {
+                const names = ["X"];
+                for (const p of ucState.points) if (p.name) names.push(p.name);
+                return names;
+            }
+
+            function ucGenerateCode() {
+                const s = ucState;
+                const out = ["unit-circle:"];
+                for (const pt of s.points)
+                    if (pt.angle && pt.name) out.push(`point ${pt.angle} new ${pt.name}`);
+                for (const pt of s.points) {
+                    if (!pt.name || pt.labelMode === "none") continue;
+                    const txt = pt.labelText || pt.name;
+                    if (pt.labelMode === "filled") out.push(`label ${pt.name} [${txt}]`);
+                    else if (pt.labelMode === "hollow") out.push(`label ${pt.name} (${txt})`);
+                    else out.push(`label ${pt.name} ${txt}`);
+                }
+                for (const arc of s.arcs) {
+                    if (!arc.from || !arc.to) continue;
+                    const lbl = arc.label ? ` ${arc.label}` : "";
+                    out.push(`${arc.arcType} ${arc.from}-${arc.to}${lbl}`);
+                }
+                for (const xl of s.xlines) {
+                    if (!xl.name) continue;
+                    let ln = `x-line ${xl.name}`;
+                    if (xl.label) ln += ` ${xl.label}`;
+                    if (xl.style !== "dotted") ln += ` -- ${xl.style}`;
+                    if (xl.rightAngle) ln += " right-angle";
+                    out.push(ln);
+                }
+                for (const yl of s.ylines) {
+                    if (!yl.name) continue;
+                    let ln = `y-line ${yl.name}`;
+                    if (yl.label) ln += ` ${yl.label}`;
+                    if (yl.style !== "dotted") ln += ` -- ${yl.style}`;
+                    if (yl.rightAngle) ln += " right-angle";
+                    out.push(ln);
+                }
+                for (const l of s.lines) {
+                    if (l.val) out.push(`line ${l.axis}=${l.val}`);
+                }
+                return out.join("\n");
+            }
+
+            let ucRenderSeq = 0;
+            async function ucRenderFromCode(code) {
+                const errEl = document.getElementById("uc-error");
+                const outEl = document.getElementById("uc-output");
+                errEl.textContent = "";
+                let tikz;
+                try { tikz = compile(code); } catch (e) { errEl.textContent = e.message; return; }
+                const seq = ++ucRenderSeq;
+                try {
+                    const res = await fetch("/render", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ lang: "tikz", content: tikz }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const svg = await res.text();
+                    if (seq !== ucRenderSeq) return;
+                    outEl.innerHTML = svg;
+                    document.getElementById("uc-download-svg").style.display = "";
+                } catch (e) {
+                    if (seq !== ucRenderSeq) return;
+                    errEl.textContent = e.message;
+                }
+            }
+
+            let ucDebounce;
+            function ucScheduleRender() {
+                const code = ucGenerateCode();
+                document.getElementById("uc-code-wrap").value = code;
+                clearTimeout(ucDebounce);
+                ucDebounce = setTimeout(() => ucRenderFromCode(code), 400);
+            }
+
+            function ucRenderPoints() {
+                const container = document.getElementById("uc-points");
+                container.innerHTML = "";
+                ucState.points.forEach((pt, i) => {
+                    const row = document.createElement("div");
+                    row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap";
+                    const mk = (tag, text, style) => Object.assign(document.createElement(tag), { textContent: text, style });
+
+                    const angleInp = document.createElement("input");
+                    angleInp.type = "text"; angleInp.className = "ib-pt-label";
+                    angleInp.style.width = "70px"; angleInp.placeholder = "angle";
+                    angleInp.value = pt.angle;
+                    angleInp.addEventListener("input", e => { ucState.points[i].angle = e.target.value; ucRefreshAll(); });
+
+                    const nameInp = document.createElement("input");
+                    nameInp.type = "text"; nameInp.className = "ib-pt-label";
+                    nameInp.style.width = "40px"; nameInp.placeholder = "name";
+                    nameInp.value = pt.name;
+                    nameInp.addEventListener("input", e => { ucState.points[i].name = e.target.value; ucRefreshAll(); });
+
+                    const modeSel = document.createElement("select");
+                    modeSel.className = "ib-select";
+                    [["none","No label"],["filled","● Filled"],["hollow","○ Hollow"],["text","Text only"]].forEach(([v,t]) => {
+                        const opt = document.createElement("option");
+                        opt.value = v; opt.textContent = t;
+                        if (pt.labelMode === v) opt.selected = true;
+                        modeSel.appendChild(opt);
+                    });
+                    modeSel.addEventListener("change", e => { ucState.points[i].labelMode = e.target.value; ucRenderPoints(); ucScheduleRender(); });
+
+                    const lblInp = document.createElement("input");
+                    lblInp.type = "text"; lblInp.className = "ib-pt-label";
+                    lblInp.style.cssText = `width:80px;${pt.labelMode === "none" ? "display:none" : ""}`;
+                    lblInp.placeholder = "label text"; lblInp.value = pt.labelText;
+                    lblInp.addEventListener("input", e => { ucState.points[i].labelText = e.target.value; ucScheduleRender(); });
+
+                    const del = document.createElement("button");
+                    del.className = "ib-small-btn danger"; del.textContent = "✕";
+                    del.style.cssText = "height:24px;padding:0 6px;font-size:11px";
+                    del.addEventListener("click", () => { ucState.points.splice(i, 1); ucRefreshAll(); });
+
+                    row.append(mk("span","angle:","font-size:12px;color:var(--text-muted)"), angleInp,
+                               mk("span","name:","font-size:12px;color:var(--text-muted)"), nameInp,
+                               modeSel, lblInp, del);
+                    container.appendChild(row);
+                });
+            }
+
+            function ucRenderArcs() {
+                const container = document.getElementById("uc-arcs");
+                container.innerHTML = "";
+                const names = ucPointNames();
+                ucState.arcs.forEach((arc, i) => {
+                    const row = document.createElement("div");
+                    row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap";
+                    const mk = (tag, text, style) => Object.assign(document.createElement(tag), { textContent: text, style });
+
+                    const typeSel = document.createElement("select");
+                    typeSel.className = "ib-select";
+                    [["rotangle","rotangle ↗"],["angle","angle (no arrow)"]].forEach(([v,t]) => {
+                        const opt = document.createElement("option");
+                        opt.value = v; opt.textContent = t;
+                        if (arc.arcType === v) opt.selected = true;
+                        typeSel.appendChild(opt);
+                    });
+                    typeSel.addEventListener("change", e => { ucState.arcs[i].arcType = e.target.value; ucScheduleRender(); });
+
+                    const mkSel = (current, onChange) => {
+                        const sel = document.createElement("select");
+                        sel.className = "ib-select";
+                        names.forEach(n => {
+                            const opt = document.createElement("option");
+                            opt.value = n; opt.textContent = n;
+                            if (n === current) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                        sel.addEventListener("change", e => onChange(e.target.value));
+                        return sel;
+                    };
+
+                    const lblInp = document.createElement("input");
+                    lblInp.type = "text"; lblInp.className = "ib-pt-label";
+                    lblInp.style.width = "100px"; lblInp.placeholder = "label (optional)";
+                    lblInp.value = arc.label;
+                    lblInp.addEventListener("input", e => { ucState.arcs[i].label = e.target.value; ucScheduleRender(); });
+
+                    const del = document.createElement("button");
+                    del.className = "ib-small-btn danger"; del.textContent = "✕";
+                    del.style.cssText = "height:24px;padding:0 6px;font-size:11px";
+                    del.addEventListener("click", () => { ucState.arcs.splice(i, 1); ucRenderArcs(); ucScheduleRender(); });
+
+                    row.append(typeSel, mk("span","from:","font-size:12px;color:var(--text-muted)"),
+                               mkSel(arc.from, v => { ucState.arcs[i].from = v; ucScheduleRender(); }),
+                               mk("span","to:","font-size:12px;color:var(--text-muted)"),
+                               mkSel(arc.to, v => { ucState.arcs[i].to = v; ucScheduleRender(); }),
+                               lblInp, del);
+                    container.appendChild(row);
+                });
+            }
+
+            function ucRenderProjLines() {
+                const container = document.getElementById("uc-projlines");
+                container.innerHTML = "";
+                const names = ucPointNames();
+                const renderGroup = (arr, axis) => {
+                    arr.forEach((pl, i) => {
+                        const row = document.createElement("div");
+                        row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap";
+
+                        const axisLbl = Object.assign(document.createElement("span"), {
+                            textContent: `${axis}-line`, style: "font-size:12px;color:var(--text-muted);min-width:40px" });
+
+                        const nameSel = document.createElement("select");
+                        nameSel.className = "ib-select";
+                        names.forEach(n => {
+                            const opt = document.createElement("option");
+                            opt.value = n; opt.textContent = n;
+                            if (pl.name === n) opt.selected = true;
+                            nameSel.appendChild(opt);
+                        });
+                        nameSel.addEventListener("change", e => { ucState[axis + "lines"][i].name = e.target.value; ucScheduleRender(); });
+
+                        const lblInp = document.createElement("input");
+                        lblInp.type = "text"; lblInp.className = "ib-pt-label";
+                        lblInp.style.width = "70px"; lblInp.placeholder = "axis label";
+                        lblInp.value = pl.label;
+                        lblInp.addEventListener("input", e => { ucState[axis + "lines"][i].label = e.target.value; ucScheduleRender(); });
+
+                        const styleSel = document.createElement("select");
+                        styleSel.className = "ib-select";
+                        ["dotted","dashed","solid"].forEach(v => {
+                            const opt = document.createElement("option");
+                            opt.value = v; opt.textContent = v;
+                            if (pl.style === v) opt.selected = true;
+                            styleSel.appendChild(opt);
+                        });
+                        styleSel.addEventListener("change", e => { ucState[axis + "lines"][i].style = e.target.value; ucScheduleRender(); });
+
+                        const raChk = document.createElement("input");
+                        raChk.type = "checkbox"; raChk.checked = pl.rightAngle;
+                        raChk.addEventListener("change", e => { ucState[axis + "lines"][i].rightAngle = e.target.checked; ucScheduleRender(); });
+                        const raWrap = document.createElement("label");
+                        raWrap.style.cssText = "display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer";
+                        raWrap.append(raChk, "∟");
+
+                        const del = document.createElement("button");
+                        del.className = "ib-small-btn danger"; del.textContent = "✕";
+                        del.style.cssText = "height:24px;padding:0 6px;font-size:11px";
+                        del.addEventListener("click", () => { ucState[axis + "lines"].splice(i, 1); ucRenderProjLines(); ucScheduleRender(); });
+
+                        row.append(axisLbl, nameSel, lblInp, styleSel, raWrap, del);
+                        container.appendChild(row);
+                    });
+                };
+                renderGroup(ucState.xlines, "x");
+                renderGroup(ucState.ylines, "y");
+            }
+
+            function ucRenderLines() {
+                const container = document.getElementById("uc-lines");
+                container.innerHTML = "";
+                ucState.lines.forEach((l, i) => {
+                    const row = document.createElement("div");
+                    row.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:4px";
+
+                    const axisSel = document.createElement("select");
+                    axisSel.className = "ib-select";
+                    ["x","y"].forEach(v => {
+                        const opt = document.createElement("option");
+                        opt.value = v; opt.textContent = `${v} =`;
+                        if (l.axis === v) opt.selected = true;
+                        axisSel.appendChild(opt);
+                    });
+                    axisSel.addEventListener("change", e => { ucState.lines[i].axis = e.target.value; ucScheduleRender(); });
+
+                    const valInp = document.createElement("input");
+                    valInp.type = "text"; valInp.className = "ib-pt-label";
+                    valInp.style.width = "60px"; valInp.placeholder = "0.5";
+                    valInp.value = l.val;
+                    valInp.addEventListener("input", e => { ucState.lines[i].val = e.target.value; ucScheduleRender(); });
+
+                    const del = document.createElement("button");
+                    del.className = "ib-small-btn danger"; del.textContent = "✕";
+                    del.style.cssText = "height:24px;padding:0 6px;font-size:11px";
+                    del.addEventListener("click", () => { ucState.lines.splice(i, 1); ucRenderLines(); ucScheduleRender(); });
+
+                    row.append(axisSel, valInp, del);
+                    container.appendChild(row);
+                });
+            }
+
+            function ucRefreshAll() {
+                ucRenderPoints();
+                ucRenderArcs();
+                ucRenderProjLines();
+                ucScheduleRender();
+            }
+
+            document.getElementById("uc-add-point").addEventListener("click", () => {
+                ucState.points.push({ angle: "", name: "", labelMode: "filled", labelText: "" });
+                ucRefreshAll();
+            });
+            document.getElementById("uc-add-arc").addEventListener("click", () => {
+                const n = ucPointNames();
+                ucState.arcs.push({ arcType: "rotangle", from: n[0] || "X", to: n[0] || "X", label: "" });
+                ucRenderArcs(); ucScheduleRender();
+            });
+            document.getElementById("uc-add-xline").addEventListener("click", () => {
+                ucState.xlines.push({ name: ucPointNames()[0] || "X", label: "", style: "dotted", rightAngle: false });
+                ucRenderProjLines(); ucScheduleRender();
+            });
+            document.getElementById("uc-add-yline").addEventListener("click", () => {
+                ucState.ylines.push({ name: ucPointNames()[0] || "X", label: "", style: "dotted", rightAngle: false });
+                ucRenderProjLines(); ucScheduleRender();
+            });
+            document.getElementById("uc-add-line").addEventListener("click", () => {
+                ucState.lines.push({ axis: "x", val: "" });
+                ucRenderLines(); ucScheduleRender();
+            });
+            document.getElementById("uc-download-svg").addEventListener("click", () => {
+                const svg = document.getElementById("uc-output").innerHTML;
+                const blob = new Blob([svg], { type: "image/svg+xml" });
+                Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "unit-circle.svg" }).click();
+            });
+
+            ucRenderPoints();
+            ucRenderArcs();
+            ucRenderProjLines();
+            ucRenderLines();
+            ucScheduleRender();
 
             // ═══════════════════════════════════════════════
             //  DEMO TAB — CodeMirror + existing logic
