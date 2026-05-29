@@ -2041,6 +2041,8 @@ function syntaxCheck(content) {
     ...pointCmds.map((c) => c.name),
     ...circlePointCmds.map((c) => c.name),
     ...intersectPointCmds.map((c) => c.name),
+    ...linearPointCmds.map((c) => c.newName),
+    ...distanceCmds.map((c) => c.newName),
     ...circleKnownNames,
     ...lineCmds.flatMap((c) => c.newNames ?? []),
     ...tangentLineCmds.map((c) => c.newName),

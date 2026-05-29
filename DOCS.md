@@ -889,6 +889,7 @@ parabola n_1 n_2 -- down
 - not possible to do hatching from -infty to +infty
 - not possible to have no points at all (plain line)
 - not possible to adjust the segment lengths / distances between points
+- generic tan?
 
 ## `unit-circle`
 
