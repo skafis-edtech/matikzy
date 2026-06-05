@@ -2309,13 +2309,13 @@
                     angleInp.type = "text"; angleInp.className = "ib-pt-label";
                     angleInp.style.width = "70px"; angleInp.placeholder = "angle";
                     angleInp.value = pt.angle;
-                    angleInp.addEventListener("input", e => { ucState.points[i].angle = e.target.value; ucRefreshAll(); });
+                    angleInp.addEventListener("input", e => { ucState.points[i].angle = e.target.value; ucScheduleRender(); });
 
                     const nameInp = document.createElement("input");
                     nameInp.type = "text"; nameInp.className = "ib-pt-label";
                     nameInp.style.width = "40px"; nameInp.placeholder = "name";
                     nameInp.value = pt.name;
-                    nameInp.addEventListener("input", e => { ucState.points[i].name = e.target.value; ucRefreshAll(); });
+                    nameInp.addEventListener("input", e => { ucState.points[i].name = e.target.value; ucScheduleRender(); });
 
                     const modeSel = document.createElement("select");
                     modeSel.className = "ib-select";
