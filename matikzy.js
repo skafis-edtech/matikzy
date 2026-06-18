@@ -2,6 +2,7 @@ import intervalCommands from "./commands/interval.js";
 import functionCommands from "./commands/function.js";
 import unitCircleCommands from "./commands/unit-circle.js";
 import geometryCommands from "./commands/geometry.js";
+import vennCommands from "./commands/venn.js";
 
 // ─── Command registry ─────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ const allCommands = [
   ...functionCommands,
   ...unitCircleCommands,
   ...geometryCommands,
+  ...vennCommands,
 ];
 
 allCommands.forEach(({ prefix, syntaxCheck, compile }) =>

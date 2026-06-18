@@ -202,6 +202,7 @@ label AD 9
 label angle A 60^\circ
 mark angle A
 ```
+- TODO: Volume of revolution diagram.
 
 ## `geometry`
 
@@ -921,3 +922,7 @@ y-line M y_M
 ### issues
 
 - no tangent line functionality yet.
+
+## `venn`
+
+Venn diagram.
